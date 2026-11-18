@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kayn — Builds & Benchmark (patch 26.22)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e17;--card:#131826;--card2:#1a2033;--line:#252c42;--txt:#e6e9f2;--mut:#8a93ad;--blue:#4f8cff;--red:#ff4d5e;--gold:#e8b64c;--green:#3ecf8e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;font-size:14px}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+header{display:flex;gap:14px;align-items:center;margin-bottom:14px}
+.champ{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--blue),#1b1f3a 50%,var(--red));display:grid;place-items:center;font-weight:800;font-size:22px}
+h1{font-size:20px;margin:0}h2{font-size:16px;margin:22px 0 10px}h3{font-size:14px;margin:0 0 8px}
+.sub{color:var(--mut);font-size:12px}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.pill{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px}
+.pill b{color:var(--green)}
+.tabs{display:flex;gap:6px;margin:12px 0}
+.tab{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-weight:700;cursor:pointer}
+.tab.on.b{background:rgba(79,140,255,.18);border-color:var(--blue)}.tab.on.r{background:rgba(255,77,94,.16);border-color:var(--red)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.path{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:8px 0}
+.it{width:40px;height:40px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:12px;border:2px solid #0006;position:relative;cursor:default}
+.it small{position:absolute;bottom:-14px;font-size:9px;color:var(--mut);font-weight:600;white-space:nowrap}
+.arr{color:var(--mut);font-size:12px;padding:0 2px}
+.leth{background:#5a2a7a}.ad{background:#7a3a2a}.def{background:#2a5a4a}.boot{background:#3a4560}.pen{background:#7a5a1a}
+.when{font-size:12px;color:var(--mut);margin-top:16px}
+.when b{color:var(--txt)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600}
+.best{color:var(--green);font-weight:700}
+.bar{height:8px;border-radius:4px;background:var(--card2);overflow:hidden;min-width:60px}.bar i{display:block;height:100%}
+select{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px;font-family:inherit;width:100%}
+label{font-size:11px;color:var(--mut);display:block;margin-bottom:4px}
+.ctrl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.big{font-size:26px;font-weight:800}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kpi{background:var(--card2);border-radius:10px;padding:10px}.kpi .sub{margin-bottom:4px}
+.row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px}.row span:first-child{width:130px;color:var(--mut)}.row .bar{flex:1;height:12px}.row span:last-child{width:60px;text-align:right}
+.note{font-size:11.5px;color:var(--mut);line-height:1.5}
+.runes{display:grid;grid-template-columns:1fr 1fr;gap:10px}.runes div{font-size:12px;line-height:1.6}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px}
+.tag.wr{background:#14361f;color:var(--green)}.tag.ap{background:#3a2e10;color:var(--gold)}
+.hide{display:none}
+</style><style>
+.it2{width:42px;height:42px;border-radius:8px;display:grid;place-items:center;position:relative;border:2px solid #0007;box-shadow:inset 0 0 0 1px #ffffff22}
+.it2 small{position:absolute;bottom:-14px;font-size:9px;color:var(--mut);font-weight:700}
+.ch{border-radius:10px;display:grid;place-items:center;position:relative;border:2px solid #ffffff18;cursor:pointer;flex:none}
+.ch b{font-size:15px;letter-spacing:.5px}.ch .cg{position:absolute;top:2px;right:3px;opacity:.85}.ch .rg{position:absolute;bottom:1px;left:4px;font-size:10px;opacity:.8}
+.ch.empty{background:var(--card2);border:2px dashed var(--line);color:var(--mut);font-size:20px}
+.team{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap}.tl{width:82px;font-weight:700;font-size:12px}
+.slots{display:flex;gap:6px;flex-wrap:wrap}.sl{display:flex;flex-direction:column;align-items:center;gap:2px;width:52px}.sl span{font-size:9px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52px;min-height:11px}.me{opacity:.9}
+.modal.hide{display:none}.modal{position:fixed;inset:0;background:#000b;z-index:9;display:flex;align-items:flex-end;justify-content:center}
+.mbox{background:var(--card);width:100%;max-width:640px;max-height:82vh;border-radius:14px 14px 0 0;padding:12px;display:flex;flex-direction:column;gap:8px}
+.mbox input{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font-size:15px}
+.btn{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:0 12px;font-family:inherit}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;overflow:auto;padding-bottom:20px}
+.grid2 .pc{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--mut);text-align:center;cursor:pointer}
+.fil{display:flex;gap:6px;flex-wrap:wrap}.fil button{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px}.fil button.on{border-color:var(--gold);color:var(--gold)}
+.verdict{display:flex;gap:12px;align-items:center;padding:12px;border-radius:10px;margin-bottom:12px}
+.verdict.blue{background:rgba(79,140,255,.15);border:1px solid var(--blue)}.verdict.red{background:rgba(255,77,94,.13);border:1px solid var(--red)}
+.gauge{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--red),#555 50%,var(--blue));position:relative;margin:6px 0 2px}.gauge i{position:absolute;top:-4px;width:4px;height:18px;background:#fff;border-radius:2px}
+.thr{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin:10px 0}
+.thr div{background:var(--card2);border-radius:8px;padding:8px;font-size:11px;color:var(--mut)}.thr b{display:block;font-size:17px;color:var(--txt)}
+.boot{display:flex;gap:10px;align-items:center;margin:8px 0;font-size:12px}
+.erow{display:flex;align-items:center;gap:10px;margin:8px 0}.erow .bar{flex:1;height:14px;position:relative}.erow .lbl{width:92px;font-size:12px}.erow .val{width:78px;text-align:right;font-size:12px;font-weight:700}
+.bar .k{position:absolute;left:100%;top:-3px;width:2px;height:20px;background:#fff8}
+</style>
+</head><body><div class="wrap">
+<header><div class="champ">K</div><div><h1>Kayn Jungle — Builds, simulations & benchmark</h1>
+<div class="sub">Patch 26.22 · Émeraude+ · statistiques des items tirées des fichiers de données du patch</div>
+<div class="pills"><span class="pill">WR jungle <b>52 %</b> (LoLalytics É+)</span><span class="pill">Tier A</span><span class="pill">Ordre des sorts : Q &gt; W &gt; E</span></div></div></header><h2>🎯 Simulateur de draft</h2>
+<div class="card">
+ <div class="sub" style="margin-bottom:6px">Touche une case pour choisir un champion.</div>
+ <div class="team"><span class="tl" style="color:var(--red)">En face</span><div class="slots" id="en"></div></div>
+ <div class="team"><span class="tl" style="color:var(--blue)">Ton équipe</span><div class="slots" id="al"></div><div class="me"></div></div>
+ <div class="ctrl" style="margin-top:12px"><div><label>Moment de la partie</label><select id="d-stage"><option value="mid">Mid game — niv. 13</option><option value="late">Late game — niv. 18</option></select></div>
+ <div><label>Forme</label><select id="d-form"><option value="auto">Recommandée</option><option value="blue">Forcer bleu</option><option value="red">Forcer rouge</option></select></div>
+ <div><label>Exemples</label><select id="d-ex"><option value="">—</option></select></div></div>
+ <div id="d-out" class="note">Ajoute au moins 3 adversaires pour lancer l'analyse.</div>
+</div>
+<div id="pick" class="modal hide"><div class="mbox"><div style="display:flex;gap:8px"><input id="q" placeholder="Rechercher un champion…"><button id="clr" class="btn">Vider</button><button id="cls" class="btn">✕</button></div>
+<div class="fil" id="fil"></div><div class="grid2" id="pg"></div></div></div>
+
+
+<div class="tabs"><button class="tab b on" data-f="blue">🔵 Shadow Assassin</button><button class="tab r" data-f="red">🔴 Rhaast</button></div>
+
+<div id="v-blue">
+ <div class="card"><h3>Runes (Assassin)</h3><div class="runes"><div><b>Domination</b><br>Dark Harvest · Sudden Impact · Grisly Mementos · Treasure Hunter</div><div><b>Inspiration</b><br>Cosmic Insight · Magical Footwear<br><span class="sub">Fragments : Adaptive ×2, PV évolutifs</span></div></div>
+ <div class="note" style="margin-top:8px">Alternative à fort WR : Hail of Blades (53,5 % sur 2 446 parties, Mobalytics).</div></div>
+ <h2>Builds selon la compo en face</h2><div class="grid" id="sc-blue"></div>
+</div>
+<div id="v-red" class="hide">
+ <div class="card"><h3>Runes (Rhaast)</h3><div class="runes"><div><b>Précision</b><br>Conqueror · Triumph · Legend: Haste · Last Stand</div><div><b>Sorcellerie</b><br>Axiom Arcanist · Transcendence<br><span class="sub">Fragments : Adaptive ×2, PV évolutifs</span></div></div>
+ <div class="note" style="margin-top:8px">Last Stand est clé : le soin de Rhaast dépend des dégâts infligés. En rouge, reste sur les bottes de base et rushe 2 items avant de les finir.</div></div>
+ <h2>Builds selon la compo en face</h2><div class="grid" id="sc-red"></div>
+</div>
+
+<h2>🧪 Simulateur</h2>
+<div class="card"><div class="ctrl">
+ <div><label>Build</label><select id="s-build"></select></div>
+ <div><label>Moment de la partie</label><select id="s-stage"><option value="mid">Mid game — niv. 13, 3 items + bottes</option><option value="late">Late game — niv. 18, build complet</option></select></div>
+ <div><label>Cible</label><select id="s-tgt"></select></div>
+ <div id="hub-wrap"><label>Stacks Hubris (bleu)</label><select id="s-hub"><option value="-1">Inactif</option><option value="2">2 stacks</option><option value="4" selected>4 stacks</option><option value="8">8 stacks</option></select></div>
+</div><div id="s-out"></div></div>
+
+<h2>📊 Benchmark — 4ᵉ item</h2>
+<div class="card" id="bench"></div>
+
+<h2>💰 Valeur brute des items</h2>
+<div class="card" id="gold"></div>
+
+<div class="card note" id="method"></div>
+<script>
+// Kayn damage model — patch 26.22 numbers (see sources in page)
+const ITEMS = {
+  voltaic: {n:"Voltaic Cyclosword", s:"VC", ad:55, leth:10, ah:10, cost:3000, volt:true},
+  hubris:  {n:"Hubris", s:"HB", ad:55, leth:18, ah:10, cost:2800, hubris:true},
+  axiom:   {n:"Axiom Arc", s:"AX", ad:55, leth:18, ah:20, cost:2750, axiom:true},
+  edge:    {n:"Edge of Night", s:"EN", ad:50, leth:15, hp:250, cost:3000},
+  serylda: {n:"Serylda's Grudge", s:"SG", ad:45, pen:35, ah:15, cost:3000},
+  serpent: {n:"Serpent's Fang", s:"SF", ad:55, leth:15, cost:2500, serpent:true},
+  youmuu:  {n:"Youmuu's Ghostblade", s:"YG", ad:55, leth:18, cost:2800},
+  bastion: {n:"Bastionbreaker", s:"BB", ad:55, leth:18, ah:15, cost:3000},
+  profane: {n:"Profane Hydra", s:"PH", ad:55, leth:18, ah:10, cost:2850},
+  cleaver: {n:"Black Cleaver", s:"BC", ad:45, hp:400, ah:20, cost:3000, shred:30},
+  dd:      {n:"Death's Dance", s:"DD", ad:60, armor:50, ah:15, cost:3300, dd:true},
+  sterak:  {n:"Sterak's Gage", s:"ST", hp:400, cost:3200, sterak:true},
+  ga:      {n:"Guardian Angel", s:"GA", ad:55, armor:45, cost:3200, approx:true},
+  lucidity:{n:"Ionian Boots of Lucidity", s:"IL", ah:10, cost:900, boots:true, approx:true},
+  steelcaps:{n:"Plated Steelcaps", s:"PS", armor:25, cost:1200, boots:true, approx:true},
+  mercury: {n:"Mercury's Treads", s:"MT", mr:25, cost:1250, boots:true, approx:true},
+};
+const growth = (L) => (L-1)*(0.7025+0.0175*(L-1));
+const ranks = (L) => { // Q max, W second, R at 6/11/16
+  const order = "QWEQQRQWQWRWWEERE E".replace(/ /g,"");
+  const r = {Q:0,W:0,E:0,R:0};
+  for (let i=0;i<L;i++) r[order[i]]++;
+  return r;
+};
+function stats(build, L, opt={}) {
+  const s = {ad:0, leth:0, ah:0, hp:0, armor:0, mr:0, pen:0, shred:0, cost:0, flags:{}};
+  build.forEach(k => { const it = ITEMS[k]; for (const f of ["ad","leth","ah","hp","armor","mr","pen","shred","cost"]) s[f]+= it[f]||0;
+    for (const f of ["volt","hubris","axiom","serpent","dd","sterak"]) if (it[f]) s.flags[f]=true; });
+  s.baseAD = 68 + 3.3*growth(L);
+  s.bonusAD = s.ad + 10.8; // 2 adaptive shards
+  if (s.flags.sterak) s.bonusAD += 0.5*s.baseAD;
+  if (s.flags.hubris && opt.hubrisStacks!=null && opt.hubrisStacks>=0) s.bonusAD += 15 + 3*opt.hubrisStacks;
+  s.totalAD = s.baseAD + s.bonusAD;
+  s.maxHP = 655 + 103*growth(L) + s.hp + (opt.healthShard? 10*L : 0);
+  s.armorT = 38 + 4.5*growth(L) + s.armor;
+  s.mrT = 32 + 2.05*growth(L) + s.mr;
+  s.cdr = 100/(100+s.ah);
+  s.r = ranks(L);
+  return s;
+}
+function physMult(s, tgt, extraLeth=0) {
+  let a = tgt.armor * (1 - s.shredActive/100) * (1 - s.pen/100) - (s.leth + extraLeth);
+  a = Math.max(0, a);
+  return 100/(100+a);
+}
+// Blue: burst combo within 3s window (passive active). W -> Q(2 hits) -> AA(Voltaic) -> R -> AA
+function blueCombo(build, L, tgt, opt={}) {
+  const s = stats(build, L, opt); s.shredActive = 0;
+  const r = s.r, b = s.bonusAD;
+  const passivePct = 0.20 + 0.20*(L-1)/17;
+  const mrMult = 100/(100+tgt.mr);
+  let hp = tgt.hp, shield = tgt.shield||0;
+  if (s.flags.serpent && shield>0) shield *= 0.5; // Shield Reaver (≈50% melee, approx.)
+  const log = []; let total = 0;
+  const firmLeth = s.flags.volt ? 15 : 0;
+  let voltReady = !!s.flags.volt, firmOn = false;
+  const hit = (name, raw, kind="phys") => {
+    let d = kind==="phys" ? raw*physMult(s,tgt, firmOn?firmLeth:0) : raw*mrMult;
+    d += (kind==="phys" ? d*passivePct*mrMult : 0); // Shadow Assassin bonus magic dmg
+    let dealt = d;
+    const abs = Math.min(shield, dealt); shield -= abs; dealt -= abs; hp -= dealt;
+    total += d; log.push([name, Math.round(d)]);
+  };
+  const volt = () => { if (!voltReady) return; voltReady=false; firmOn=true;
+    hit("Voltaic (9% PV act.)", 0.09*Math.max(hp,0)); };
+  if (r.W) { hit("W", [0,85,130,175,220,265][r.W] + 1.10*b); volt(); }
+  if (r.Q) { const q=[0,75,105,135,165,195][r.Q] + 0.85*b; hit("Q (1)", q); hit("Q (2)", q); }
+  hit("AA", s.totalAD);
+  if (r.R) hit("R", [0,150,250,350][r.R] + 1.50*b);
+  hit("AA", s.totalAD);
+  const ehp = tgt.hp + (tgt.shield||0);
+  return {s, total:Math.round(total), pct: Math.round(1000*(tgt.hp - hp)/tgt.hp)/10, kill: hp<=0, log, ehp};
+}
+// Red: 6-second sustained fight
+function redFight(build, L, tgt, opt={}) {
+  const s = stats(build, L, opt); const T = opt.T||6;
+  s.shredActive = s.shred; // full Cleaver stacks over a 6s fight (approx.)
+  const r = s.r, b = s.bonusAD, m = physMult(s, tgt);
+  const qCD = [0,7,6.5,6,5.5,5][r.Q]*s.cdr, wCD = [0,13,12,11,10,9][r.W]*s.cdr;
+  const nQ = r.Q ? 1+Math.floor(T/qCD) : 0, nW = r.W ? 1+Math.floor(T/wCD) : 0;
+  const qDmg = (1.30*s.totalAD + (0.12 + 0.07*b/100)*tgt.hp)*m;
+  const wDmg = r.W ? ([0,85,130,175,220,265][r.W] + 1.10*b)*m : 0;
+  const rDmg = r.R ? (0.15 + 0.10*b/100)*tgt.hp*m : 0;
+  const as = 0.669*(1 + 0.027*(L-1));
+  const nAA = Math.max(0, Math.floor(as*T*0.65)); // ~35% du temps en casts/dash
+  const aaDmg = s.totalAD*m;
+  const voltProcs = s.flags.volt ? 2 : 0;
+  const voltDmg = voltProcs*0.09*0.6*tgt.hp*m; // proc sur PV actuels (~60% en moyenne)
+  const abil = nQ*qDmg + nW*wDmg + rDmg;
+  const total = abil + nAA*aaDmg + voltDmg;
+  const healPct = 0.25 + 0.005*(s.hp)/100;
+  const heal = healPct*abil + (r.R ? (0.1125 + 0.075*b/100)*tgt.hp : 0);
+  const ehpPhys = s.maxHP*(1+s.armorT/100)*(s.flags.dd ? 1/(1-0.35*0.5) : 1); // DD: ~moitié du dmg différé purgé
+  const ehpMag = s.maxHP*(1+s.mrT/100);
+  return {s, total:Math.round(total), dps:Math.round(total/T), pct:Math.round(1000*total/tgt.hp)/10,
+    heal:Math.round(heal), ehpPhys:Math.round(ehpPhys), ehpMag:Math.round(ehpMag),
+    parts:{Q:Math.round(nQ*qDmg), W:Math.round(nW*wDmg), R:Math.round(rDmg), AA:Math.round(nAA*aaDmg), Voltaic:Math.round(voltDmg)}, nQ, nW, nAA};
+}
+const TARGETS = {
+  mid: { adc:{n:"ADC", hp:1900, armor:75, mr:45}, mage:{n:"Mage", hp:1950, armor:85, mr:45},
+         shield:{n:"ADC + bouclier 350", hp:1900, armor:75, mr:45, shield:350},
+         bruiser:{n:"Bruiser", hp:3200, armor:140, mr:70}, tank:{n:"Tank", hp:4200, armor:220, mr:90} },
+  late:{ adc:{n:"ADC", hp:2600, armor:100, mr:55}, mage:{n:"Mage", hp:2700, armor:120, mr:55},
+         shield:{n:"ADC + bouclier 550", hp:2600, armor:100, mr:55, shield:550},
+         bruiser:{n:"Bruiser", hp:4200, armor:190, mr:90}, tank:{n:"Tank", hp:5600, armor:300, mr:120} },
+};
+
+
+// name|class|range|dmg|cc|tags   class: T tank F fighter A assassin M mage D marksman S enchanter
+// dmg P physical M magic X mixed ; cc 0-3 ; tags s=shields h=heal/sustain w=slows
+const CHAMP_RAW=`Aatrox|F|m|P|2|h
+Ahri|M|r|M|2|
+Akali|A|m|M|1|
+Akshan|D|r|P|0|
+Alistar|T|m|M|3|h
+Ambessa|F|m|P|2|
+Amumu|T|m|M|3|
+Anivia|M|r|M|3|w
+Annie|M|r|M|3|s
+Aphelios|D|r|P|1|
+Ashe|D|r|P|3|w
+Aurelion Sol|M|r|M|2|w
+Aurora|M|r|M|2|w
+Azir|M|r|M|2|
+Bard|S|r|M|3|h
+Bel'Veth|F|m|P|1|
+Blitzcrank|T|m|M|3|s
+Brand|M|r|M|2|
+Braum|T|m|M|3|w
+Briar|F|m|P|1|h
+Caitlyn|D|r|P|1|
+Camille|F|m|X|2|
+Cassiopeia|M|r|M|3|w
+Cho'Gath|T|m|M|3|hw
+Corki|D|r|X|0|
+Darius|F|m|P|2|hw
+Diana|A|m|M|2|s
+Dr. Mundo|T|m|X|1|hw
+Draven|D|r|P|1|
+Ekko|A|m|M|2|sw
+Elise|A|r|M|2|
+Evelynn|A|m|M|1|w
+Ezreal|D|r|X|0|
+Fiddlesticks|M|r|M|3|h
+Fiora|F|m|P|1|h
+Fizz|A|m|M|1|w
+Galio|T|m|M|3|
+Gangplank|F|m|X|1|w
+Garen|F|m|P|1|s
+Gnar|F|r|P|3|w
+Gragas|T|m|M|3|
+Graves|D|r|P|1|
+Gwen|F|m|M|1|h
+Hecarim|F|m|P|3|
+Heimerdinger|M|r|M|2|w
+Hwei|M|r|M|2|w
+Illaoi|F|m|P|1|h
+Irelia|F|m|P|2|h
+Ivern|S|r|M|2|s
+Janna|S|r|M|3|sw
+Jarvan IV|F|m|P|3|s
+Jax|F|m|X|2|
+Jayce|F|r|P|1|w
+Jhin|D|r|P|2|w
+Jinx|D|r|P|1|w
+K'Sante|T|m|P|3|
+Kai'Sa|D|r|X|0|s
+Kalista|D|r|P|1|w
+Karma|S|r|M|2|sw
+Karthus|M|r|M|1|w
+Kassadin|A|m|M|1|sw
+Katarina|A|m|M|0|
+Kayle|D|r|X|1|w
+Kayn|F|m|P|1|h
+Kennen|M|r|M|3|
+Kha'Zix|A|m|P|1|w
+Kindred|D|r|P|1|w
+Kled|F|m|P|2|
+Kog'Maw|D|r|X|0|w
+LeBlanc|A|r|M|2|
+Lee Sin|F|m|P|2|sw
+Leona|T|m|M|3|
+Lillia|M|m|M|2|w
+Lissandra|M|r|M|3|w
+Locke|A|m|M|2|
+Lucian|D|r|P|0|
+Lulu|S|r|M|3|sw
+Lux|M|r|M|3|sw
+Malphite|T|m|M|3|sw
+Malzahar|M|r|M|3|s
+Maokai|T|m|M|3|h
+Master Yi|F|m|P|0|h
+Mel|M|r|M|2|
+Milio|S|r|M|1|sh
+Miss Fortune|D|r|P|1|w
+Mordekaiser|F|m|M|2|s
+Morgana|M|r|M|3|sw
+Naafiri|A|m|P|1|
+Nami|S|r|M|3|hw
+Nasus|F|m|P|2|hw
+Nautilus|T|m|M|3|sw
+Neeko|M|r|M|3|w
+Nidalee|A|r|M|1|h
+Nilah|D|m|P|1|sh
+Nocturne|A|m|P|2|
+Nunu & Willump|T|m|M|3|hw
+Olaf|F|m|P|1|hw
+Orianna|M|r|M|2|sw
+Ornn|T|m|M|3|
+Pantheon|F|m|P|2|
+Poppy|T|m|P|3|
+Pyke|A|m|P|3|w
+Qiyana|A|m|P|2|
+Quinn|D|r|P|1|
+Rakan|S|m|M|3|sh
+Rammus|T|m|M|3|w
+Rek'Sai|F|m|P|2|
+Rell|T|m|M|3|s
+Renata Glasc|S|r|M|3|s
+Renekton|F|m|P|2|h
+Rengar|A|m|P|1|w
+Riven|F|m|P|2|s
+Rumble|M|m|M|2|sw
+Ryze|M|r|M|2|s
+Samira|D|r|P|1|
+Sejuani|T|m|M|3|s
+Senna|D|r|P|2|sh
+Seraphine|S|r|M|3|sh
+Sett|F|m|P|2|s
+Shaco|A|m|X|1|w
+Shen|T|m|X|3|s
+Shyvana|F|m|X|1|
+Singed|T|m|M|2|w
+Sion|T|m|P|3|sw
+Sivir|D|r|P|0|s
+Skarner|T|m|P|3|w
+Smolder|D|r|X|1|w
+Sona|S|r|M|2|shw
+Soraka|S|r|M|2|h
+Swain|M|r|M|2|h
+Sylas|M|m|M|2|h
+Syndra|M|r|M|2|w
+Tahm Kench|T|m|M|2|sh
+Taliyah|M|r|M|2|w
+Talon|A|m|P|1|w
+Taric|T|m|M|3|sh
+Teemo|M|r|M|1|w
+Thresh|T|r|M|3|sw
+Tristana|D|r|P|1|w
+Trundle|F|m|P|2|hw
+Tryndamere|F|m|P|1|hw
+Twisted Fate|M|r|M|2|w
+Twitch|D|r|P|1|w
+Udyr|F|m|X|2|s
+Urgot|F|r|P|3|sw
+Varus|D|r|P|2|w
+Vayne|D|r|P|1|h
+Veigar|M|r|M|3|
+Vel'Koz|M|r|M|2|w
+Vex|M|r|M|2|s
+Vi|F|m|P|3|s
+Viego|A|m|P|1|h
+Viktor|M|r|M|2|sw
+Vladimir|M|r|M|1|hw
+Volibear|F|m|X|3|h
+Warwick|F|m|X|2|h
+Wukong|F|m|P|3|
+Xayah|D|r|P|2|
+Xerath|M|r|M|2|w
+Xin Zhao|F|m|P|2|
+Yasuo|F|m|P|2|s
+Yone|F|m|X|2|s
+Yorick|F|m|P|2|w
+Yunara|D|r|P|0|
+Yuumi|S|r|M|1|shw
+Zaahen|F|m|P|2|h
+Zac|T|m|M|3|hw
+Zed|A|m|P|1|w
+Zeri|D|r|P|1|sw
+Ziggs|M|r|M|1|w
+Zilean|S|r|M|2|w
+Zoe|M|r|M|2|
+Zyra|M|r|M|2|w`;
+const CHAMPS=CHAMP_RAW.split("\n").map(l=>{const [n,c,r,d,cc,t]=l.split("|");return {n,c,r,d,cc:+cc,s:t.includes("s"),h:t.includes("h"),w:t.includes("w")}});
+
+// ---------- original icons (SVG glyphs, not Riot art) ----------
+const G={
+ bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+ crown:'<path d="M3 18h18l-2-10-4 4-3-6-3 6-4-4z"/>',
+ arc:'<path d="M12 3a9 9 0 1 0 9 9h-3a6 6 0 1 1-6-6z"/><path d="M15 2l5 4-6 2z"/>',
+ moon:'<path d="M15 3a9 9 0 1 0 6 13A7 7 0 0 1 15 3z"/>',
+ spike:'<path d="M3 21l7-11 2 2zM14 2l8 0 0 8-3-3-6 6-2-2 6-6z"/>',
+ fang:'<path d="M5 3c0 9 3 15 7 19 4-4 7-10 7-19-2 3-4 5-7 5S7 6 5 3z"/>',
+ ghost:'<path d="M5 21V10a7 7 0 0 1 14 0v11l-2.3-2-2.3 2-2.4-2-2.4 2-2.3-2z"/>',
+ tower:'<path d="M5 21V8h3V4h2v4h4V4h2v4h3v13z"/>',
+ hydra:'<path d="M5 21V9l-2-3 3-1 1 3v13zm6 0V6L9 3l3-1 1 3v16zm6 0V9l-2-3 3-1 1 3v13z"/>',
+ axe:'<path d="M5 22l-2-2L13 10l2 2z"/><path d="M12 3c5 0 9 4 9 9l-4-1-4-4z"/>',
+ drop:'<path d="M12 2c4 6 7 9 7 13a7 7 0 0 1-14 0c0-4 3-7 7-13z"/>',
+ heart:'<path d="M12 21l-8-8a5 5 0 0 1 8-6 5 5 0 0 1 8 6z"/>',
+ wings:'<circle cx="12" cy="5" r="2.5"/><path d="M12 9c-4 0-8 3-10 8 4-1 7-1 10 2 3-3 6-3 10-2-2-5-6-8-10-8z"/>',
+ boot:'<path d="M7 3h6v9l7 3v6H4v-3h3z"/>',
+ saw:'<path d="M3 15l3-4 3 4 3-4 3 4 3-4 3 4v5H3z"/>',
+ shield:'<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/>',
+ swords:'<path d="M4 3l8 9-2 2-8-9V3zm16 0v2l-8 9-2-2 8-9z"/><path d="M5 17l3 3-2 2-3-3zm14 0l2 2-3 3-2-2z"/>',
+ dagger:'<path d="M12 1l2.5 11h-5zM8 13h8v2H8zm3 3h2v6h-2z"/>',
+ star:'<path d="M12 2l2.6 6.9L22 9.3l-5.6 4.8L18.2 22 12 18l-6.2 4 1.8-7.9L2 9.3l7.4-.4z"/>',
+ arrow:'<path d="M3 21l10-10-2-2 9-6-6 9-2-2L4 22z"/>',
+ plus:'<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>'};
+const svg=(g,c="#fff",s=22)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="${c}">${G[g]}</svg>`;
+Object.assign(ITEMS,{
+ chempunk:{n:"Chempunk Chainsword",s:"CC",ad:45,hp:450,ah:15,cost:3000},
+ swiftness:{n:"Boots of Swiftness",s:"SW",cost:1000,boots:true,approx:true},
+});
+const IG={voltaic:["bolt","#c9a227"],hubris:["crown","#8e44ad"],axiom:["arc","#3d7be0"],edge:["moon","#4a3f8f"],serylda:["spike","#b5651d"],serpent:["fang","#2e8b57"],youmuu:["ghost","#5d6d7e"],bastion:["tower","#7f8c8d"],profane:["hydra","#a04000"],cleaver:["axe","#922b21"],dd:["drop","#7b241c"],sterak:["heart","#b03a2e"],ga:["wings","#d4ac0d"],lucidity:["boot","#2874a6"],steelcaps:["boot","#616a6b"],mercury:["boot","#1e8449"],swiftness:["boot","#ca6f1e"],chempunk:["saw","#28b463"]};
+let ic=k=>`<div class="it2" style="background:${IG[k][1]}" title="${ITEMS[k].n}">${svg(IG[k][0])}<small>${ITEMS[k].s}</small></div>`;
+const CC={T:["shield","#2e7d6b","Tank"],F:["swords","#b5522f","Combattant"],A:["dagger","#6c3483","Assassin"],M:["star","#2e5fb5","Mage"],D:["arrow","#b7950b","Tireur"],S:["plus","#1f8a70","Enchanteur"]};
+const initials=n=>n.replace(/[^A-Za-z ]/g,"").split(" ").filter(Boolean).map(w=>w[0]).join("").slice(0,2).toUpperCase().padEnd(2,n.replace(/[^a-z]/g,"")[0]||"");
+const chTile=(c,sz=48)=>c?`<div class="ch" style="width:${sz}px;height:${sz}px;background:linear-gradient(140deg,${CC[c.c][1]},#11151f)" title="${c.n}"><b>${initials(c.n)}</b><span class="cg">${svg(CC[c.c][0],"#fff",12)}</span><span class="rg">${c.r==="m"?"⚔":"➹"}</span></div>`:`<div class="ch empty" style="width:${sz}px;height:${sz}px">+</div>`;
+
+// ---------- engine ----------
+const PROF={mid:{D:[1900,75,45],M:[1950,85,45],S:[1800,80,45],A:[2100,85,50],F:[3200,140,70],T:[4200,220,90]},
+            late:{D:[2600,100,55],M:[2700,120,55],S:[2300,105,55],A:[2800,115,60],F:[4200,190,90],T:[5600,300,120]}};
+function analyse(en,al){
+ const E=en.filter(Boolean),A=al.filter(Boolean),n=E.length||1;
+ const melee=E.filter(c=>c.r==="m").length,ranged=E.length-melee;
+ const squ=E.filter(c=>"DMSA".includes(c.c)).length,tanks=E.filter(c=>c.c==="T").length,fight=E.filter(c=>c.c==="F").length;
+ const ad=E.reduce((s,c)=>s+(c.d==="P"?1:c.d==="X"?.5:0),0),ap=E.length-ad;
+ const cc=E.reduce((s,c)=>s+c.cc,0),hard=E.filter(c=>c.cc>=3).length;
+ const shields=E.filter(c=>c.s&&("STM".includes(c.c))).length+E.filter(c=>c.s&&!"STM".includes(c.c)).length*.5;
+ const heals=E.filter(c=>c.h).length,slows=E.filter(c=>c.w).length,aa=E.filter(c=>c.c==="D"||(c.c==="F"&&c.d==="P")).length;
+ const allyFront=A.filter(c=>"TF".includes(c.c)).length,allyCarry=A.filter(c=>"DMA".includes(c.c)).length,allyAD=A.reduce((s,c)=>s+(c.d==="P"?1:c.d==="X"?.5:0),0);
+ // form score: >0 blue, <0 red
+ let sc=0;const why=[];
+ sc+=squ*1-tanks*1.4-fight*0.6;why.push(`${squ} cible(s) fragile(s) vs ${tanks} tank(s) et ${fight} combattant(s) en face`);
+ sc+=(ranged-melee)*0.35;why.push(`${melee} mêlée (orbes rouges) / ${ranged} distance (orbes bleus)`);
+ if(A.length){if(allyFront===0){sc-=1.5;why.push("aucune frontline dans ton équipe → Rhaast tient ce rôle");}
+  else if(allyFront>=3){sc+=0.8;why.push(`${allyFront} frontlines alliées → tu peux jouer l'assassin`);}
+  if(allyCarry<=1){sc+=0.6;why.push("peu de dégâts alliés → l'équipe a besoin de ton burst");}}
+ const form=sc>=0.5?"blue":sc<=-0.5?"red":"either";
+ return {E,A,melee,ranged,squ,tanks,fight,ad,ap,adShare:ad/n,apShare:ap/n,cc,hard,shields,heals,slows,aa,allyFront,allyCarry,allyAD,sc,why,form};
+}
+function chooseBoots(x,f){
+ const o=[];
+ if(x.apShare>=0.6||(x.hard>=3&&x.apShare>=0.4)) o.push(["mercury",`${Math.round(x.apShare*100)} % de dégâts magiques${x.hard>=3?` + ${x.hard} gros CC`:""} → MR + 30 % de ténacité`]);
+ else if(x.hard>=4) o.push(["mercury",`${x.hard} champions à gros CC → la ténacité vaut plus que la haste`]);
+ if(x.adShare>=(f==="blue"?0.7:0.6)&&x.aa>=2) o.push(["steelcaps",`${Math.round(x.adShare*100)} % de dégâts physiques dont ${x.aa} auto-attaqueurs`]);
+ if(x.slows>=3&&x.ranged>=3) o.push(["swiftness",`${x.slows} sources de ralentissement et ${x.ranged} champions à distance : Swiftness réduit les ralentissements`]);
+ const def=f==="blue"?["lucidity","par défaut en bleu : haste sur E/R et sur les sorts d'invocateur"]:["steelcaps","par défaut en rouge (rester en bottes de base jusqu'aux 2 items)"];
+ if(!o.length) o.push(def); else if(!o.find(b=>b[0]===def[0])) o.push([def[0],"alternative : "+def[1]]);
+ return o;
+}
+const T3={lucidity:"Crimson Lucidity",steelcaps:"Armored Advance",mercury:"Chainlaced Crushers",swiftness:"Swiftmarch"};
+function chooseBuild(x,f){
+ const boots=chooseBoots(x,f)[0][0];const notes=[];let b;
+ if(f==="blue"){
+  const second=x.hard>=3?"edge":"hubris";
+  b=["voltaic",second,boots];
+  if(second==="edge")notes.push(`<b>Edge of Night en 2ᵉ</b> : ${x.hard} gros CC en face, le bouclier anti-sort protège ton engage.`);
+  let fourth="axiom";
+  if(x.shields>=2){fourth="serpent";notes.push(`<b>Serpent's Fang</b> : ${Math.round(x.shields)} sources de boucliers en face.`);}
+  else if(x.tanks+x.fight*0.5>=2||x.allyAD>=3){fourth="serylda";notes.push(`<b>Serylda en 4ᵉ</b> : ${x.tanks+x.fight>=2?"frontline armurée":"ton équipe fait surtout des dégâts physiques, ils vont stacker l'armure"}.`);}
+  b.push(fourth);
+  const rest=["hubris","axiom","serylda","edge","ga"].filter(k=>!b.includes(k));
+  if(fourth==="serpent"&&!b.includes("serylda")) b.push("serylda");
+  while(b.length<6) b.push(rest.shift()); b=b.slice(0,6);
+  if(!b.includes("hubris"))notes.push("Pas de Hubris : sans kills, son passif ne s'active pas.");
+ } else {
+  const tanky=x.tanks>=2;
+  b=tanky?["cleaver","voltaic",boots]:["voltaic","cleaver",boots];
+  if(x.heals>=2){b.push("chempunk");notes.push(`<b>Chempunk Chainsword</b> : ${x.heals} champions avec beaucoup de soins (anti-heal). Prends Executioner's Calling tôt.`);}
+  if(tanky){b.push("serylda");notes.push(`<b>Serylda + Cleaver</b> : ${x.tanks} tanks. Les deux se multiplient (−30 % d'armure, puis 35 % de pénétration).`);}
+  if(x.adShare>=0.55){b.push("dd");notes.push(`<b>Death's Dance</b> : ${Math.round(x.adShare*100)} % de dégâts physiques en face.`);}
+  if(x.apShare>=0.55){b.push("sterak");notes.push(`<b>Sterak</b> : ${Math.round(x.apShare*100)} % de dégâts magiques en face (Maw of Malmortius possible aussi, non modélisé).`);}
+  for(const k of ["dd","sterak","ga"]) if(!b.includes(k)) b.push(k);
+  b=[...new Set(b)].slice(0,6);
+ }
+ if(f==="blue"&&x.heals>=2) notes.push(`${x.heals} champions avec beaucoup de soins : un Executioner's Calling (800 po) suffit en bleu, car tu burst.`);
+ return {b,notes};
+}
+function targetFor(c,stage,x){const [hp,ar,mr]=PROF[stage][c.c];const shieldSrc=x.E.filter(e=>e.s&&e.c==="S").length;
+ const sh=("DMA".includes(c.c)&&shieldSrc)?(stage==="mid"?350:550)*Math.min(2,shieldSrc):0;return {n:c.n,hp,armor:ar,mr,shield:sh};}
+
+const CAT={voltaic:"leth",hubris:"leth",axiom:"leth",edge:"leth",serpent:"leth",youmuu:"leth",bastion:"leth",profane:"leth",serylda:"pen",cleaver:"ad",dd:"def",sterak:"def",ga:"def",lucidity:"boot",steelcaps:"boot",mercury:"boot"};
+const SC={blue:[
+ {t:"Défaut — 2-3 squishies",b:["voltaic","hubris","lucidity","axiom","serylda","edge"],wr:"Core 52,5 % · Axiom 4ᵉ 55,1 %",w:"Snowball classique. <b>Axiom</b> refresh ton R à chaque kill → reset en teamfight. Si tu es très ahead : <b>GA</b> en 6ᵉ (64 % WR en dernier item)."},
+ {t:"Boucliers en face (Lulu, Janna, Karma, Seraphine, Sett…)",b:["voltaic","hubris","lucidity","serpent","serylda","edge"],w:"<b>Serpent's Fang</b> en 4ᵉ (ou 3ᵉ si 2+ shielders). Dans le simulateur, contre un ADC + bouclier, il rattrape presque Serylda pour 500 po de moins."},
+ {t:"Frontline armurée mais assez de cibles pour le bleu",b:["voltaic","hubris","lucidity","serylda","axiom","edge"],wr:"Serylda 5ᵉ 57,9 %",w:"<b>Serylda</b> monte en 4ᵉ : c'est le meilleur 4ᵉ item du benchmark contre toutes les cibles, et l'écart grandit avec l'armure."},
+ {t:"Beaucoup de CC ponctuels (Leona, Ashe, Lissandra, Morgana…)",b:["voltaic","edge","lucidity","hubris","serylda","ga"],wr:"EoN 4ᵉ 54,7 %",w:"<b>Edge of Night</b> en 2ᵉ : le bouclier anti-sort bloque le CC qui couperait ton engage. +250 PV."},
+ {t:"Pas de kills / en retard",b:["voltaic","youmuu","lucidity","edge","serylda","ga"],w:"Ne pas acheter Hubris sans kills : son passif ne se déclenche pas. Youmuu (vitesse de déplacement) ou Axiom pour jouer les picks."},
+ {t:"Tu domines mais n'arrives pas à fermer",b:["voltaic","hubris","lucidity","axiom","serylda","bastion"],w:"<b>Bastionbreaker</b> à la place du 6ᵉ item : pick le support / l'ADC, puis split une tour. Dégâts aux structures (non modélisés)."}
+],red:[
+ {t:"Défaut — bruisers / compo mixte",b:["voltaic","cleaver","steelcaps","dd","sterak","ga"],wr:"Core 53,2 % (Master)",w:"Rush Voltaic (le soin vient des dégâts) → Cleaver. Bottes de base jusqu'aux 2 items."},
+ {t:"2+ tanks lourds",b:["cleaver","voltaic","steelcaps","serylda","dd","sterak"],w:"<b>Serylda + Cleaver</b> se multiplient (−30 % d'armure puis 35 % de pénétration). Benchmark : meilleur DPS contre un tank, +23 % par rapport à DD."},
+ {t:"Gros dégâts physiques (assassins AD, ADC hypercarry)",b:["voltaic","cleaver","steelcaps","dd","ga","sterak"],w:"<b>Death's Dance</b> : +49 % de PV effectifs physiques par rapport à Sterak dans le simulateur, sans perdre beaucoup de DPS."},
+ {t:"Gros dégâts magiques",b:["voltaic","cleaver","mercury","sterak","dd","ga"],w:"Mercury's Treads + Sterak (PV bruts, efficaces contre le burst magique). Maw / Spirit Visage restent possibles mais ne sont pas modélisés (stats non vérifiées)."},
+ {t:"Compo full squishy mais tu es déjà rouge",b:["voltaic","hubris","steelcaps","cleaver","dd","ga"],w:"Un 2ᵉ item léthalité (<b>Hubris/Axiom</b>) monte ton AD bonus, donc tes % de PV max. Dans le benchmark, Axiom fait plus de DPS que DD."}
+]};
+let form="blue";
+function renderSc(){for(const f of ["blue","red"]){document.getElementById("sc-"+f).innerHTML=SC[f].map(s=>`<div class="card" style="margin:0"><h3>${s.t}${s.wr?`<span class="tag wr">${s.wr}</span>`:""}</h3><div class="path">${s.b.map((k,i)=>(i?'<span class="arr">›</span>':'')+ic(k)).join("")}</div><div class="sub">${s.b.map(k=>ITEMS[k].n).join(" → ")}</div><div class="when">${s.w}</div></div>`).join("")}}
+const fmt=n=>n.toLocaleString("fr-FR");
+function cut(b,stage){const boots=b.find(k=>ITEMS[k].boots);if(stage==="late")return b;const items=b.filter(k=>!ITEMS[k].boots).slice(0,3);return [...items,boots]}
+function sim(){
+ const sc=SC[form][+document.getElementById("s-build").value],st=document.getElementById("s-stage").value,tk=document.getElementById("s-tgt").value;
+ const L=st==="mid"?13:18,b=cut(sc.b,st),tgt=TARGETS[st][tk],hub=+document.getElementById("s-hub").value;
+ const o=document.getElementById("s-out");
+ let h=`<div class="path" style="margin-bottom:18px">${b.map(ic).join("")}<span class="sub" style="margin-left:8px">Niv. ${L} · ${fmt(stats(b,L).cost)} po · cible : ${tgt.n} (${fmt(tgt.hp)} PV, ${tgt.armor} armure${tgt.shield?`, bouclier ${tgt.shield}`:""})</span></div>`;
+ if(form==="blue"){const r=blueCombo(b,L,tgt,{hubrisStacks:hub});const mx=Math.max(...r.log.map(x=>x[1]));
+  h+=`<div class="kpis"><div class="kpi"><div class="sub">Dégâts du combo</div><div class="big">${fmt(r.total)}</div></div><div class="kpi"><div class="sub">% PV de la cible</div><div class="big" style="color:${r.kill?'var(--green)':'var(--gold)'}">${r.pct}%</div></div><div class="kpi"><div class="sub">Résultat</div><div class="big">${r.kill?"☠️ Kill":"Survit"}</div></div><div class="kpi"><div class="sub">AD total / létha</div><div class="big">${Math.round(r.s.totalAD)} / ${r.s.leth}</div></div></div><h3 style="margin-top:14px">Combo W › Q › AA › R › AA (passif Assassin inclus)</h3>`+r.log.map(([n,d])=>`<div class="row"><span>${n}</span><div class="bar"><i style="width:${100*d/mx}%;background:var(--blue)"></i></div><span>${fmt(d)}</span></div>`).join("")}
+ else{const r=redFight(b,L,tgt);const mx=Math.max(...Object.values(r.parts));
+  h+=`<div class="kpis"><div class="kpi"><div class="sub">DPS (combat de 6 s)</div><div class="big">${fmt(r.dps)}</div></div><div class="kpi"><div class="sub">% PV max retirés</div><div class="big">${r.pct}%</div></div><div class="kpi"><div class="sub">Soins sur 6 s</div><div class="big" style="color:var(--green)">${fmt(r.heal)}</div></div><div class="kpi"><div class="sub">PV eff. phys / mag</div><div class="big">${fmt(r.ehpPhys)}<span class="sub"> / ${fmt(r.ehpMag)}</span></div></div></div><h3 style="margin-top:14px">Répartition (${r.nQ} Q, ${r.nW} W, 1 R, ${r.nAA} AA)</h3>`+Object.entries(r.parts).map(([n,d])=>`<div class="row"><span>${n}</span><div class="bar"><i style="width:${100*d/mx}%;background:var(--red)"></i></div><span>${fmt(d)}</span></div>`).join("")}
+ o.innerHTML=h}
+function fillSel(){document.getElementById("s-build").innerHTML=SC[form].map((s,i)=>`<option value="${i}">${s.t}</option>`).join("");
+ document.getElementById("s-tgt").innerHTML=Object.entries(TARGETS.mid).map(([k,t])=>`<option value="${k}" ${k===(form==="blue"?"adc":"tank")?"selected":""}>${t.n.replace(/ \d+$/,"")}</option>`).join("");
+ document.getElementById("hub-wrap").style.display=form==="blue"?"":"none";sim()}
+function bench(){const el=document.getElementById("bench");let h="";
+ if(form==="blue"){const base=["voltaic","hubris","lucidity"],c=["axiom","serylda","edge","serpent","youmuu","bastion","profane"],ts=["adc","shield","bruiser","tank"];
+  const rows=c.map(k=>({k,v:ts.map(t=>blueCombo([...base,k],14,TARGETS.mid[t],{hubrisStacks:4}).pct)}));const best=ts.map((_,i)=>Math.max(...rows.map(r=>r.v[i])));
+  const pas={axiom:"Rend ~25 % du CD du R par kill",serylda:"Ralentit les cibles basses en PV",edge:"Bouclier anti-sort, +250 PV",serpent:"Réduit les boucliers (~50 %)",youmuu:"Vitesse de déplacement",bastion:"Dégâts aux structures",profane:"Actif de zone (non modélisé)"};
+  h=`<div class="sub" style="margin-bottom:8px">Base : Voltaic + Hubris (4 stacks) + Lucidity, niveau 14. Valeur = % de PV retirés par le combo complet (au-delà de 100 % = surplus de dégâts).</div><table><tr><th>4ᵉ item</th><th>Prix</th>${ts.map(t=>`<th>${TARGETS.mid[t].n.replace(/ \d+$/,"")}</th>`).join("")}<th>Passif</th></tr>`+rows.map(r=>`<tr><td>${ITEMS[r.k].n}</td><td>${fmt(ITEMS[r.k].cost)}</td>${r.v.map((v,i)=>`<td class="${v===best[i]?'best':''}">${v}%</td>`).join("")}<td class="sub" style="text-align:left">${pas[r.k]}</td></tr>`).join("")+`</table><div class="note" style="margin-top:8px"><b>Lecture :</b> Serylda est le meilleur 4ᵉ item partout, et l'écart grandit avec l'armure (+9,6 pts contre un bruiser, +7,6 contre un tank). Axiom, Youmuu, Bastionbreaker et Profane ont les mêmes stats (55 AD, 18 létha), donc c'est leur passif qui décide : Axiom pour les teamfights, Youmuu pour le roam, Bastion pour finir la partie. Serpent's ne vaut le coup que contre les boucliers.</div>`}
+ else{const base=["voltaic","cleaver","steelcaps"],c=["dd","sterak","serylda","hubris","axiom","edge","ga"];
+  const rows=c.map(k=>{const t=redFight([...base,k],14,TARGETS.mid.tank),b=redFight([...base,k],14,TARGETS.mid.bruiser);return {k,v:[t.dps,b.dps,t.heal,t.ehpPhys,t.ehpMag]}});const best=[0,1,2,3,4].map(i=>Math.max(...rows.map(r=>r.v[i])));
+  const hd=["DPS vs tank","DPS vs bruiser","Soin 6 s (tank)","PV eff. phys","PV eff. mag"];
+  h=`<div class="sub" style="margin-bottom:8px">Base : Voltaic + Cleaver + Steelcaps, niveau 14, combat de 6 s.</div><table><tr><th>4ᵉ item</th><th>Prix</th>${hd.map(x=>`<th>${x}</th>`).join("")}</tr>`+rows.map(r=>`<tr><td>${ITEMS[r.k].n}${ITEMS[r.k].approx?' <span class="tag ap">≈</span>':''}</td><td>${fmt(ITEMS[r.k].cost)}</td>${r.v.map((v,i)=>`<td class="${v===best[i]?'best':''}">${fmt(v)}</td>`).join("")}</tr>`).join("")+`</table><div class="note" style="margin-top:8px"><b>Lecture :</b> les % de PV de Rhaast montent avec l'AD bonus. Serylda (qui se cumule avec Cleaver) et les items léthalité donnent le plus de DPS ; Death's Dance donne de loin le plus de PV effectifs physiques ; Sterak est le meilleur contre le magique. Les soins varient peu d'un item à l'autre, car le R (en % des PV max de la cible) en fournit la majeure partie.</div>`}
+ el.innerHTML=h}
+function gold(){const v={ad:35,leth:30,ah:50,hp:2.67,armor:20,mr:18};
+ const ks=["voltaic","hubris","axiom","edge","serylda","serpent","youmuu","bastion","cleaver","dd","sterak"];
+ const rows=ks.map(k=>{const it=ITEMS[k];let s=0;for(const f in v)s+=(it[f]||0)*v[f];return {k,s:Math.round(s),e:Math.round(100*s/it.cost)}}).sort((a,b)=>b.e-a.e);
+ document.getElementById("gold").innerHTML=`<div class="sub" style="margin-bottom:8px">Valeur des stats brutes au prix des composants de base (AD 35 po, létha 30, AH 50, PV 2,67, armure 20). Hors passifs et hors pénétration en %.</div>`+rows.map(r=>`<div class="row"><span>${ITEMS[r.k].n}</span><div class="bar"><i style="width:${Math.min(100,r.e/1.3)}%;background:${r.e>=100?'var(--green)':'var(--gold)'}"></i></div><span>${r.e}%</span></div>`).join("")+`<div class="note" style="margin-top:6px">Voltaic paraît peu rentable sur le papier (seulement 10 létha), mais Firmament (+15 létha pendant 4 s et 9 % des PV actuels) se déclenche à chaque combo grâce à Galvanize. C'est pour ça qu'il est le premier item dans les deux formes.</div>`}
+document.getElementById("method").innerHTML=`<b>Méthode & limites.</b> Kayn : stats et ratios du patch 26.22 (Q bleu 75–195 +85 % AD bonus par coup ; Q rouge 65 % AD +6 % PV max +3,5 % par 100 AD bonus par coup ; R rouge 15 % PV max +10 % par 100 AD bonus ; passif Assassin 20→40 % de dégâts magiques bonus pendant 3 s). Ordre des sorts Q›W›E, R aux niveaux 6/11/16. Fragments : 2× adaptatif (+10,8 AD). Armure effective = armure × (1 − réduction Cleaver) × (1 − % pén) − létha. Les runes clés (Dark Harvest, Conqueror) ne sont pas modélisées. <b>Cibles</b> = profils types estimés (PV et armure moyens), pas des champions précis. Les items marqués ≈ (GA, bottes) et la réduction de bouclier de Serpent's (~50 %) n'ont pas été vérifiés sur ce patch. Le combat de Rhaast suppose environ 65 % du temps passé à auto-attaquer et Cleaver à 5 stacks. Win rates : Skill Capped (patch 26.22), Mobalytics, LoLalytics (Émeraude+). <b>Draft :</b> chaque champion est classé par profil (tank, combattant, assassin, mage, tireur, enchanteur), portée, type de dégâts, niveau de CC, boucliers, soins et ralentissements. C'est une simplification : la recommandation donne une tendance, pas une vérité absolue. Les icônes sont des pictogrammes originaux, pas les visuels officiels.`;
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{form=t.dataset.f;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));document.getElementById("v-blue").classList.toggle("hide",form!=="blue");document.getElementById("v-red").classList.toggle("hide",form!=="red");fillSel();bench()});
+["s-build","s-stage","s-tgt","s-hub"].forEach(id=>document.getElementById(id).onchange=sim);
+renderSc();fillSel();bench();gold();
+const byName=Object.fromEntries(CHAMPS.map(c=>[c.n,c]));
+const ST={en:[null,null,null,null,null],al:[null,null,null,null],slot:null,fil:"all"};
+const EX={"Mages + enchanteur":[["Gnar","Viego","Ahri","Jinx","Lulu"],["Ornn","Syndra","Kai'Sa","Nautilus"]],
+ "Frontline lourde":[["Ornn","Sejuani","Galio","Aphelios","Braum"],["Jax","Orianna","Ezreal","Karma"]],
+ "Bruisers AD":[["Darius","Lee Sin","Yone","Draven","Pyke"],["Malphite","Lux","Caitlyn","Leona"]],
+ "Beaucoup de soins":[["Aatrox","Warwick","Vladimir","Samira","Soraka"],["K'Sante","Ahri","Jhin","Rell"]]};
+document.getElementById("d-ex").innerHTML+=Object.keys(EX).map(k=>`<option>${k}</option>`).join("");
+document.querySelector(".me").innerHTML=`<div class="sl">${chTile(byName["Kayn"],48)}<span style="color:var(--blue)">Toi</span></div>`;
+function drawSlots(){for(const t of ["en","al"])document.getElementById(t).innerHTML=ST[t].map((c,i)=>`<div class="sl" onclick="openPick('${t}',${i})">${chTile(c,48)}<span>${c?c.n:""}</span></div>`).join("");}
+function openPick(t,i){ST.slot=[t,i];document.getElementById("pick").classList.remove("hide");document.getElementById("q").value="";drawPick();}
+function drawPick(){const q=document.getElementById("q").value.toLowerCase();const used=new Set([...ST.en,...ST.al].filter(Boolean).map(c=>c.n));
+ document.getElementById("fil").innerHTML=[["all","Tous"],...Object.entries(CC).map(([k,v])=>[k,v[2]])].map(([k,l])=>`<button class="${ST.fil===k?'on':''}" onclick="ST.fil='${k}';drawPick()">${l}</button>`).join("");
+ document.getElementById("pg").innerHTML=CHAMPS.filter(c=>c.n!=="Kayn"&&!used.has(c.n)&&(ST.fil==="all"||c.c===ST.fil)&&c.n.toLowerCase().includes(q)).map(c=>`<div class="pc" onclick="pickC('${c.n.replace(/'/g,"\\'")}')">${chTile(c,52)}<span>${c.n}</span></div>`).join("");}
+function pickC(n){const [t,i]=ST.slot;ST[t][i]=byName[n];closePick();run();}
+function closePick(){document.getElementById("pick").classList.add("hide");drawSlots();}
+document.getElementById("q").oninput=drawPick;document.getElementById("cls").onclick=closePick;
+document.getElementById("clr").onclick=()=>{const [t,i]=ST.slot;ST[t][i]=null;closePick();run();};
+document.getElementById("pick").onclick=e=>{if(e.target.id==="pick")closePick();};
+document.getElementById("d-ex").onchange=e=>{const v=EX[e.target.value];if(!v)return;ST.en=v[0].map(n=>byName[n]);ST.al=v[1].map(n=>byName[n]);drawSlots();run();};
+["d-stage","d-form"].forEach(id=>document.getElementById(id).onchange=run);
+function run(){
+ const out=document.getElementById("d-out");const x=analyse(ST.en,ST.al);
+ if(x.E.length<3){out.innerHTML="Ajoute au moins 3 adversaires pour lancer l'analyse.";out.className="note";return;}
+ out.className="";const stage=document.getElementById("d-stage").value,L=stage==="mid"?13:18;
+ const fsel=document.getElementById("d-form").value;const f=fsel!=="auto"?fsel:(x.form==="either"?(x.sc>=0?"blue":"red"):x.form);
+ const pos=Math.max(2,Math.min(98,50+x.sc*9));
+ let h=`<div class="verdict ${f}"><div style="font-size:30px">${f==="blue"?"🔵":"🔴"}</div><div style="flex:1"><div style="font-weight:800;font-size:16px">${f==="blue"?"Shadow Assassin":"Rhaast"}${x.form==="either"&&fsel==="auto"?' <span class="tag ap">les deux sont jouables</span>':""}${fsel!=="auto"?' <span class="tag ap">forcé</span>':""}</div>
+ <div class="gauge"><i style="left:${pos}%"></i></div><div class="sub" style="display:flex;justify-content:space-between"><span>Rouge</span><span>Bleu</span></div>
+ <div class="sub" style="margin-top:4px">${x.why.join(" · ")}</div></div></div>`;
+ h+=`<div class="thr"><div>Dégâts phys./mag.<b>${Math.round(x.adShare*100)} / ${Math.round(x.apShare*100)} %</b></div><div>Gros CC<b>${x.hard}</b></div><div>Boucliers<b>${Math.round(x.shields*10)/10}</b></div><div>Soins<b>${x.heals}</b></div><div>Ralentissements<b>${x.slows}</b></div><div>Tanks / combattants<b>${x.tanks} / ${x.fight}</b></div></div>`;
+ const boots=chooseBoots(x,f);
+ h+=`<h3>👟 Bottes</h3>`+boots.map((b,i)=>`<div class="boot" style="opacity:${i?0.65:1}">${ic(b[0])}<div><b>${ITEMS[b[0]].n}</b>${i?"":` <span class="tag wr">conseillé</span>`}<br><span class="sub">${b[1]} · niveau 3 : ${T3[b[0]]}</span></div></div>`).join("");
+ const {b,notes}=chooseBuild(x,f);
+ h+=`<h3 style="margin-top:14px">🛠️ Ordre de build</h3><div class="path" style="margin-bottom:18px">${b.map((k,i)=>(i?'<span class="arr">›</span>':'')+ic(k)).join("")}</div><div class="sub">${b.map(k=>ITEMS[k].n).join(" → ")}</div>`;
+ if(notes.length)h+=`<div class="note" style="margin-top:8px">${notes.map(n=>"• "+n).join("<br>")}</div>`;
+ const bb=stage==="mid"?[...b.filter(k=>!ITEMS[k].boots).slice(0,3),b.find(k=>ITEMS[k].boots)]:b;
+ h+=`<h3 style="margin-top:16px">⚔️ Contre chaque adversaire (niv. ${L}, ${bb.filter(k=>!ITEMS[k].boots).length} items)</h3>`;
+ if(f==="blue"){h+=`<div class="sub">% des PV retirés par le combo W › Q › AA › R › AA (bouclier des enchanteurs adverses inclus). Le trait blanc marque 100 % (kill).</div>`;
+  for(const c of x.E){const t=targetFor(c,stage,x);const r=blueCombo(bb,L,t,{hubrisStacks:4});const w=Math.min(100,r.pct/1.5);
+   h+=`<div class="erow">${chTile(c,38)}<div class="lbl">${c.n}<br><span class="sub">${CC[c.c][2]}${t.shield?` · 🛡${t.shield}`:""}</span></div><div class="bar"><i style="width:${w}%;background:${r.kill?'var(--green)':'var(--gold)'}"></i><span class="k" style="left:${100/1.5}%"></span></div><div class="val">${r.pct}%${r.kill?" ☠️":""}</div></div>`;}}
+ else{h+=`<div class="sub">Temps estimé pour tuer la cible en 1v1 (DPS d'un combat de 6 s, Cleaver à 5 stacks). Le trait blanc marque 6 s.</div>`;
+  for(const c of x.E){const t=targetFor(c,stage,x);const r=redFight(bb,L,t);const ttk=(t.hp+(t.shield||0))/r.dps;const w=Math.min(100,ttk/12*100);
+   h+=`<div class="erow">${chTile(c,38)}<div class="lbl">${c.n}<br><span class="sub">${CC[c.c][2]}</span></div><div class="bar"><i style="width:${w}%;background:${ttk<=6?'var(--green)':ttk<=9?'var(--gold)':'var(--red)'}"></i><span class="k" style="left:50%"></span></div><div class="val">${ttk.toFixed(1)} s</div></div>`;}
+  const r0=redFight(bb,L,targetFor(x.E[0],stage,x));h+=`<div class="sub" style="margin-top:6px">Ta résistance : ${fmt(r0.ehpPhys)} PV effectifs contre le physique, ${fmt(r0.ehpMag)} contre le magique.</div>`;}
+ out.innerHTML=h;}
+drawSlots();
+
+</script></div></body></html>
