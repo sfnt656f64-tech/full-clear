@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e17" />
+  <title>Kayn Jungle — Builds & simulateur</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="logo" id="logo">K</div>
+      <div>
+        <h1>Kayn Jungle — Builds, simulations & benchmark</h1>
+        <div class="sub" id="patch-line"></div>
+        <div class="pills" id="pills"></div>
+      </div>
+    </header>
+
+    <section>
+      <h2>🎯 Simulateur de draft</h2>
+      <div class="card" id="draft"></div>
+    </section>
+
+    <nav class="tabs" id="tabs" aria-label="Forme">
+      <button class="tab b on" data-form="blue" aria-pressed="true">🔵 Shadow Assassin</button>
+      <button class="tab r" data-form="red" aria-pressed="false">🔴 Rhaast</button>
+    </nav>
+
+    <section id="guides"></section>
+
+    <section>
+      <h2>🧪 Simulateur</h2>
+      <div class="card" id="simulator"></div>
+    </section>
+
+    <section>
+      <h2>📊 Benchmark — 4ᵉ item</h2>
+      <div class="card" id="bench"></div>
+    </section>
+
+    <section>
+      <h2>💰 Valeur brute des items</h2>
+      <div class="card" id="gold"></div>
+    </section>
+
+    <section class="card note" id="method"></section>
+
+    <footer id="legal"></footer>
+  </div>
+
+  <div id="picker" class="modal hide" role="dialog" aria-modal="true" aria-label="Choisir un champion"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

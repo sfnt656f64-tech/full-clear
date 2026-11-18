@@ -1,0 +1,105 @@
+# Déploiement sur GitHub Pages + synchronisation hebdomadaire avec Data Dragon.
+#
+# - push sur main          → tests, build, déploiement
+# - chaque jeudi (planifié) → synchronisation Data Dragon ; si le patch a changé :
+#                             tests, commit des données sur main, déploiement
+# - lancement manuel       → idem, synchronisation optionnelle
+#
+# Si un nouveau patch casse les tests (ex. nouveau champion absent de overrides.json),
+# rien n'est commité ni déployé et le workflow échoue : GitHub envoie un e-mail.
+name: Déploiement
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 6 * * 4" # jeudi 06:23 UTC, après les patchs du mercredi
+  workflow_dispatch:
+    inputs:
+      sync:
+        description: "Synchroniser Data Dragon avant de déployer"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Synchroniser Data Dragon
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.sync)
+        run: npm run sync
+
+      - name: Détecter un changement de données
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain -- src/data/generated)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff --stat -- src/data/generated
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Aucun changement Data Dragon."
+          fi
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Commiter les nouvelles données
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          VERSION=$(node -p "require('./src/data/generated/version.json').version")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/generated
+          git commit -m "Données : Data Dragon $VERSION"
+          git push
+
+      - name: Faut-il déployer ?
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "${{ steps.changes.outputs.changed }}" = "true" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/configure-pages@v5
+        if: steps.decide.outputs.deploy == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.decide.outputs.deploy == 'true'
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,211 @@
+{
+  "voltaic": {
+    "id": "6699",
+    "name": "Voltaic Cyclosword",
+    "nameFr": "Cyclosabre voltaïque",
+    "image": "6699.png",
+    "cost": 3000,
+    "ad": 55,
+    "leth": 10,
+    "ah": 10
+  },
+  "hubris": {
+    "id": "6697",
+    "name": "Hubris",
+    "nameFr": "Orgueil",
+    "image": "6697.png",
+    "cost": 2800,
+    "ad": 55,
+    "leth": 18,
+    "ah": 10
+  },
+  "axiom": {
+    "id": "6696",
+    "name": "Axiom Arc",
+    "nameFr": "Arc axiomatique",
+    "image": "6696.png",
+    "cost": 2750,
+    "ad": 55,
+    "leth": 18,
+    "ah": 20
+  },
+  "edge": {
+    "id": "3814",
+    "name": "Edge of Night",
+    "nameFr": "Manteau de la nuit",
+    "image": "3814.png",
+    "cost": 3000,
+    "ad": 50,
+    "leth": 15,
+    "hp": 250
+  },
+  "serylda": {
+    "id": "6694",
+    "name": "Serylda's Grudge",
+    "nameFr": "Rancune de Serylda",
+    "image": "6694.png",
+    "cost": 3000,
+    "ad": 45,
+    "pen": 35,
+    "ah": 15
+  },
+  "serpent": {
+    "id": "6695",
+    "name": "Serpent's Fang",
+    "nameFr": "Crochet de serpent",
+    "image": "6695.png",
+    "cost": 2500,
+    "ad": 55,
+    "leth": 15
+  },
+  "youmuu": {
+    "id": "3142",
+    "name": "Youmuu's Ghostblade",
+    "nameFr": "Lame spectre de Youmuu",
+    "image": "3142.png",
+    "cost": 2800,
+    "ad": 55,
+    "leth": 18,
+    "msPct": 4
+  },
+  "bastion": {
+    "id": "2520",
+    "name": "Bastionbreaker",
+    "nameFr": "Briseur de bastion",
+    "image": "2520.png",
+    "cost": 3000,
+    "ad": 55,
+    "leth": 18,
+    "ah": 15
+  },
+  "profane": {
+    "id": "6698",
+    "name": "Profane Hydra",
+    "nameFr": "Hydre profane",
+    "image": "6698.png",
+    "cost": 2850,
+    "ad": 55,
+    "leth": 18,
+    "ah": 10
+  },
+  "cleaver": {
+    "id": "3071",
+    "name": "Black Cleaver",
+    "nameFr": "Couperet noir",
+    "image": "3071.png",
+    "cost": 3000,
+    "ad": 45,
+    "hp": 400,
+    "ah": 20
+  },
+  "dd": {
+    "id": "6333",
+    "name": "Death's Dance",
+    "nameFr": "Danse de la mort",
+    "image": "6333.png",
+    "cost": 3300,
+    "ad": 60,
+    "armor": 50,
+    "ah": 15
+  },
+  "sterak": {
+    "id": "3053",
+    "name": "Sterak's Gage",
+    "nameFr": "Gage de Sterak",
+    "image": "3053.png",
+    "cost": 3200,
+    "hp": 400,
+    "tenacity": 20
+  },
+  "ga": {
+    "id": "3026",
+    "name": "Guardian Angel",
+    "nameFr": "Ange gardien",
+    "image": "3026.png",
+    "cost": 3200,
+    "ad": 55,
+    "armor": 45
+  },
+  "chempunk": {
+    "id": "6609",
+    "name": "Chempunk Chainsword",
+    "nameFr": "Épée dentelée chimico-punk",
+    "image": "6609.png",
+    "cost": 3000,
+    "ad": 45,
+    "hp": 450,
+    "ah": 15
+  },
+  "lucidity": {
+    "id": "3158",
+    "name": "Ionian Boots of Lucidity",
+    "nameFr": "Bottes de lucidité",
+    "image": "3158.png",
+    "cost": 900,
+    "ah": 10,
+    "ms": 45
+  },
+  "steelcaps": {
+    "id": "3047",
+    "name": "Plated Steelcaps",
+    "nameFr": "Coques en acier",
+    "image": "3047.png",
+    "cost": 1200,
+    "armor": 25,
+    "ms": 45
+  },
+  "mercury": {
+    "id": "3111",
+    "name": "Mercury's Treads",
+    "nameFr": "Sandales de Mercure",
+    "image": "3111.png",
+    "cost": 1250,
+    "mr": 20,
+    "ms": 45,
+    "tenacity": 30
+  },
+  "swiftness": {
+    "id": "3009",
+    "name": "Boots of Swiftness",
+    "nameFr": "Bottes de célérité",
+    "image": "3009.png",
+    "cost": 1000,
+    "ms": 55
+  },
+  "crimsonLucidity": {
+    "id": "3171",
+    "name": "Crimson Lucidity",
+    "nameFr": "Lucidité pourpre",
+    "image": "3171.png",
+    "cost": 900,
+    "ah": 20,
+    "ms": 45
+  },
+  "armoredAdvance": {
+    "id": "3174",
+    "name": "Armored Advance",
+    "nameFr": "Avancée blindée",
+    "image": "3174.png",
+    "cost": 1200,
+    "armor": 35,
+    "ms": 45
+  },
+  "chainlacedCrushers": {
+    "id": "3173",
+    "name": "Chainlaced Crushers",
+    "nameFr": "Broyeuses à chaînes",
+    "image": "3173.png",
+    "cost": 1250,
+    "mr": 25,
+    "ms": 45,
+    "tenacity": 30
+  },
+  "swiftmarch": {
+    "id": "3170",
+    "name": "Swiftmarch",
+    "nameFr": "Célérité martiale",
+    "image": "3170.png",
+    "cost": 1000,
+    "ms": 65
+  }
+}
