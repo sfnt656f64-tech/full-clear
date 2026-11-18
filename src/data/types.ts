@@ -47,6 +47,8 @@ export type DamageType = "physical" | "magic" | "mixed";
 export interface Champion {
   /** Identifiant Data Dragon (stable). Absent pour les données de la première version. */
   id?: string;
+  /** Clé numérique Riot (championId de l'API). */
+  key?: number;
   /** Nom affiché (français). */
   name: string;
   /** Nom anglais. */

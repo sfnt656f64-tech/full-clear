@@ -1,5 +1,5 @@
 // Configuration locale : lue dans .env (jamais commité, voir .gitignore) ou dans les variables d'environnement.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export interface RiotConfig {
@@ -21,8 +21,33 @@ export function parseRiotId(id: string): [string, string] | null {
   return [id.slice(0, i).trim(), id.slice(i + 1).trim()];
 }
 
+/**
+ * Lit un .env : lignes CLÉ=valeur, lignes vides et lignes commençant par # ignorées.
+ * Contrairement au lecteur intégré à Node, un « # » DANS une valeur est gardé (RIOT_ID=Nom#TAG).
+ * Tolère un BOM, les fins de ligne Windows (CRLF) et les guillemets autour de la valeur.
+ */
+export function parseEnvText(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).replace(/^export\s+/, "").trim();
+    let val = line.slice(eq + 1).trim();
+    if (val.length >= 2 && (val[0] === '"' || val[0] === "'") && val.endsWith(val[0])) val = val.slice(1, -1);
+    out[key] = val;
+  }
+  return out;
+}
+
+/** Charge un .env sans écraser les variables déjà définies. */
+export function readEnvFile(file: string, env: NodeJS.ProcessEnv): void {
+  for (const [k, v] of Object.entries(parseEnvText(readFileSync(file, "utf8")))) if (env[k] === undefined) env[k] = v;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, envFile = resolve(process.cwd(), ".env")): RiotConfig {
-  if (env === process.env && existsSync(envFile)) process.loadEnvFile(envFile);
+  if (existsSync(envFile)) readEnvFile(envFile, env);
   const problems: string[] = [];
   const apiKey = (env.RIOT_API_KEY ?? "").trim();
   if (!apiKey) problems.push("RIOT_API_KEY manquant");

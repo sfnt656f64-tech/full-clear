@@ -3,7 +3,10 @@
 import { describe, expect, it } from "vitest";
 import { RateLimiter, type Clock } from "../scripts/riot/rate-limiter";
 import { RiotApiError, RiotClient, type ActiveGame } from "../scripts/riot/client";
-import { loadConfig, parseRiotId } from "../scripts/riot/config";
+import { loadConfig, parseEnvText, parseRiotId, readEnvFile } from "../scripts/riot/config";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildLiveDraft, draftUrl, loadChampions } from "../scripts/riot/live";
 import { decodeDraft, encodeDraft } from "../src/engine/draft-link";
 
@@ -143,16 +146,30 @@ describe("configuration (.env)", () => {
     expect(parseRiotId("Nom#")).toBeNull();
   });
 
+  it("le # d'un Riot ID est gardé (le lecteur intégré à Node le prendrait pour un commentaire)", () => {
+    expect(parseEnvText("RIOT_ID=Invincy#TIG\n# commentaire\nA = 'x y'\nB=\"q#1\"\n=vide\nsansegal\n")).toEqual({ RIOT_ID: "Invincy#TIG", A: "x y", B: "q#1" });
+  });
+
+  it(".env édité sous Windows (BOM, CRLF, commentaires) : lu correctement, sans écraser l'environnement", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "kayn-env-")), ".env");
+    writeFileSync(file, `\uFEFF# commentaire\r\nRIOT_API_KEY=${FAKE_KEY}\r\nRIOT_ID=Nom Avec Espaces#EUW\r\nRIOT_PLATFORM=euw1\r\n`);
+    const env: NodeJS.ProcessEnv = { RIOT_PLATFORM: "déjà-défini" };
+    readEnvFile(file, env);
+    expect(env).toEqual({ RIOT_API_KEY: FAKE_KEY, RIOT_ID: "Nom Avec Espaces#EUW", RIOT_PLATFORM: "déjà-défini" });
+    expect(loadConfig({}, file)).toMatchObject({ gameName: "Nom Avec Espaces", tagLine: "EUW", platform: "euw1" });
+  });
+
   it("valeurs par défaut EUW et site publié", () => {
-    const cfg = loadConfig({ RIOT_API_KEY: FAKE_KEY, RIOT_ID: "Test#EUW" });
+    const cfg = loadConfig({ RIOT_API_KEY: FAKE_KEY, RIOT_ID: "Test#EUW" }, "/inexistant/.env");
     expect(cfg).toMatchObject({ gameName: "Test", tagLine: "EUW", region: "europe", platform: "euw1" });
     expect(cfg.siteUrl).toMatch(/^https:\/\/.+\/kayn-sim\/$/);
   });
 
   it("message clair si la configuration manque, sans afficher la clé", () => {
-    expect(() => loadConfig({})).toThrow(/RIOT_API_KEY manquant.*RIOT_ID manquant/s);
-    expect(() => loadConfig({ RIOT_API_KEY: FAKE_KEY })).toThrow(/RIOT_ID/);
-    try { loadConfig({ RIOT_API_KEY: FAKE_KEY }); } catch (e) { expect((e as Error).message).not.toContain(FAKE_KEY); }
+    const none = "/inexistant/.env";
+    expect(() => loadConfig({}, none)).toThrow(/RIOT_API_KEY manquant.*RIOT_ID manquant/s);
+    expect(() => loadConfig({ RIOT_API_KEY: FAKE_KEY }, none)).toThrow(/RIOT_ID/);
+    try { loadConfig({ RIOT_API_KEY: FAKE_KEY }, none); } catch (e) { expect((e as Error).message).not.toContain(FAKE_KEY); }
   });
 });
 

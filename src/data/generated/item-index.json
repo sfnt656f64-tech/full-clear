@@ -1,0 +1,716 @@
+{
+  "2065": {
+    "name": "Shurelya's Battlesong",
+    "nameFr": "Chant de guerre de Shurelya",
+    "image": "2065.png",
+    "kind": "legendary"
+  },
+  "2501": {
+    "name": "Overlord's Bloodmail",
+    "nameFr": "Armure sanguine",
+    "image": "2501.png",
+    "kind": "legendary"
+  },
+  "2502": {
+    "name": "Unending Despair",
+    "nameFr": "Désespoir infini",
+    "image": "2502.png",
+    "kind": "legendary"
+  },
+  "2503": {
+    "name": "Blackfire Torch",
+    "nameFr": "Torche noire",
+    "image": "2503.png",
+    "kind": "legendary"
+  },
+  "2504": {
+    "name": "Kaenic Rookern",
+    "nameFr": "Rookern kaénique",
+    "image": "2504.png",
+    "kind": "legendary"
+  },
+  "2510": {
+    "name": "Dusk and Dawn",
+    "nameFr": "Aube et crépuscule",
+    "image": "2510.png",
+    "kind": "legendary"
+  },
+  "2512": {
+    "name": "Fiendhunter Bolts",
+    "nameFr": "Chasseur de monstres",
+    "image": "2512.png",
+    "kind": "legendary"
+  },
+  "2517": {
+    "name": "Endless Hunger",
+    "nameFr": "Faim insatiable",
+    "image": "2517.png",
+    "kind": "legendary"
+  },
+  "2520": {
+    "name": "Bastionbreaker",
+    "nameFr": "Briseur de bastion",
+    "image": "2520.png",
+    "kind": "legendary"
+  },
+  "2522": {
+    "name": "Actualizer",
+    "nameFr": "Actualisateur",
+    "image": "2522.png",
+    "kind": "legendary"
+  },
+  "2523": {
+    "name": "Hexoptics C44",
+    "nameFr": "Lunettes Hextech C44",
+    "image": "2523.png",
+    "kind": "legendary"
+  },
+  "2524": {
+    "name": "Bandlepipes",
+    "nameFr": "Flûtes de Bandle",
+    "image": "2524.png",
+    "kind": "legendary"
+  },
+  "2525": {
+    "name": "Protoplasm Harness",
+    "nameFr": "Harnais protoplasmique",
+    "image": "2525.png",
+    "kind": "legendary"
+  },
+  "3003": {
+    "name": "Archangel's Staff",
+    "nameFr": "Bâton de l'archange",
+    "image": "3003.png",
+    "kind": "legendary"
+  },
+  "3004": {
+    "name": "Manamune",
+    "nameFr": "Manamune",
+    "image": "3004.png",
+    "kind": "legendary"
+  },
+  "3006": {
+    "name": "Berserker's Greaves",
+    "nameFr": "Jambières du berzerker",
+    "image": "3006.png",
+    "kind": "boots"
+  },
+  "3008": {
+    "name": "Gluttonous Greaves",
+    "nameFr": "Jambières gloutonnes",
+    "image": "3008.png",
+    "kind": "boots"
+  },
+  "3009": {
+    "name": "Boots of Swiftness",
+    "nameFr": "Bottes de célérité",
+    "image": "3009.png",
+    "kind": "boots"
+  },
+  "3020": {
+    "name": "Sorcerer's Shoes",
+    "nameFr": "Chaussures de sorcier",
+    "image": "3020.png",
+    "kind": "boots"
+  },
+  "3026": {
+    "name": "Guardian Angel",
+    "nameFr": "Ange gardien",
+    "image": "3026.png",
+    "kind": "legendary"
+  },
+  "3031": {
+    "name": "Infinity Edge",
+    "nameFr": "Lame d'infini",
+    "image": "3031.png",
+    "kind": "legendary"
+  },
+  "3032": {
+    "name": "Yun Tal Wildarrows",
+    "nameFr": "Flèches des Yun Tal",
+    "image": "3032.png",
+    "kind": "legendary"
+  },
+  "3033": {
+    "name": "Mortal Reminder",
+    "nameFr": "Rappel mortel",
+    "image": "3033.png",
+    "kind": "legendary"
+  },
+  "3036": {
+    "name": "Lord Dominik's Regards",
+    "nameFr": "Salutations de Dominik",
+    "image": "3036.png",
+    "kind": "legendary"
+  },
+  "3046": {
+    "name": "Phantom Dancer",
+    "nameFr": "Danseur fantôme",
+    "image": "3046.png",
+    "kind": "legendary"
+  },
+  "3047": {
+    "name": "Plated Steelcaps",
+    "nameFr": "Coques en acier",
+    "image": "3047.png",
+    "kind": "boots"
+  },
+  "3050": {
+    "name": "Zeke's Convergence",
+    "nameFr": "Convergence de Zeke",
+    "image": "3050.png",
+    "kind": "legendary"
+  },
+  "3053": {
+    "name": "Sterak's Gage",
+    "nameFr": "Gage de Sterak",
+    "image": "3053.png",
+    "kind": "legendary"
+  },
+  "3065": {
+    "name": "Spirit Visage",
+    "nameFr": "Visage spirituel",
+    "image": "3065.png",
+    "kind": "legendary"
+  },
+  "3068": {
+    "name": "Sunfire Aegis",
+    "nameFr": "Égide solaire",
+    "image": "3068.png",
+    "kind": "legendary"
+  },
+  "3071": {
+    "name": "Black Cleaver",
+    "nameFr": "Couperet noir",
+    "image": "3071.png",
+    "kind": "legendary"
+  },
+  "3072": {
+    "name": "Bloodthirster",
+    "nameFr": "Soif-de-sang",
+    "image": "3072.png",
+    "kind": "legendary"
+  },
+  "3073": {
+    "name": "Experimental Hexplate",
+    "nameFr": "Hexplaque expérimentale",
+    "image": "3073.png",
+    "kind": "legendary"
+  },
+  "3074": {
+    "name": "Ravenous Hydra",
+    "nameFr": "Hydre vorace",
+    "image": "3074.png",
+    "kind": "legendary"
+  },
+  "3075": {
+    "name": "Thornmail",
+    "nameFr": "Cotte épineuse",
+    "image": "3075.png",
+    "kind": "legendary"
+  },
+  "3078": {
+    "name": "Trinity Force",
+    "nameFr": "Force de la trinité",
+    "image": "3078.png",
+    "kind": "legendary"
+  },
+  "3083": {
+    "name": "Warmog's Armor",
+    "nameFr": "Armure de Warmog",
+    "image": "3083.png",
+    "kind": "legendary"
+  },
+  "3084": {
+    "name": "Heartsteel",
+    "nameFr": "Cœuracier",
+    "image": "3084.png",
+    "kind": "legendary"
+  },
+  "3085": {
+    "name": "Runaan's Hurricane",
+    "nameFr": "Ouragan de Runaan",
+    "image": "3085.png",
+    "kind": "legendary"
+  },
+  "3087": {
+    "name": "Statikk Shiv",
+    "nameFr": "Poignard de Statikk",
+    "image": "3087.png",
+    "kind": "legendary"
+  },
+  "3089": {
+    "name": "Rabadon's Deathcap",
+    "nameFr": "Coiffe de Rabadon",
+    "image": "3089.png",
+    "kind": "legendary"
+  },
+  "3091": {
+    "name": "Wit's End",
+    "nameFr": "Au bout du rouleau",
+    "image": "3091.png",
+    "kind": "legendary"
+  },
+  "3094": {
+    "name": "Rapid Firecannon",
+    "nameFr": "Canon ultrarapide",
+    "image": "3094.png",
+    "kind": "legendary"
+  },
+  "3095": {
+    "name": "Stormrazor",
+    "nameFr": "Lame tempête",
+    "image": "3095.png",
+    "kind": "legendary"
+  },
+  "3100": {
+    "name": "Lich Bane",
+    "nameFr": "Fléau de liche",
+    "image": "3100.png",
+    "kind": "legendary"
+  },
+  "3102": {
+    "name": "Banshee's Veil",
+    "nameFr": "Voile de la banshee",
+    "image": "3102.png",
+    "kind": "legendary"
+  },
+  "3107": {
+    "name": "Redemption",
+    "nameFr": "Rédemption",
+    "image": "3107.png",
+    "kind": "legendary"
+  },
+  "3109": {
+    "name": "Knight's Vow",
+    "nameFr": "Vœu du chevalier",
+    "image": "3109.png",
+    "kind": "legendary"
+  },
+  "3110": {
+    "name": "Frozen Heart",
+    "nameFr": "Cœur gelé",
+    "image": "3110.png",
+    "kind": "legendary"
+  },
+  "3111": {
+    "name": "Mercury's Treads",
+    "nameFr": "Sandales de Mercure",
+    "image": "3111.png",
+    "kind": "boots"
+  },
+  "3115": {
+    "name": "Nashor's Tooth",
+    "nameFr": "Dent de Nashor",
+    "image": "3115.png",
+    "kind": "legendary"
+  },
+  "3116": {
+    "name": "Rylai's Crystal Scepter",
+    "nameFr": "Sceptre de Rylai",
+    "image": "3116.png",
+    "kind": "legendary"
+  },
+  "3118": {
+    "name": "Malignance",
+    "nameFr": "Malfaisance",
+    "image": "3118.png",
+    "kind": "legendary"
+  },
+  "3119": {
+    "name": "Winter's Approach",
+    "nameFr": "Approche de l'hiver",
+    "image": "3119.png",
+    "kind": "legendary"
+  },
+  "3124": {
+    "name": "Guinsoo's Rageblade",
+    "nameFr": "Lame enragée de Guinsoo",
+    "image": "3124.png",
+    "kind": "legendary"
+  },
+  "3135": {
+    "name": "Void Staff",
+    "nameFr": "Bâton du vide",
+    "image": "3135.png",
+    "kind": "legendary"
+  },
+  "3137": {
+    "name": "Cryptbloom",
+    "nameFr": "Fleur de crypte",
+    "image": "3137.png",
+    "kind": "legendary"
+  },
+  "3139": {
+    "name": "Mercurial Scimitar",
+    "nameFr": "Cimeterre mercuriel",
+    "image": "3139.png",
+    "kind": "legendary"
+  },
+  "3142": {
+    "name": "Youmuu's Ghostblade",
+    "nameFr": "Lame spectre de Youmuu",
+    "image": "3142.png",
+    "kind": "legendary"
+  },
+  "3143": {
+    "name": "Randuin's Omen",
+    "nameFr": "Présage de Randuin",
+    "image": "3143.png",
+    "kind": "legendary"
+  },
+  "3146": {
+    "name": "Hextech Gunblade",
+    "nameFr": "Pistolame Hextech",
+    "image": "3146.png",
+    "kind": "legendary"
+  },
+  "3152": {
+    "name": "Hextech Rocketbelt",
+    "nameFr": "Ceinture-roquette Hextech",
+    "image": "3152.png",
+    "kind": "legendary"
+  },
+  "3153": {
+    "name": "Blade of The Ruined King",
+    "nameFr": "Lame du roi déchu",
+    "image": "3153.png",
+    "kind": "legendary"
+  },
+  "3156": {
+    "name": "Maw of Malmortius",
+    "nameFr": "Gueule de Malmortius",
+    "image": "3156.png",
+    "kind": "legendary"
+  },
+  "3157": {
+    "name": "Zhonya's Hourglass",
+    "nameFr": "Sablier de Zhonya",
+    "image": "3157.png",
+    "kind": "legendary"
+  },
+  "3158": {
+    "name": "Ionian Boots of Lucidity",
+    "nameFr": "Bottes de lucidité",
+    "image": "3158.png",
+    "kind": "boots"
+  },
+  "3161": {
+    "name": "Spear of Shojin",
+    "nameFr": "Lance de Shojin",
+    "image": "3161.png",
+    "kind": "legendary"
+  },
+  "3165": {
+    "name": "Morellonomicon",
+    "nameFr": "Morellonomicon",
+    "image": "3165.png",
+    "kind": "legendary"
+  },
+  "3168": {
+    "name": "Immortal Path",
+    "nameFr": "Voie immortelle",
+    "image": "3168.png",
+    "kind": "boots",
+    "baseBoots": "3008"
+  },
+  "3170": {
+    "name": "Swiftmarch",
+    "nameFr": "Célérité martiale",
+    "image": "3170.png",
+    "kind": "boots",
+    "baseBoots": "3009"
+  },
+  "3171": {
+    "name": "Crimson Lucidity",
+    "nameFr": "Lucidité pourpre",
+    "image": "3171.png",
+    "kind": "boots",
+    "baseBoots": "3158"
+  },
+  "3173": {
+    "name": "Chainlaced Crushers",
+    "nameFr": "Broyeuses à chaînes",
+    "image": "3173.png",
+    "kind": "boots",
+    "baseBoots": "3111"
+  },
+  "3174": {
+    "name": "Armored Advance",
+    "nameFr": "Avancée blindée",
+    "image": "3174.png",
+    "kind": "boots",
+    "baseBoots": "3047"
+  },
+  "3175": {
+    "name": "Spellslinger's Shoes",
+    "nameFr": "Chaussures de lanceur de sorts",
+    "image": "3175.png",
+    "kind": "boots",
+    "baseBoots": "3020"
+  },
+  "3179": {
+    "name": "Umbral Glaive",
+    "nameFr": "Glaive d'ombre",
+    "image": "3179.png",
+    "kind": "legendary"
+  },
+  "3181": {
+    "name": "Hullbreaker",
+    "nameFr": "Brise-coques",
+    "image": "3181.png",
+    "kind": "legendary"
+  },
+  "3190": {
+    "name": "Locket of the Iron Solari",
+    "nameFr": "Médaillon de l'Iron Solari",
+    "image": "3190.png",
+    "kind": "legendary"
+  },
+  "3222": {
+    "name": "Mikael's Blessing",
+    "nameFr": "Bénédiction de Mikael",
+    "image": "3222.png",
+    "kind": "legendary"
+  },
+  "3302": {
+    "name": "Terminus",
+    "nameFr": "Terminus",
+    "image": "3302.png",
+    "kind": "legendary"
+  },
+  "3504": {
+    "name": "Ardent Censer",
+    "nameFr": "Encensoir ardent",
+    "image": "3504.png",
+    "kind": "legendary"
+  },
+  "3508": {
+    "name": "Essence Reaver",
+    "nameFr": "Faux spectrale",
+    "image": "3508.png",
+    "kind": "legendary"
+  },
+  "3742": {
+    "name": "Dead Man's Plate",
+    "nameFr": "Plaque du mort",
+    "image": "3742.png",
+    "kind": "legendary"
+  },
+  "3748": {
+    "name": "Titanic Hydra",
+    "nameFr": "Hydre titanesque",
+    "image": "3748.png",
+    "kind": "legendary"
+  },
+  "3814": {
+    "name": "Edge of Night",
+    "nameFr": "Manteau de la nuit",
+    "image": "3814.png",
+    "kind": "legendary"
+  },
+  "4005": {
+    "name": "Imperial Mandate",
+    "nameFr": "Mandat impérial",
+    "image": "4005.png",
+    "kind": "legendary"
+  },
+  "4401": {
+    "name": "Force of Nature",
+    "nameFr": "Force de la nature",
+    "image": "4401.png",
+    "kind": "legendary"
+  },
+  "4628": {
+    "name": "Horizon Focus",
+    "nameFr": "Concentration lointaine",
+    "image": "4628.png",
+    "kind": "legendary"
+  },
+  "4629": {
+    "name": "Cosmic Drive",
+    "nameFr": "Volonté cosmique",
+    "image": "4629.png",
+    "kind": "legendary"
+  },
+  "4633": {
+    "name": "Riftmaker",
+    "nameFr": "Créateur de failles",
+    "image": "4633.png",
+    "kind": "legendary"
+  },
+  "4645": {
+    "name": "Shadowflame",
+    "nameFr": "Flamme-ombre",
+    "image": "4645.png",
+    "kind": "legendary"
+  },
+  "4646": {
+    "name": "Stormsurge",
+    "nameFr": "Onde orageuse",
+    "image": "4646.png",
+    "kind": "legendary"
+  },
+  "6333": {
+    "name": "Death's Dance",
+    "nameFr": "Danse de la mort",
+    "image": "6333.png",
+    "kind": "legendary"
+  },
+  "6609": {
+    "name": "Chempunk Chainsword",
+    "nameFr": "Épée dentelée chimico-punk",
+    "image": "6609.png",
+    "kind": "legendary"
+  },
+  "6610": {
+    "name": "Sundered Sky",
+    "nameFr": "Ciel éventré",
+    "image": "6610.png",
+    "kind": "legendary"
+  },
+  "6616": {
+    "name": "Staff of Flowing Water",
+    "nameFr": "Bâton des flots",
+    "image": "6616.png",
+    "kind": "legendary"
+  },
+  "6617": {
+    "name": "Moonstone Renewer",
+    "nameFr": "Régénérateur de pierre de lune",
+    "image": "6617.png",
+    "kind": "legendary"
+  },
+  "6620": {
+    "name": "Echoes of Helia",
+    "nameFr": "Échos d'Helia",
+    "image": "6620.png",
+    "kind": "legendary"
+  },
+  "6621": {
+    "name": "Dawncore",
+    "nameFr": "Cœur de l'aube",
+    "image": "6621.png",
+    "kind": "legendary"
+  },
+  "6631": {
+    "name": "Stridebreaker",
+    "nameFr": "Estropieur",
+    "image": "6631.png",
+    "kind": "legendary"
+  },
+  "6653": {
+    "name": "Liandry's Torment",
+    "nameFr": "Tourment de Liandry",
+    "image": "6653.png",
+    "kind": "legendary"
+  },
+  "6655": {
+    "name": "Luden's Echo",
+    "nameFr": "Écho de Luden",
+    "image": "6655.png",
+    "kind": "legendary"
+  },
+  "6657": {
+    "name": "Rod of Ages",
+    "nameFr": "Bâton séculaire",
+    "image": "6657.png",
+    "kind": "legendary"
+  },
+  "6662": {
+    "name": "Iceborn Gauntlet",
+    "nameFr": "Gantelet givrant",
+    "image": "6662.png",
+    "kind": "legendary"
+  },
+  "6664": {
+    "name": "Hollow Radiance",
+    "nameFr": "Rayonnement du vide",
+    "image": "6664.png",
+    "kind": "legendary"
+  },
+  "6665": {
+    "name": "Jak'Sho, The Protean",
+    "nameFr": "Jak'Sho, le Protéiforme",
+    "image": "6665.png",
+    "kind": "legendary"
+  },
+  "6672": {
+    "name": "Kraken Slayer",
+    "nameFr": "Tueur de krakens",
+    "image": "6672.png",
+    "kind": "legendary"
+  },
+  "6673": {
+    "name": "Immortal Shieldbow",
+    "nameFr": "Arc-bouclier immortel",
+    "image": "6673.png",
+    "kind": "legendary"
+  },
+  "6675": {
+    "name": "Navori Flickerblade",
+    "nameFr": "Tremblelame navori",
+    "image": "6675.png",
+    "kind": "legendary"
+  },
+  "6676": {
+    "name": "The Collector",
+    "nameFr": "Percepteur",
+    "image": "6676.png",
+    "kind": "legendary"
+  },
+  "6692": {
+    "name": "Eclipse",
+    "nameFr": "Éclipse",
+    "image": "6692.png",
+    "kind": "legendary"
+  },
+  "6694": {
+    "name": "Serylda's Grudge",
+    "nameFr": "Rancune de Serylda",
+    "image": "6694.png",
+    "kind": "legendary"
+  },
+  "6695": {
+    "name": "Serpent's Fang",
+    "nameFr": "Crochet de serpent",
+    "image": "6695.png",
+    "kind": "legendary"
+  },
+  "6696": {
+    "name": "Axiom Arc",
+    "nameFr": "Arc axiomatique",
+    "image": "6696.png",
+    "kind": "legendary"
+  },
+  "6697": {
+    "name": "Hubris",
+    "nameFr": "Orgueil",
+    "image": "6697.png",
+    "kind": "legendary"
+  },
+  "6698": {
+    "name": "Profane Hydra",
+    "nameFr": "Hydre profane",
+    "image": "6698.png",
+    "kind": "legendary"
+  },
+  "6699": {
+    "name": "Voltaic Cyclosword",
+    "nameFr": "Cyclosabre voltaïque",
+    "image": "6699.png",
+    "kind": "legendary"
+  },
+  "8010": {
+    "name": "Bloodletter's Curse",
+    "nameFr": "Malédiction du sanguinaire",
+    "image": "8010.png",
+    "kind": "legendary"
+  },
+  "8020": {
+    "name": "Abyssal Mask",
+    "nameFr": "Masque abyssal",
+    "image": "8020.png",
+    "kind": "legendary"
+  }
+}

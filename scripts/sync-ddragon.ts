@@ -8,6 +8,8 @@
 //   items.json      stats des items utilisés (AD, létalité, haste, PV, armure, RM, pén. %, prix)
 //   champions.json  champions : nom FR/EN, tags Riot, portée d'attaque, icône
 //   kayn.json       stats de base et sorts de Kayn
+//   item-index.json tous les items terminés de la Faille (légendaires, bottes) : nom, icône, type
+//                   (sert aux stats de tes parties, npm run stats)
 //
 // Les fichiers sont déterministes (pas d'horodatage) : un diff git vide = rien n'a changé.
 // Ce script n'importe rien de src/ pour pouvoir tourner avec `node` seul (type stripping).
@@ -97,6 +99,10 @@ interface DDItem {
   gold: { total: number; purchasable: boolean };
   maps: Record<string, boolean>;
   image: { full: string };
+  tags?: string[];
+  from?: string[];
+  into?: string[];
+  inStore?: boolean;
 }
 interface DDChampion {
   id: string;
@@ -153,6 +159,33 @@ function buildItems(en: DDFile<DDItem>, fr: DDFile<DDItem>, warnings: string[]) 
       cost: it.gold.total,
       ...stats,
     };
+  }
+  return out;
+}
+
+/** Prix minimal d'un item légendaire (les composants coûtent moins). */
+const LEGENDARY_MIN_GOLD = 2000;
+const BASIC_BOOTS = "1001";
+
+export interface IndexedItem { name: string; nameFr: string; image: string; kind: "legendary" | "boots"; baseBoots?: string }
+
+/**
+ * Items « terminés » achetables sur la Faille : légendaires (aucune amélioration, ≥ 2000 po, hors consommables)
+ * et bottes (hors bottes de base). Les bottes de niveau 3 pointent vers leurs bottes de niveau 2 (baseBoots).
+ */
+export function buildItemIndex(en: DDFile<DDItem>, fr: DDFile<DDItem>): Record<string, IndexedItem> {
+  const out: Record<string, IndexedItem> = {};
+  for (const [id, it] of Object.entries(en.data).sort(([a], [b]) => Number(a) - Number(b))) {
+    if (!it.maps["11"] || !it.gold.purchasable || it.inStore === false || Number(id) >= 10000) continue;
+    const tags = it.tags ?? [];
+    const base = { name: it.name, nameFr: fr.data[id]?.name ?? it.name, image: it.image.full };
+    if (tags.includes("Boots")) {
+      if (id === BASIC_BOOTS) continue;
+      const parent = (it.from ?? []).find((f) => en.data[f]?.tags?.includes("Boots") && f !== BASIC_BOOTS);
+      out[id] = { ...base, kind: "boots", ...(parent ? { baseBoots: parent } : {}) };
+    } else if (!(it.into?.length) && it.gold.total >= LEGENDARY_MIN_GOLD && !tags.includes("Consumable") && !tags.includes("Trinket")) {
+      out[id] = { ...base, kind: "legendary" };
+    }
   }
   return out;
 }
@@ -240,6 +273,7 @@ async function main() {
   const items = buildItems(itemEn, itemFr, warnings);
   const champions = buildChampions(champEn, champFr);
   const kayn = buildKayn(kaynFr, kaynEn);
+  const itemIndex = buildItemIndex(itemEn, itemFr);
   await checkOverrides(champions, warnings);
 
   await mkdir(OUT, { recursive: true });
@@ -247,8 +281,9 @@ async function main() {
   await write("items.json", items);
   await write("champions.json", champions);
   await write("kayn.json", kayn);
+  await write("item-index.json", itemIndex);
 
-  console.log(`${Object.keys(items).length} items, ${champions.length} champions écrits dans src/data/generated/`);
+  console.log(`${Object.keys(items).length} items, ${champions.length} champions, ${Object.keys(itemIndex).length} items terminés écrits dans src/data/generated/`);
   if (warnings.length) console.log(`\n⚠️  ${warnings.length} avertissement(s) :\n- ` + warnings.join("\n- "));
 }
 

@@ -14,6 +14,22 @@ npm run sync       # synchronise les données avec Data Dragon (dernière versio
 npm run sync -- 16.22.1   # … ou une version précise
 ```
 
+Installation sur Windows pas à pas : [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md).
+
+## Mes parties (`npm run stats`, sur ton PC, rien n'est publié)
+
+Analyse tes parties **Solo/Duo de la saison en cours** (depuis le patch 26.01, le 8 janvier 2026) sur Kayn :
+win rate global, par forme (bleu, rouge, sans transformation), par 1er item et par item de l'inventaire final,
+et comparaison entre ton build réel et celui que le moteur recommande pour la même compo (forme, 1er item,
+3 premiers items, bottes). Résultat : un résumé dans la console et un rapport `.cache/riot/rapport.html`
+qui s'ouvre dans le navigateur.
+
+- Options : `--since=AAAA-MM-JJ`, `--refresh` (ignore le cache), `--no-open`.
+- Les parties déjà analysées restent dans `.cache/riot/` (ignoré par git) : le 1er lancement prend quelques
+  minutes (limite de 100 requêtes / 2 min), les suivants quelques secondes. Ctrl+C ne perd rien.
+- Seuls les résumés utiles sont gardés en cache (champions, items, forme, résultat) : ni PUUID d'autres joueurs,
+  ni noms.
+
 ## Partie en cours (`npm run live`, sur ton PC)
 
 Prérequis : Node 22.18 ou plus récent (le script TypeScript tourne directement avec `node`).

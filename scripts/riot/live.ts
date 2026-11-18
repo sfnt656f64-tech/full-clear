@@ -8,13 +8,13 @@
 //
 // La clé est lue dans .env et n'est envoyée qu'à l'API Riot : le lien ouvert ne contient
 // que des identifiants de champions, dans le fragment (#…) que le navigateur n'envoie jamais au serveur.
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { encodeDraft } from "../../src/engine/draft-link.ts";
 import { QUEUE_SOLO_DUO, RiotClient, type ActiveGame } from "./client.ts";
 import { LOCAL_SITE_URL, loadConfig } from "./config.ts";
+import { openBrowser } from "./open.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const KAYN_ID = "Kayn";
@@ -56,16 +56,6 @@ export function buildLiveDraft(game: ActiveGame, myPuuid: string, champions: Map
 
 export function draftUrl(siteUrl: string, d: LiveDraft): string {
   return `${siteUrl.replace(/#.*$/, "")}#${encodeDraft({ en: d.en, al: d.al, src: "live" })}`;
-}
-
-/** Ouvre une URL dans le navigateur par défaut (Windows, macOS, Linux). */
-function openBrowser(url: string): void {
-  // Windows : commande passée telle quelle (sinon cmd découpe ou échappe l'URL) ; l'URL ne contient ni espace ni guillemet.
-  const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", `start "" "${url}"`]]
-    : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
-  const child = spawn(cmd, args, { stdio: "ignore", detached: true, windowsHide: true, windowsVerbatimArguments: process.platform === "win32" });
-  child.on("error", () => console.log("Impossible d'ouvrir le navigateur : ouvre le lien ci-dessus à la main."));
-  child.unref();
 }
 
 async function main() {
