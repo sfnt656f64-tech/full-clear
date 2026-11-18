@@ -1,9 +1,25 @@
-// Icônes originales (pictogrammes SVG, pas les visuels Riot).
-// À l'étape 3, elles deviendront l'icône de secours des images Data Dragon.
+// Icônes : images officielles Data Dragon, posées sur les pictogrammes SVG d'origine.
+// Si une image ne charge pas (hors ligne, CDN indisponible, fichier absent), elle est
+// retirée par installImageFallback() et le pictogramme en dessous reste visible.
 import { ITEMS } from "../data/items";
 import { PROFILE_LABEL } from "../data/champions";
 import type { Champion, ItemKey, Profile } from "../data/types";
+import { DDRAGON_VERSION } from "../data/version";
 import { esc } from "./html";
+
+export const DDRAGON_IMG = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img`;
+
+/** Image Data Dragon (décorative : le nom est déjà dans le title du parent). */
+export const ddImg = (path: string, lazy = true): string =>
+  `<img class="dd" src="${DDRAGON_IMG}/${encodeURI(path)}" alt=""${lazy ? ' loading="lazy"' : ""} decoding="async" draggable="false">`;
+
+/** Retire toute image Data Dragon qui échoue, pour laisser apparaître l'icône de secours. */
+export function installImageFallback(root: Document | HTMLElement = document): void {
+  root.addEventListener("error", (e) => {
+    const t = e.target;
+    if (t instanceof HTMLImageElement && t.classList.contains("dd")) t.remove();
+  }, true);
+}
 
 const GLYPHS = {
   bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
@@ -43,7 +59,8 @@ const ITEM_GLYPH: Record<ItemKey, [Glyph, string]> = {
 
 export function itemIcon(k: ItemKey): string {
   const [g, color] = ITEM_GLYPH[k];
-  return `<div class="it" style="background:${color}" title="${esc(ITEMS[k].n)}">${svg(g)}<small>${ITEMS[k].s}</small></div>`;
+  const it = ITEMS[k];
+  return `<div class="it" style="background:${color}" title="${esc(it.n)}">${svg(g)}${it.image ? ddImg(`item/${it.image}`) : ""}<small>${it.s}</small></div>`;
 }
 
 export const PROFILE_GLYPH: Record<Profile, [Glyph, string]> = {
@@ -62,7 +79,7 @@ export function champTile(c: Champion | null, size = 48): string {
   const [g, color] = PROFILE_GLYPH[c.profile];
   const title = `${c.name} — ${PROFILE_LABEL[c.profile]}${c.unverified ? " (non vérifié : absent de overrides.json)" : ""}`;
   return `<div class="ch" style="${dim};background:linear-gradient(140deg,${color},#11151f)" title="${esc(title)}">`
-    + `<b>${initials(c.nameEn ?? c.name)}</b><span class="cg">${svg(g, "#fff", 12)}</span>`
+    + `<b>${initials(c.nameEn ?? c.name)}</b>${c.image ? ddImg(`champion/${c.image}`) : ""}<span class="cg">${svg(g, "#fff", 12)}</span>`
     + `<span class="rg">${c.range === "melee" ? "⚔" : "➹"}</span>`
     + (c.unverified ? `<span class="uv">?</span>` : "") + `</div>`;
 }

@@ -19,7 +19,7 @@ const state = {
 export function mountDraft(): void {
   const root = $("draft");
   root.innerHTML = `
-    <div class="sub" style="margin-bottom:6px">Touche une case pour choisir un champion.</div>
+    <div class="sub" style="margin-bottom:6px">Clique ou touche une case pour choisir un champion.</div>
     <div class="team"><span class="tl" style="color:var(--red)">En face</span><div class="slots" id="slots-en"></div></div>
     <div class="team"><span class="tl" style="color:var(--blue)">Ton équipe</span><div class="slots" id="slots-al"></div></div>
     <div class="ctrl" style="margin-top:12px">

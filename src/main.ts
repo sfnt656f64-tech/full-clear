@@ -4,7 +4,8 @@ import { renderBench, renderGold } from "./ui/benchmark";
 import { mountDraft } from "./ui/draft";
 import { renderGuides } from "./ui/guides";
 import { $ } from "./ui/html";
-import { renderHeader, renderMethod } from "./ui/method";
+import { installImageFallback } from "./ui/icons";
+import { renderFooter, renderHeader, renderMethod } from "./ui/method";
 import { mountSimulator, setSimulatorForm } from "./ui/simulator";
 
 function setForm(f: Form): void {
@@ -18,12 +19,14 @@ function setForm(f: Form): void {
   renderBench(f);
 }
 
+installImageFallback();
 renderHeader();
 mountDraft();
 mountSimulator();
 setForm("blue");
 renderGold();
 renderMethod();
+renderFooter();
 
 $("tabs").addEventListener("click", (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>("[data-form]");

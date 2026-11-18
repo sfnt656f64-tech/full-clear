@@ -55,3 +55,24 @@ describe("interface", () => {
     expect($("slots-al").textContent).toContain("Zed");
   });
 });
+
+describe("icônes et mention légale", () => {
+  it("les icônes pointent vers Data Dragon, à la version synchronisée", async () => {
+    const { DDRAGON_VERSION } = await import("../src/data/version");
+    const img = document.querySelector("#guides .it img.dd") as HTMLImageElement;
+    expect(img.src).toBe(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/item/6699.png`);
+    expect(document.querySelector("#logo img.dd")).not.toBeNull();
+  });
+
+  it("une image qui ne charge pas est retirée, le pictogramme de secours reste", () => {
+    const tile = document.querySelector("#guides .it") as HTMLElement;
+    tile.querySelector("img.dd")!.dispatchEvent(new Event("error"));
+    expect(tile.querySelector("img.dd")).toBeNull();
+    expect(tile.querySelector("svg")).not.toBeNull();
+  });
+
+  it("affiche la mention légale de Riot Games", () => {
+    expect($("legal").textContent).toContain("isn't endorsed by Riot Games");
+    expect($("legal").textContent).toContain("trademarks or registered trademarks of Riot Games, Inc.");
+  });
+});
