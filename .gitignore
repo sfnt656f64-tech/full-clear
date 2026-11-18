@@ -6,3 +6,4 @@ desktop/dist/
 .DS_Store
 !.env.example
 .cache/
+release/

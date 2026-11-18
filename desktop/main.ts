@@ -17,6 +17,17 @@ import { loadSettings, parseWindowMode, saveSettings, type Settings, type Window
 const HIDDEN_ARG = "--hidden";
 const dev = !app.isPackaged;
 const here = __dirname; // desktop/dist une fois compilé
+/** Identifiant Windows de l'appli (barre des tâches, notifications) : identique à appId dans package.json. */
+const APP_ID = "io.github.kayn-sim";
+/**
+ * Nom de l'entrée « démarrage » dans HKCUSoftwareMicrosoftWindowsCurrentVersionRun.
+ * Fixe, pour que le désinstalleur puisse la retirer (desktop/installer.nsh).
+ */
+const LOGIN_ITEM_NAME = "KaynSim";
+
+// Dossier des réglages et du .env : %APPDATA%kayn-sim, en développement comme une fois installée
+// (sans cela, Electron le nommerait d'après le nom affiché de l'appli).
+app.setPath("userData", join(app.getPath("appData"), "kayn-sim"));
 
 let tray: Tray | null = null;
 let win: BrowserWindow | null = null;
@@ -88,11 +99,13 @@ function loginArgs(): string[] {
 }
 
 function openAtLogin(): boolean {
-  return app.getLoginItemSettings({ args: loginArgs() }).openAtLogin;
+  const s = app.getLoginItemSettings({ args: loginArgs() });
+  // Notre entrée (nom fixe), active : désactivée dans le Gestionnaire des tâches → décochée ici aussi.
+  return s.launchItems?.some((i) => i.name === LOGIN_ITEM_NAME && i.enabled) ?? s.openAtLogin;
 }
 
 function setOpenAtLogin(on: boolean): void {
-  app.setLoginItemSettings({ openAtLogin: on, args: loginArgs() });
+  app.setLoginItemSettings({ openAtLogin: on, args: loginArgs(), name: LOGIN_ITEM_NAME });
   refreshTrayMenu();
 }
 
@@ -231,7 +244,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => showWindow());
-  app.setAppUserModelId("io.github.kayn-sim");
+  app.setAppUserModelId(APP_ID);
   app.whenReady().then(() => {
     config = readConfig();
     settingsFile = join(app.getPath("userData"), "settings.json");

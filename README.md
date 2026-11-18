@@ -30,7 +30,30 @@ qui s'ouvre dans le navigateur.
 - Seuls les résumés utiles sont gardés en cache (champions, items, forme, résultat) : ni PUUID d'autres joueurs,
   ni noms.
 
-## Partie en cours (`npm run live`, sur ton PC)
+## Application de bureau (draft et overlay en jeu)
+
+Application Electron (`desktop/`), dans la zone de notification de Windows, qui réutilise le moteur de `src/` :
+
+- **Draft** : lit la sélection des champions via l'API locale du client (LCU, identifiants du `lockfile` ou de
+  la ligne de commande de `LeagueClientUx.exe`) et affiche à chaque pick la forme, les runes, les bottes et le build.
+- **En jeu** : lit la Live Client Data API (`https://127.0.0.1:2999`) et affiche dans un overlay transparent,
+  toujours au premier plan et traversé par la souris, le prochain item selon l'inventaire, l'or et les items
+  adverses (`src/data/generated/shop.json` : prix, recettes et stats de tous les items).
+- Aucune injection ni lecture mémoire ; seulement ce que le joueur voit déjà. Les réponses des API locales sont
+  réduites dès réception à des numéros de champions et d'items : aucun pseudo d'autre joueur n'est affiché ni gardé.
+- Seul `RIOT_ID` (et `SITE_URL`) est lu dans le `.env` : celui du projet en développement, puis
+  `%APPDATA%\kayn-sim\.env`. La clé API n'est pas utilisée.
+
+```bash
+npm run desktop        # compile (esbuild → desktop/dist) et lance l'appli
+npm run desktop:dist   # installeur Windows (NSIS) dans release/
+```
+
+Guide d'installation et d'utilisation : [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md#6-lapplication-de-bureau-draft-et-overlay-en-jeu).
+
+## Partie en cours (`npm run live`, en secours)
+
+> Remplacé par l'application de bureau ; gardé en secours.
 
 Prérequis : Node 22.18 ou plus récent (le script TypeScript tourne directement avec `node`).
 
@@ -53,7 +76,7 @@ Le même lien sert à partager une draft : la page met l'adresse à jour quand t
 
 - `scripts/sync-ddragon.ts` télécharge `item.json`, `champion.json` et `champion/Kayn.json` (fr_FR et en_US)
   et écrit `src/data/generated/` : version et patch, stats des items utilisés, champions (nom FR/EN, tags Riot,
-  portée, mêlée si ≤ 325), stats et sorts de Kayn. Les fichiers sont déterministes : un diff git vide = rien n'a changé.
+  portée, mêlée si ≤ 325), stats et sorts de Kayn, et tous les items achetables (`shop.json` : prix, recette, stats). Les fichiers sont déterministes : un diff git vide = rien n'a changé.
   Le script s'arrête si Riot renumérote un item, et signale les nouveaux champions sans override.
 - La létalité, la haste et la pénétration en % ne figurent pas dans les stats numériques de Data Dragon :
   elles sont lues dans le bloc `<stats>` de la description anglaise, recoupée avec les stats numériques.
@@ -69,7 +92,8 @@ Le même lien sert à partager une draft : la page met l'adresse à jour quand t
 | `src/model/` | Calculs de dégâts purs : stats de Kayn, combo bleu, combat rouge de 6 s, benchmark. Toutes les valeurs de jeu sont dans `constants.ts` |
 | `src/engine/` | Analyse de draft : score de forme, bottes, ordre de build, simulation contre chaque adversaire |
 | `src/ui/` | Interface (TypeScript sans framework) |
-| `scripts/` | Scripts de données |
+| `desktop/` | Application de bureau Electron : processus principal, fenêtre, overlay, accès aux API locales |
+| `scripts/` | Scripts de données et de compilation de l'appli |
 | `tests/` | Tests Vitest |
 
 ## Référence de non-régression
