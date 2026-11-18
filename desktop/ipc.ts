@@ -1,5 +1,6 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
 import type { DraftView } from "./draft-view.ts";
+import type { HostState } from "./collector-host.ts";
 
 export type { DraftView };
 
@@ -42,6 +43,13 @@ export interface AppState {
   searched: string[];
   /** « Nom#TAG », jamais d'autre identité. */
   riotId: string | null;
+  /** Tes comptes (RIOT_ID, RIOT_ID_2). */
+  riotIds: string[];
+  /** Une clé est présente dans le .env (la clé elle-même n'est jamais envoyée à la fenêtre). */
+  hasApiKey: boolean;
+  collector: HostState;
+  /** Pause manuelle de la collecte. */
+  collectorPaused: boolean;
   problems: string[];
   openAtLogin: boolean;
   /** Vrai en développement (npm run desktop) : le démarrage automatique pointe alors vers Electron + le dépôt. */
@@ -53,6 +61,7 @@ export interface KaynApi {
   setOpenAtLogin(on: boolean): Promise<AppState>;
   reloadConfig(): Promise<AppState>;
   openUserDataDir(): Promise<void>;
+  setCollectorPaused(on: boolean): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
   setFormChoice(f: "auto" | "blue" | "red"): Promise<AppState>;
@@ -69,6 +78,7 @@ export const IPC = {
   setOpenAtLogin: "kayn:set-open-at-login",
   reloadConfig: "kayn:reload-config",
   openUserDataDir: "kayn:open-user-data",
+  setCollectorPaused: "kayn:set-collector-paused",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",
   setFormChoice: "kayn:set-form-choice",

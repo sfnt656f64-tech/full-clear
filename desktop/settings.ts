@@ -13,9 +13,11 @@ export interface Settings {
   /** Forme utilisée en jeu : « auto » = celle recommandée d'après la composition. */
   formChoice: Form | "auto";
   shortcuts: Shortcuts;
+  /** Collecte en pause (bouton de la fenêtre). */
+  collectorPaused: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS } };
+export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false };
 
 export function parseSettings(text: string | null): Settings {
   try {
@@ -29,6 +31,7 @@ export function parseSettings(text: string | null): Settings {
         toggle: isValidAccelerator(raw.shortcuts?.toggle) ? raw.shortcuts.toggle : DEFAULT_SHORTCUTS.toggle,
         move: isValidAccelerator(raw.shortcuts?.move) ? raw.shortcuts.move : DEFAULT_SHORTCUTS.move,
       },
+      collectorPaused: raw.collectorPaused === true,
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

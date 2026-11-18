@@ -246,8 +246,53 @@ $<HTMLInputElement>("overlay-on").addEventListener("change", async (e) => render
 $<HTMLSelectElement>("form-choice").addEventListener("change", async (e) => render(await window.kayn.setFormChoice((e.target as HTMLSelectElement).value as "auto" | "blue" | "red")));
 $("overlay-reset").addEventListener("click", async () => render(await window.kayn.resetOverlayPosition()));
 
+// ---------- Collecte ----------
+
+const PAUSE_LABELS: Record<string, string> = { game: "partie en cours", user: "pause manuelle", key: "clé refusée", config: "configuration" };
+
+function renderCollector(s: AppState): void {
+  const st = $("col-status");
+  const body: Child[] = [];
+  const c = s.collector;
+  const btn = $<HTMLButtonElement>("col-pause");
+  btn.textContent = s.collectorPaused ? "Reprendre la collecte" : "Mettre en pause";
+  btn.hidden = c.kind === "off";
+  let cls = "idle", text: string;
+  if (c.kind === "off") text = c.reason === "no-key" ? "Arrêtée : pas de RIOT_API_KEY dans le .env." : "Arrêtée : pas de RIOT_ID dans le .env.";
+  else if (c.kind === "starting" || (c.kind === "on" && !c.status)) text = "Démarrage…";
+  else if (c.kind === "crashed") { cls = "warn"; text = c.message; }
+  else {
+    const x = c.status!;
+    const reasons = x.pauseReasons.map((r) => PAUSE_LABELS[r] ?? r).join(", ");
+    [cls, text] = x.state === "running" ? ["ok", "En cours"]
+      : x.state === "idle" ? ["ok", "À jour (vérifie les nouvelles parties régulièrement)"]
+      : x.state === "key-refused" ? ["warn", "Arrêtée : clé API refusée. Corrige RIOT_API_KEY, puis « Relire le .env »."]
+      : x.state === "paused" ? ["idle", `En pause : ${reasons}`]
+      : ["idle", "Arrêtée"];
+    const games = Object.entries(x.myGames);
+    for (const acc of s.riotIds) body.push(h("p", { class: "small" }, `${acc} : ${x.myGames[acc] ?? 0} partie(s) Solo/Duo enregistrée(s)`));
+    for (const [acc, n] of games) if (!s.riotIds.includes(acc)) body.push(h("p", { class: "small muted" }, `${acc} (ancien compte) : ${n} partie(s)`));
+    for (const j of x.jobs) {
+      if (!j.pending && !j.done && !j.failed) continue;
+      body.push(h("p", { class: "small muted" }, `${j.label} : ${j.done} fait(s)${j.pending ? `, ${j.pending} en attente` : ""}${j.failed ? `, ${j.failed} en échec` : ""}`));
+    }
+    body.push(h("p", { class: "small muted" }, `Requêtes sur 2 min : europe ${x.usage.europe}/${x.budget} · euw1 ${x.usage.euw1}/${x.budget}`));
+    if (x.lastError && x.state !== "running") body.push(h("p", { class: "small warn-text" }, `Dernière erreur : ${x.lastError}`));
+  }
+  st.className = `status ${cls}`;
+  st.textContent = text;
+  $("col-body").replaceChildren(...body.filter((b): b is Node | string => !!b));
+  $("accounts").textContent = s.riotIds.length > 1 ? `Comptes suivis : ${s.riotIds.join(", ")}` : s.riotIds.length ? `Compte suivi : ${s.riotIds[0]} (ajoute RIOT_ID_2 pour un 2ᵉ compte)` : "";
+}
+
+$("col-pause").addEventListener("click", async () => {
+  const s = await window.kayn.getState();
+  render(await window.kayn.setCollectorPaused(!s.collectorPaused));
+});
+
 function render(s: AppState): void {
   renderClient(s);
+  renderCollector(s);
   renderLive(s);
   renderDraft(s);
   $("version").textContent = `v${s.version}${s.dev ? " (dev)" : ""}`;

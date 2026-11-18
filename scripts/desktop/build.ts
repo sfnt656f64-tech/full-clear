@@ -21,6 +21,7 @@ const common = { bundle: true, sourcemap: "linked", logLevel: "warning", target:
 await Promise.all([
   build({ ...common, entryPoints: [resolve(SRC, "main.ts")], outfile: resolve(OUT, "main.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "preload.ts")], outfile: resolve(OUT, "preload.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
+  build({ ...common, entryPoints: [resolve(SRC, "collector/collector-main.ts")], outfile: resolve(OUT, "collector.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "preload-overlay.ts")], outfile: resolve(OUT, "preload-overlay.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "renderer/renderer.ts")], outfile: resolve(OUT, "renderer/renderer.js"), platform: "browser", format: "iife" }),
   build({ ...common, entryPoints: [resolve(SRC, "overlay/overlay.ts")], outfile: resolve(OUT, "overlay/overlay.js"), platform: "browser", format: "iife" }),

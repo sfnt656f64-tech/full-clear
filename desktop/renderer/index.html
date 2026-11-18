@@ -20,6 +20,14 @@
   </section>
 
   <section>
+    <h2>Collecte (API Riot)</h2>
+    <p id="col-status" class="status idle"></p>
+    <div id="col-body"></div>
+    <div class="row"><button id="col-pause" type="button"></button></div>
+    <p class="muted small">Tourne seulement quand l'appli est ouverte, en arrière-plan et en priorité basse ; en pause du chargement à la fin de chaque partie. Reprend où elle s'était arrêtée.</p>
+  </section>
+
+  <section>
     <h2>Overlay en jeu</h2>
     <p id="live-status" class="status idle">Pas de partie en cours.</p>
     <div id="live-body"></div>
@@ -61,7 +69,8 @@
     <p id="riot-id" class="status"></p>
     <ul id="problems" class="problems"></ul>
     <p class="muted small">Fichier : <span id="env-file"></span></p>
-    <p class="muted small">Seul ton Riot ID est lu. La clé API n'est pas utilisée par l'appli : elle ne parle qu'au client local.</p>
+    <p id="accounts" class="muted small"></p>
+    <p class="muted small">La clé API (RIOT_API_KEY) sert uniquement à la collecte et n'est envoyée qu'à l'API Riot. Le client et le jeu sont lus en local.</p>
     <div class="row">
       <button id="reload" type="button">Relire le .env</button>
       <button id="open-dir" type="button">Ouvrir le dossier de l'appli</button>

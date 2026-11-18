@@ -4,7 +4,8 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, 
 import { mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ClientWatcher } from "./client-watch.ts";
-import { envCandidates, loadDesktopConfig, type DesktopConfig } from "./config.ts";
+import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
+import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -20,12 +21,12 @@ const here = __dirname; // desktop/dist une fois compilé
 /** Identifiant Windows de l'appli (barre des tâches, notifications) : identique à appId dans package.json. */
 const APP_ID = "io.github.kayn-sim";
 /**
- * Nom de l'entrée « démarrage » dans HKCUSoftwareMicrosoftWindowsCurrentVersionRun.
+ * Nom de l'entrée « démarrage » dans HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
  * Fixe, pour que le désinstalleur puisse la retirer (desktop/installer.nsh).
  */
 const LOGIN_ITEM_NAME = "KaynSim";
 
-// Dossier des réglages et du .env : %APPDATA%kayn-sim, en développement comme une fois installée
+// Dossier des réglages et du .env : %APPDATA%\kayn-sim, en développement comme une fois installée
 // (sans cela, Electron le nommerait d'après le nom affiché de l'appli).
 app.setPath("userData", join(app.getPath("appData"), "kayn-sim"));
 
@@ -45,8 +46,15 @@ let liveSnap: LiveSnapshot | null = null;
 let liveView: OverlayView | null = null;
 let windowMode: WindowMode = "unknown";
 let overlay: OverlayWindow;
+let collector: CollectorHost;
 
-/** Mode d'affichage du jeu, lu dans Configgame.cfg (simple lecture de fichier). */
+/** (Re)configure la collecte : clé et comptes du .env, pause manuelle mémorisée. */
+function configureCollector(): void {
+  collector.setPaused("user", settings.collectorPaused);
+  collector.configure(config.apiKey, config.riotIds.map(riotIdText));
+}
+
+/** Mode d'affichage du jeu, lu dans Config\game.cfg (simple lecture de fichier). */
 function readWindowMode(): WindowMode {
   const dir = watcher.installDir;
   if (!dir) return "unknown";
@@ -66,7 +74,7 @@ const live = new LiveWatcher((snap) => {
 });
 
 const watcher = new ClientWatcher(
-  () => config?.riotId ?? null,
+  () => config?.riotIds ?? [],
   (s) => {
     const phase = s.kind === "connected" ? s.phase : "";
     if (phase === "ChampSelect" && prevPhase !== "ChampSelect") {
@@ -77,6 +85,8 @@ const watcher = new ClientWatcher(
     if (s.kind === "closed" || CLEAR_DRAFT.has(phase)) draft = null;
     if (phase !== prevPhase) windowMode = readWindowMode();
     prevPhase = phase;
+    // Pause de la collecte du chargement à la fin de la partie : rien ne doit gêner le jeu.
+    collector?.setPaused("game", GAME_PHASES.has(phase));
     pushState();
     if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
   },
@@ -132,7 +142,11 @@ function state(): AppState {
     version: app.getVersion(),
     envFile: config.envFile,
     searched: config.searched,
-    riotId: config.riotId ? `${config.riotId.gameName}#${config.riotId.tagLine}` : null,
+    riotId: config.riotId ? riotIdText(config.riotId) : null,
+    riotIds: config.riotIds.map(riotIdText),
+    hasApiKey: !!config.apiKey,
+    collector: collector?.state ?? { kind: "off", reason: "no-key" },
+    collectorPaused: settings?.collectorPaused ?? false,
     problems: config.problems,
     openAtLogin: openAtLogin(),
     dev,
@@ -232,7 +246,13 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.getState, () => state());
   ipcMain.handle(IPC.setOpenAtLogin, (_e, on: unknown) => { setOpenAtLogin(on === true); return state(); });
-  ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); return state(); });
+  ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); configureCollector(); return state(); });
+  ipcMain.handle(IPC.setCollectorPaused, (_e, on: unknown) => {
+    settings.collectorPaused = on === true;
+    saveSettings(settingsFile, settings);
+    collector.setPaused("user", settings.collectorPaused);
+    return state();
+  });
   ipcMain.handle(IPC.openUserDataDir, async () => { await shell.openPath(app.getPath("userData")); });
   ipcMain.handle(IPC.openDraftInSimulator, async () => {
     if (draft) await shell.openExternal(`${config.siteUrl.replace(/#.*$/, "")}#${draft.link}`);
@@ -257,6 +277,8 @@ if (!app.requestSingleInstanceLock()) {
       onChange: () => { pushState(); refreshTrayMenu(); },
     });
     overlay.enabled = settings.overlay.enabled;
+    collector = new CollectorHost(here, join(app.getPath("userData"), "riot.db"), pushState);
+    configureCollector();
     registerIpc();
     createTray();
     overlay.applyShortcuts(); // diagnostic immédiat : raccourcis libres ou déjà pris
@@ -266,6 +288,6 @@ if (!app.requestSingleInstanceLock()) {
   });
   // Toutes les fenêtres fermées : on reste dans la zone de notification.
   app.on("window-all-closed", () => { /* rien */ });
-  app.on("before-quit", () => { quitting = true; watcher.stop(); live.stop(); overlay?.destroy(); });
+  app.on("before-quit", () => { quitting = true; watcher.stop(); live.stop(); overlay?.destroy(); collector?.stop(); });
   app.on("will-quit", () => globalShortcut.unregisterAll());
 }

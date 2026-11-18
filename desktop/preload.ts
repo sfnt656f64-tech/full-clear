@@ -7,6 +7,7 @@ const api: KaynApi = {
   setOpenAtLogin: (on) => ipcRenderer.invoke(IPC.setOpenAtLogin, on),
   reloadConfig: () => ipcRenderer.invoke(IPC.reloadConfig),
   openUserDataDir: () => ipcRenderer.invoke(IPC.openUserDataDir),
+  setCollectorPaused: (on) => ipcRenderer.invoke(IPC.setCollectorPaused, on),
   openDraftInSimulator: () => ipcRenderer.invoke(IPC.openDraftInSimulator),
   setOverlayEnabled: (on) => ipcRenderer.invoke(IPC.setOverlayEnabled, on),
   setFormChoice: (f) => ipcRenderer.invoke(IPC.setFormChoice, f),
