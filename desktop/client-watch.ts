@@ -38,6 +38,9 @@ export class ClientWatcher {
 
   start(): void { this.stopped = false; void this.loop(); }
 
+  /** Dossier d'installation du jeu le plus probable (pour lire Configgame.cfg). */
+  get installDir(): string | null { return this.installDirs[0] ?? null; }
+
   stop(): void {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);

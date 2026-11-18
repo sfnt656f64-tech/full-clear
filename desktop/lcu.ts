@@ -68,7 +68,7 @@ export async function discover(installDirs: string[], scanProcesses: boolean): P
   return null;
 }
 
-// Le client utilise un certificat auto-signé par Riot. On l'accepte uniquement pour 127.0.0.1,
+// Le client et le jeu utilisent un certificat auto-signé par Riot. On l'accepte uniquement pour 127.0.0.1,
 // avec un agent dédié : le reste de l'appli garde la vérification TLS normale.
 const localAgent = new Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 4 });
 
@@ -77,16 +77,21 @@ export class LcuError extends Error {
   constructor(message: string, status: number | null) { super(message); this.status = status; }
 }
 
-/** GET sur l'API locale. Renvoie le JSON, ou null pour un 404 (ex. pas de draft en cours). */
+/** GET sur l'API locale du client (LCU). Renvoie le JSON, ou null pour un 404 (ex. pas de draft en cours). */
 export function lcuGet<T>(creds: LcuCredentials, path: string, timeoutMs = 4000): Promise<T | null> {
+  return localGet<T>(creds.port, path, { Authorization: `Basic ${Buffer.from(`riot:${creds.token}`).toString("base64")}` }, timeoutMs);
+}
+
+/** GET JSON sur 127.0.0.1 (LCU ou API en jeu du port 2999). null pour un 404. */
+export function localGet<T>(port: number, path: string, headers: Record<string, string> = {}, timeoutMs = 4000): Promise<T | null> {
   return new Promise((ok, fail) => {
     const req = request({
       host: "127.0.0.1",
-      port: creds.port,
+      port,
       path,
       method: "GET",
       agent: localAgent,
-      headers: { Authorization: `Basic ${Buffer.from(`riot:${creds.token}`).toString("base64")}`, Accept: "application/json" },
+      headers: { ...headers, Accept: "application/json" },
       timeout: timeoutMs,
     }, (res) => {
       const chunks: Buffer[] = [];
@@ -94,13 +99,13 @@ export function lcuGet<T>(creds: LcuCredentials, path: string, timeoutMs = 4000)
       res.on("end", () => {
         const status = res.statusCode ?? 0;
         if (status === 404) return ok(null);
-        if (status < 200 || status >= 300) return fail(new LcuError(`LCU ${path} : HTTP ${status}`, status));
+        if (status < 200 || status >= 300) return fail(new LcuError(`${path} : HTTP ${status}`, status));
         const body = Buffer.concat(chunks).toString("utf8");
-        try { ok(body ? (JSON.parse(body) as T) : null); } catch { fail(new LcuError(`LCU ${path} : réponse illisible`, status)); }
+        try { ok(body ? (JSON.parse(body) as T) : null); } catch { fail(new LcuError(`${path} : réponse illisible`, status)); }
       });
     });
-    req.on("timeout", () => req.destroy(new LcuError(`LCU ${path} : délai dépassé`, null)));
-    req.on("error", (e) => fail(e instanceof LcuError ? e : new LcuError(`LCU ${path} : ${e.message}`, null)));
+    req.on("timeout", () => req.destroy(new LcuError(`${path} : délai dépassé`, null)));
+    req.on("error", (e) => fail(e instanceof LcuError ? e : new LcuError(`${path} : ${e.message}`, null)));
     req.end();
   });
 }

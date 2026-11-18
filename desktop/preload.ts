@@ -8,6 +8,11 @@ const api: KaynApi = {
   reloadConfig: () => ipcRenderer.invoke(IPC.reloadConfig),
   openUserDataDir: () => ipcRenderer.invoke(IPC.openUserDataDir),
   openDraftInSimulator: () => ipcRenderer.invoke(IPC.openDraftInSimulator),
+  setOverlayEnabled: (on) => ipcRenderer.invoke(IPC.setOverlayEnabled, on),
+  setFormChoice: (f) => ipcRenderer.invoke(IPC.setFormChoice, f),
+  resetOverlayPosition: () => ipcRenderer.invoke(IPC.resetOverlayPosition),
+  setShortcut: (name, acc) => ipcRenderer.invoke(IPC.setShortcut, name, acc),
+  setCapturing: (on) => ipcRenderer.invoke(IPC.setCapturing, on),
   onState: (cb) => { ipcRenderer.on(IPC.state, (_e, s: AppState) => cb(s)); },
 };
 

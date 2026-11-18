@@ -1,0 +1,1866 @@
+{
+  "1001": {
+    "name": "Bottes",
+    "cost": 300,
+    "boots": true
+  },
+  "1004": {
+    "name": "Charme féérique",
+    "cost": 200
+  },
+  "1006": {
+    "name": "Collier rafraîchissant",
+    "cost": 300
+  },
+  "1011": {
+    "name": "Ceinture du géant",
+    "cost": 900,
+    "from": [
+      "1028"
+    ],
+    "hp": 350
+  },
+  "1018": {
+    "name": "Cape d'agilité",
+    "cost": 600
+  },
+  "1026": {
+    "name": "Baguette explosive",
+    "cost": 850,
+    "ap": 45
+  },
+  "1027": {
+    "name": "Cristal de saphir",
+    "cost": 300
+  },
+  "1028": {
+    "name": "Cristal de rubis",
+    "cost": 400,
+    "hp": 150
+  },
+  "1029": {
+    "name": "Armure d'étoffe",
+    "cost": 300,
+    "armor": 15
+  },
+  "1031": {
+    "name": "Cotte de mailles",
+    "cost": 800,
+    "from": [
+      "1029"
+    ],
+    "armor": 40
+  },
+  "1033": {
+    "name": "Cape de néant",
+    "cost": 400,
+    "mr": 20
+  },
+  "1036": {
+    "name": "Épée longue",
+    "cost": 350,
+    "ad": 10
+  },
+  "1037": {
+    "name": "Pioche",
+    "cost": 875,
+    "ad": 25
+  },
+  "1038": {
+    "name": "BF Glaive",
+    "cost": 1300,
+    "ad": 40
+  },
+  "1042": {
+    "name": "Dague",
+    "cost": 250
+  },
+  "1043": {
+    "name": "Arc courbe",
+    "cost": 700,
+    "from": [
+      "1042"
+    ]
+  },
+  "1052": {
+    "name": "Tome d'amplification",
+    "cost": 400,
+    "ap": 20
+  },
+  "1053": {
+    "name": "Sceptre vampirique",
+    "cost": 900,
+    "from": [
+      "1036"
+    ],
+    "ad": 15,
+    "heal": true
+  },
+  "1054": {
+    "name": "Bouclier de Doran",
+    "cost": 450,
+    "hp": 110
+  },
+  "1055": {
+    "name": "Lame de Doran",
+    "cost": 450,
+    "ad": 10,
+    "hp": 80,
+    "heal": true
+  },
+  "1056": {
+    "name": "Anneau de Doran",
+    "cost": 400,
+    "ap": 18,
+    "hp": 90
+  },
+  "1057": {
+    "name": "Manteau de Négatron",
+    "cost": 850,
+    "from": [
+      "1033"
+    ],
+    "mr": 45
+  },
+  "1058": {
+    "name": "Baguette trop grosse",
+    "cost": 1200,
+    "ap": 65
+  },
+  "1082": {
+    "name": "Sceau noir",
+    "cost": 350,
+    "ap": 15,
+    "hp": 50
+  },
+  "1083": {
+    "name": "Abatteur",
+    "cost": 450,
+    "ad": 7
+  },
+  "1086": {
+    "name": "Arc de Doran",
+    "cost": 400,
+    "ad": 7,
+    "heal": true
+  },
+  "1101": {
+    "name": "Bébé Chardent",
+    "cost": 450
+  },
+  "1102": {
+    "name": "Bébé Saute-nuages",
+    "cost": 450
+  },
+  "1103": {
+    "name": "Bébé Ixamandre",
+    "cost": 450
+  },
+  "1105": {
+    "name": "Bébé Ixamandre",
+    "cost": 450
+  },
+  "1106": {
+    "name": "Bébé Saute-nuages",
+    "cost": 450
+  },
+  "1107": {
+    "name": "Bébé Chardent",
+    "cost": 450
+  },
+  "1120": {
+    "name": "Casque de Doran",
+    "cost": 450,
+    "armor": 8,
+    "mr": 8,
+    "hp": 150
+  },
+  "2003": {
+    "name": "Potion de soin",
+    "cost": 50
+  },
+  "2019": {
+    "name": "Sceau d'acier",
+    "cost": 1100,
+    "from": [
+      "1029",
+      "1036",
+      "1029"
+    ],
+    "ad": 15,
+    "armor": 30
+  },
+  "2020": {
+    "name": "Brutaliseur",
+    "cost": 1337,
+    "from": [
+      "2022",
+      "1037"
+    ],
+    "ad": 25
+  },
+  "2021": {
+    "name": "Foreuse",
+    "cost": 1150,
+    "from": [
+      "1036",
+      "1028"
+    ],
+    "ad": 15,
+    "hp": 250
+  },
+  "2022": {
+    "name": "Poussière luisante",
+    "cost": 250
+  },
+  "2031": {
+    "name": "Potion rechargeable",
+    "cost": 150
+  },
+  "2051": {
+    "name": "Corne du gardien",
+    "cost": 950,
+    "hp": 150
+  },
+  "2055": {
+    "name": "Balise de contrôle",
+    "cost": 75
+  },
+  "2065": {
+    "name": "Chant de guerre de Shurelya",
+    "cost": 2200,
+    "from": [
+      "3113",
+      "4642"
+    ],
+    "ap": 50
+  },
+  "2138": {
+    "name": "Élixir de fer",
+    "cost": 500
+  },
+  "2139": {
+    "name": "Élixir de sorcellerie",
+    "cost": 500
+  },
+  "2140": {
+    "name": "Élixir de rage",
+    "cost": 500,
+    "heal": true
+  },
+  "2141": {
+    "name": "Jus chapi-chapo",
+    "cost": 300
+  },
+  "2420": {
+    "name": "Protège-bras du savant",
+    "cost": 1600,
+    "from": [
+      "1052",
+      "1029",
+      "1052"
+    ],
+    "ap": 40,
+    "armor": 25
+  },
+  "2421": {
+    "name": "Protège-bras pulvérisé",
+    "cost": 1600,
+    "from": [
+      "1052",
+      "1029",
+      "1052"
+    ],
+    "ap": 40,
+    "armor": 25
+  },
+  "2501": {
+    "name": "Armure sanguine",
+    "cost": 3300,
+    "from": [
+      "2021",
+      "2021"
+    ],
+    "ad": 40,
+    "hp": 550
+  },
+  "2502": {
+    "name": "Désespoir infini",
+    "cost": 2800,
+    "from": [
+      "1031",
+      "3067",
+      "1028"
+    ],
+    "armor": 50,
+    "hp": 400
+  },
+  "2503": {
+    "name": "Torche noire",
+    "cost": 2800,
+    "from": [
+      "3802",
+      "2508"
+    ],
+    "ap": 80
+  },
+  "2504": {
+    "name": "Rookern kaénique",
+    "cost": 2900,
+    "from": [
+      "3211",
+      "1057"
+    ],
+    "mr": 80,
+    "hp": 400
+  },
+  "2508": {
+    "name": "Cendres fatidiques",
+    "cost": 900,
+    "from": [
+      "1052"
+    ],
+    "ap": 30
+  },
+  "2510": {
+    "name": "Aube et crépuscule",
+    "cost": 3100,
+    "from": [
+      "3057",
+      "1026",
+      "3067",
+      "1042"
+    ],
+    "ap": 60,
+    "hp": 300
+  },
+  "2512": {
+    "name": "Chasseur de monstres",
+    "cost": 2650,
+    "from": [
+      "3086",
+      "3144"
+    ]
+  },
+  "2517": {
+    "name": "Faim insatiable",
+    "cost": 3100,
+    "from": [
+      "3133",
+      "1037",
+      "1036"
+    ],
+    "ad": 65,
+    "heal": true
+  },
+  "2520": {
+    "name": "Briseur de bastion",
+    "cost": 3000,
+    "from": [
+      "2020",
+      "3134"
+    ],
+    "ad": 55
+  },
+  "2522": {
+    "name": "Actualisateur",
+    "cost": 2800,
+    "from": [
+      "3802",
+      "1026"
+    ],
+    "ap": 90
+  },
+  "2523": {
+    "name": "Lunettes Hextech C44",
+    "cost": 2800,
+    "from": [
+      "1037",
+      "6670",
+      "1036"
+    ],
+    "ad": 55
+  },
+  "2524": {
+    "name": "Flûtes de Bandle",
+    "cost": 2300,
+    "from": [
+      "3067",
+      "1029",
+      "1033"
+    ],
+    "armor": 20,
+    "mr": 20,
+    "hp": 200
+  },
+  "2525": {
+    "name": "Harnais protoplasmique",
+    "cost": 2600,
+    "from": [
+      "3067",
+      "1011"
+    ],
+    "hp": 600
+  },
+  "2526": {
+    "name": "Diadème des murmures",
+    "cost": 2250,
+    "from": [
+      "3114",
+      "1028",
+      "3070"
+    ],
+    "hp": 200
+  },
+  "3003": {
+    "name": "Bâton de l'archange",
+    "cost": 2900,
+    "from": [
+      "3070",
+      "3802",
+      "3108"
+    ],
+    "ap": 70
+  },
+  "3004": {
+    "name": "Manamune",
+    "cost": 2900,
+    "from": [
+      "3070",
+      "3133",
+      "1036"
+    ],
+    "ad": 35
+  },
+  "3006": {
+    "name": "Jambières du berzerker",
+    "cost": 1100,
+    "from": [
+      "1001",
+      "1042",
+      "1042"
+    ],
+    "boots": true
+  },
+  "3008": {
+    "name": "Jambières gloutonnes",
+    "cost": 1100,
+    "from": [
+      "1001"
+    ],
+    "heal": true,
+    "boots": true
+  },
+  "3009": {
+    "name": "Bottes de célérité",
+    "cost": 1000,
+    "from": [
+      "1001"
+    ],
+    "boots": true
+  },
+  "3020": {
+    "name": "Chaussures de sorcier",
+    "cost": 1100,
+    "from": [
+      "1001"
+    ],
+    "boots": true
+  },
+  "3024": {
+    "name": "Bouclier glacial",
+    "cost": 900,
+    "from": [
+      "1029",
+      "1027",
+      "2022"
+    ],
+    "armor": 25
+  },
+  "3026": {
+    "name": "Ange gardien",
+    "cost": 3200,
+    "from": [
+      "2019",
+      "1038"
+    ],
+    "ad": 55,
+    "armor": 45
+  },
+  "3031": {
+    "name": "Lame d'infini",
+    "cost": 3500,
+    "from": [
+      "1038",
+      "1037",
+      "1018"
+    ],
+    "ad": 75
+  },
+  "3032": {
+    "name": "Flèches des Yun Tal",
+    "cost": 3000,
+    "from": [
+      "1038",
+      "3144",
+      "1036"
+    ],
+    "ad": 50
+  },
+  "3033": {
+    "name": "Rappel mortel",
+    "cost": 3000,
+    "from": [
+      "3123",
+      "3035",
+      "1018"
+    ],
+    "ad": 35
+  },
+  "3035": {
+    "name": "Dernier souffle",
+    "cost": 1450,
+    "from": [
+      "1036",
+      "1036"
+    ],
+    "ad": 20
+  },
+  "3036": {
+    "name": "Salutations de Dominik",
+    "cost": 3300,
+    "from": [
+      "3035",
+      "6670"
+    ],
+    "ad": 35
+  },
+  "3041": {
+    "name": "Voleur d'âmes de Mejai",
+    "cost": 1500,
+    "from": [
+      "1082"
+    ],
+    "ap": 20,
+    "hp": 100
+  },
+  "3044": {
+    "name": "Phage",
+    "cost": 1100,
+    "from": [
+      "1028",
+      "1036"
+    ],
+    "ad": 15,
+    "hp": 200
+  },
+  "3046": {
+    "name": "Danseur fantôme",
+    "cost": 2650,
+    "from": [
+      "1042",
+      "3086",
+      "1042"
+    ]
+  },
+  "3047": {
+    "name": "Coques en acier",
+    "cost": 1200,
+    "from": [
+      "1001",
+      "1029"
+    ],
+    "armor": 25,
+    "boots": true
+  },
+  "3050": {
+    "name": "Convergence de Zeke",
+    "cost": 2200,
+    "from": [
+      "3067",
+      "1029",
+      "1033"
+    ],
+    "armor": 25,
+    "mr": 25,
+    "hp": 300
+  },
+  "3051": {
+    "name": "Hache d'Âtrinsèque",
+    "cost": 1200,
+    "from": [
+      "1036",
+      "1042",
+      "1036"
+    ],
+    "ad": 20
+  },
+  "3053": {
+    "name": "Gage de Sterak",
+    "cost": 3200,
+    "from": [
+      "1037",
+      "2021",
+      "1028"
+    ],
+    "hp": 400
+  },
+  "3057": {
+    "name": "Brillance",
+    "cost": 900,
+    "from": [
+      "2022"
+    ]
+  },
+  "3065": {
+    "name": "Visage spirituel",
+    "cost": 2700,
+    "from": [
+      "3211",
+      "3067"
+    ],
+    "mr": 50,
+    "hp": 400
+  },
+  "3066": {
+    "name": "Plaque de lune ailée",
+    "cost": 800,
+    "from": [
+      "1028"
+    ],
+    "hp": 200
+  },
+  "3067": {
+    "name": "Gemme exaltante",
+    "cost": 800,
+    "from": [
+      "1028",
+      "2022"
+    ],
+    "hp": 200
+  },
+  "3068": {
+    "name": "Égide solaire",
+    "cost": 2800,
+    "from": [
+      "6660",
+      "1031",
+      "1028"
+    ],
+    "armor": 50,
+    "hp": 350
+  },
+  "3070": {
+    "name": "Larme de la déesse",
+    "cost": 400
+  },
+  "3071": {
+    "name": "Couperet noir",
+    "cost": 3000,
+    "from": [
+      "3044",
+      "3067",
+      "1037"
+    ],
+    "ad": 45,
+    "hp": 400
+  },
+  "3072": {
+    "name": "Soif-de-sang",
+    "cost": 3400,
+    "from": [
+      "1038",
+      "1037",
+      "1053"
+    ],
+    "ad": 80,
+    "heal": true
+  },
+  "3073": {
+    "name": "Hexplaque expérimentale",
+    "cost": 3000,
+    "from": [
+      "2021",
+      "1042",
+      "3044"
+    ],
+    "ad": 40,
+    "hp": 450
+  },
+  "3074": {
+    "name": "Hydre vorace",
+    "cost": 3300,
+    "from": [
+      "3077",
+      "1053",
+      "3133"
+    ],
+    "ad": 65,
+    "heal": true
+  },
+  "3075": {
+    "name": "Cotte épineuse",
+    "cost": 2450,
+    "from": [
+      "3076",
+      "1031",
+      "1028"
+    ],
+    "armor": 75,
+    "hp": 150
+  },
+  "3076": {
+    "name": "Armure roncière",
+    "cost": 800,
+    "from": [
+      "1029",
+      "1029"
+    ],
+    "armor": 30
+  },
+  "3077": {
+    "name": "Tiamat",
+    "cost": 1200,
+    "from": [
+      "1036",
+      "1036"
+    ],
+    "ad": 25
+  },
+  "3078": {
+    "name": "Force de la trinité",
+    "cost": 3333,
+    "from": [
+      "3057",
+      "3044",
+      "3051"
+    ],
+    "ad": 36,
+    "hp": 333
+  },
+  "3082": {
+    "name": "Mailles du gardien",
+    "cost": 1000,
+    "from": [
+      "1029",
+      "1029"
+    ],
+    "armor": 40
+  },
+  "3083": {
+    "name": "Armure de Warmog",
+    "cost": 3100,
+    "from": [
+      "1011",
+      "1011",
+      "3801"
+    ],
+    "hp": 1000
+  },
+  "3084": {
+    "name": "Cœuracier",
+    "cost": 3000,
+    "from": [
+      "1011",
+      "3801",
+      "1011"
+    ],
+    "hp": 900
+  },
+  "3085": {
+    "name": "Ouragan de Runaan",
+    "cost": 2650,
+    "from": [
+      "3086",
+      "3144"
+    ]
+  },
+  "3086": {
+    "name": "Zèle",
+    "cost": 1200,
+    "from": [
+      "1018",
+      "1042"
+    ]
+  },
+  "3087": {
+    "name": "Poignard de Statikk",
+    "cost": 3000,
+    "from": [
+      "3144",
+      "3113",
+      "1037"
+    ],
+    "ad": 45,
+    "ap": 45
+  },
+  "3089": {
+    "name": "Coiffe de Rabadon",
+    "cost": 3500,
+    "from": [
+      "1058",
+      "1058"
+    ],
+    "ap": 130
+  },
+  "3091": {
+    "name": "Au bout du rouleau",
+    "cost": 2800,
+    "from": [
+      "1043",
+      "1057",
+      "1043"
+    ],
+    "mr": 45
+  },
+  "3094": {
+    "name": "Canon ultrarapide",
+    "cost": 2650,
+    "from": [
+      "3086",
+      "3144"
+    ]
+  },
+  "3095": {
+    "name": "Lame tempête",
+    "cost": 3200,
+    "from": [
+      "1038",
+      "1018",
+      "3144"
+    ],
+    "ad": 50
+  },
+  "3100": {
+    "name": "Fléau de liche",
+    "cost": 2900,
+    "from": [
+      "3057",
+      "3113",
+      "1026"
+    ],
+    "ap": 100
+  },
+  "3102": {
+    "name": "Voile de la banshee",
+    "cost": 3000,
+    "from": [
+      "1058",
+      "4632"
+    ],
+    "ap": 105,
+    "mr": 40
+  },
+  "3107": {
+    "name": "Rédemption",
+    "cost": 2300,
+    "from": [
+      "3108",
+      "3114"
+    ],
+    "ap": 30
+  },
+  "3108": {
+    "name": "Codex méphitique",
+    "cost": 850,
+    "from": [
+      "1052",
+      "2022"
+    ],
+    "ap": 25
+  },
+  "3109": {
+    "name": "Vœu du chevalier",
+    "cost": 2300,
+    "from": [
+      "3067",
+      "1031",
+      "1006"
+    ],
+    "armor": 40,
+    "hp": 200
+  },
+  "3110": {
+    "name": "Cœur gelé",
+    "cost": 2500,
+    "from": [
+      "3082",
+      "3024"
+    ],
+    "armor": 75
+  },
+  "3111": {
+    "name": "Sandales de Mercure",
+    "cost": 1250,
+    "from": [
+      "1001",
+      "1033"
+    ],
+    "mr": 20,
+    "boots": true
+  },
+  "3112": {
+    "name": "Orbe du gardien",
+    "cost": 950,
+    "ap": 50,
+    "hp": 150
+  },
+  "3113": {
+    "name": "Feu follet éthéré",
+    "cost": 900,
+    "from": [
+      "1052"
+    ],
+    "ap": 30
+  },
+  "3114": {
+    "name": "Idole interdite",
+    "cost": 600,
+    "from": [
+      "1004"
+    ]
+  },
+  "3115": {
+    "name": "Dent de Nashor",
+    "cost": 2900,
+    "from": [
+      "1043",
+      "1026",
+      "3108"
+    ],
+    "ap": 80
+  },
+  "3116": {
+    "name": "Sceptre de Rylai",
+    "cost": 2600,
+    "from": [
+      "1026",
+      "1011",
+      "1052"
+    ],
+    "ap": 65,
+    "hp": 400
+  },
+  "3118": {
+    "name": "Malfaisance",
+    "cost": 2700,
+    "from": [
+      "3802",
+      "1026"
+    ],
+    "ap": 90
+  },
+  "3119": {
+    "name": "Approche de l'hiver",
+    "cost": 2400,
+    "from": [
+      "3070",
+      "1011",
+      "3067"
+    ],
+    "hp": 550
+  },
+  "3123": {
+    "name": "Marque du bourreau",
+    "cost": 800,
+    "from": [
+      "1036"
+    ],
+    "ad": 15
+  },
+  "3124": {
+    "name": "Lame enragée de Guinsoo",
+    "cost": 3000,
+    "from": [
+      "1052",
+      "1043",
+      "1037"
+    ],
+    "ad": 30,
+    "ap": 30
+  },
+  "3133": {
+    "name": "Marteau de Caulfield",
+    "cost": 1050,
+    "from": [
+      "1036",
+      "2022",
+      "1036"
+    ],
+    "ad": 20
+  },
+  "3134": {
+    "name": "Dague dentelée",
+    "cost": 1000,
+    "from": [
+      "1036",
+      "1036"
+    ],
+    "ad": 20
+  },
+  "3135": {
+    "name": "Bâton du vide",
+    "cost": 3000,
+    "from": [
+      "4630",
+      "1026"
+    ],
+    "ap": 95
+  },
+  "3137": {
+    "name": "Fleur de crypte",
+    "cost": 3000,
+    "from": [
+      "4630",
+      "3108",
+      "3108"
+    ],
+    "ap": 75
+  },
+  "3139": {
+    "name": "Cimeterre mercuriel",
+    "cost": 3200,
+    "from": [
+      "3140",
+      "1037",
+      "1053"
+    ],
+    "ad": 50,
+    "mr": 35,
+    "heal": true
+  },
+  "3140": {
+    "name": "Ceinture de mercure",
+    "cost": 1300,
+    "from": [
+      "1033"
+    ],
+    "mr": 30
+  },
+  "3142": {
+    "name": "Lame spectre de Youmuu",
+    "cost": 2800,
+    "from": [
+      "3134",
+      "6690",
+      "1036"
+    ],
+    "ad": 55
+  },
+  "3143": {
+    "name": "Présage de Randuin",
+    "cost": 2700,
+    "from": [
+      "3082",
+      "1011"
+    ],
+    "armor": 75,
+    "hp": 350
+  },
+  "3144": {
+    "name": "Fronde de l'éclaireur",
+    "cost": 600,
+    "from": [
+      "1042",
+      "1042"
+    ]
+  },
+  "3145": {
+    "name": "Alternateur Hextech",
+    "cost": 1100,
+    "from": [
+      "1052",
+      "1052"
+    ],
+    "ap": 45
+  },
+  "3146": {
+    "name": "Pistolame Hextech",
+    "cost": 3000,
+    "from": [
+      "1053",
+      "3145",
+      "1052"
+    ],
+    "ad": 40,
+    "ap": 80,
+    "heal": true
+  },
+  "3147": {
+    "name": "Déguisement hanté",
+    "cost": 1300,
+    "from": [
+      "1052",
+      "1028"
+    ],
+    "ap": 30,
+    "hp": 200
+  },
+  "3152": {
+    "name": "Ceinture-roquette Hextech",
+    "cost": 2650,
+    "from": [
+      "3145",
+      "3067",
+      "1028"
+    ],
+    "ap": 60,
+    "hp": 350
+  },
+  "3153": {
+    "name": "Lame du roi déchu",
+    "cost": 3200,
+    "from": [
+      "1053",
+      "1043",
+      "1037"
+    ],
+    "ad": 40,
+    "heal": true
+  },
+  "3155": {
+    "name": "Hexterminateur",
+    "cost": 1300,
+    "from": [
+      "1036",
+      "1033",
+      "1036"
+    ],
+    "ad": 25,
+    "mr": 25
+  },
+  "3156": {
+    "name": "Gueule de Malmortius",
+    "cost": 3100,
+    "from": [
+      "3155",
+      "3133"
+    ],
+    "ad": 60,
+    "mr": 40,
+    "heal": true
+  },
+  "3157": {
+    "name": "Sablier de Zhonya",
+    "cost": 3250,
+    "from": [
+      "1058",
+      "2420"
+    ],
+    "ap": 105,
+    "armor": 50
+  },
+  "3158": {
+    "name": "Bottes de lucidité",
+    "cost": 900,
+    "from": [
+      "1001",
+      "2022"
+    ],
+    "boots": true
+  },
+  "3161": {
+    "name": "Lance de Shojin",
+    "cost": 3100,
+    "from": [
+      "1037",
+      "2021",
+      "1028"
+    ],
+    "ad": 45,
+    "hp": 450
+  },
+  "3165": {
+    "name": "Morellonomicon",
+    "cost": 2850,
+    "from": [
+      "3916",
+      "1026",
+      "3067"
+    ],
+    "ap": 75,
+    "hp": 350
+  },
+  "3168": {
+    "name": "Voie immortelle",
+    "cost": 1100,
+    "from": [
+      "3008"
+    ],
+    "heal": true,
+    "boots": true
+  },
+  "3170": {
+    "name": "Célérité martiale",
+    "cost": 1000,
+    "from": [
+      "3009"
+    ],
+    "boots": true
+  },
+  "3171": {
+    "name": "Lucidité pourpre",
+    "cost": 900,
+    "from": [
+      "3158"
+    ],
+    "boots": true
+  },
+  "3172": {
+    "name": "Jambières de métal",
+    "cost": 1100,
+    "from": [
+      "3006"
+    ],
+    "heal": true
+  },
+  "3173": {
+    "name": "Broyeuses à chaînes",
+    "cost": 1250,
+    "from": [
+      "3111"
+    ],
+    "mr": 25,
+    "boots": true
+  },
+  "3174": {
+    "name": "Avancée blindée",
+    "cost": 1200,
+    "from": [
+      "3047"
+    ],
+    "armor": 35,
+    "boots": true
+  },
+  "3175": {
+    "name": "Chaussures de lanceur de sorts",
+    "cost": 1100,
+    "from": [
+      "3020"
+    ],
+    "boots": true
+  },
+  "3177": {
+    "name": "Lame du gardien",
+    "cost": 950,
+    "ad": 30,
+    "hp": 150
+  },
+  "3179": {
+    "name": "Glaive d'ombre",
+    "cost": 2800,
+    "from": [
+      "3134",
+      "3133"
+    ],
+    "ad": 60
+  },
+  "3181": {
+    "name": "Brise-coques",
+    "cost": 3000,
+    "from": [
+      "2021",
+      "3066",
+      "1037"
+    ],
+    "ad": 40,
+    "hp": 500
+  },
+  "3184": {
+    "name": "Marteau du gardien",
+    "cost": 950,
+    "ad": 25,
+    "hp": 150,
+    "heal": true
+  },
+  "3190": {
+    "name": "Médaillon de l'Iron Solari",
+    "cost": 2200,
+    "from": [
+      "3067",
+      "1029",
+      "1033"
+    ],
+    "armor": 30,
+    "mr": 30,
+    "hp": 200
+  },
+  "3211": {
+    "name": "Manteau de spectre",
+    "cost": 1250,
+    "from": [
+      "1028",
+      "1033",
+      "1006"
+    ],
+    "mr": 35,
+    "hp": 200
+  },
+  "3222": {
+    "name": "Bénédiction de Mikael",
+    "cost": 2300,
+    "from": [
+      "3067",
+      "3114"
+    ],
+    "hp": 250
+  },
+  "3302": {
+    "name": "Terminus",
+    "cost": 3000,
+    "from": [
+      "3051",
+      "1043"
+    ],
+    "ad": 30
+  },
+  "3330": {
+    "name": "Effigie d'épouvantail",
+    "cost": 0
+  },
+  "3340": {
+    "name": "Balise camouflée",
+    "cost": 0
+  },
+  "3363": {
+    "name": "Altération divinatoire",
+    "cost": 0
+  },
+  "3364": {
+    "name": "Brouilleur oraculaire",
+    "cost": 0
+  },
+  "3504": {
+    "name": "Encensoir ardent",
+    "cost": 2200,
+    "from": [
+      "3113",
+      "3114"
+    ],
+    "ap": 45
+  },
+  "3508": {
+    "name": "Faux spectrale",
+    "cost": 3050,
+    "from": [
+      "3057",
+      "3133",
+      "1018"
+    ],
+    "ad": 50
+  },
+  "3599": {
+    "name": "Lance noire de Kalista",
+    "cost": 0
+  },
+  "3600": {
+    "name": "Lance noire de Kalista",
+    "cost": 0
+  },
+  "3742": {
+    "name": "Plaque du mort",
+    "cost": 2900,
+    "from": [
+      "3066",
+      "1028",
+      "1031"
+    ],
+    "armor": 55,
+    "hp": 350
+  },
+  "3748": {
+    "name": "Hydre titanesque",
+    "cost": 3300,
+    "from": [
+      "3077",
+      "2021",
+      "1011"
+    ],
+    "ad": 40,
+    "hp": 600
+  },
+  "3801": {
+    "name": "Bracelet cristallin",
+    "cost": 800,
+    "from": [
+      "1028",
+      "1006"
+    ],
+    "hp": 200
+  },
+  "3802": {
+    "name": "Chapitre perdu",
+    "cost": 1200,
+    "from": [
+      "1052",
+      "1027",
+      "2022"
+    ],
+    "ap": 40
+  },
+  "3803": {
+    "name": "Catalyseur de l'éternité",
+    "cost": 1300,
+    "from": [
+      "1028",
+      "1028",
+      "1027"
+    ],
+    "hp": 300
+  },
+  "3814": {
+    "name": "Manteau de la nuit",
+    "cost": 3000,
+    "from": [
+      "3134",
+      "2021"
+    ],
+    "ad": 50,
+    "hp": 250
+  },
+  "3865": {
+    "name": "Atlas",
+    "cost": 400
+  },
+  "3869": {
+    "name": "Opposition céleste",
+    "cost": 400,
+    "from": [
+      "3867"
+    ],
+    "hp": 200
+  },
+  "3870": {
+    "name": "Rêve éveillé",
+    "cost": 400,
+    "from": [
+      "3867"
+    ],
+    "hp": 200
+  },
+  "3871": {
+    "name": "Pique dimensionnelle de Zaz'Zak",
+    "cost": 400,
+    "from": [
+      "3867"
+    ],
+    "hp": 200
+  },
+  "3876": {
+    "name": "Traîneau du solstice",
+    "cost": 400,
+    "from": [
+      "3867"
+    ],
+    "hp": 200
+  },
+  "3877": {
+    "name": "Mélodie du sang",
+    "cost": 400,
+    "from": [
+      "3867"
+    ],
+    "hp": 200
+  },
+  "3916": {
+    "name": "Orbe de l'oubli",
+    "cost": 800,
+    "from": [
+      "1052"
+    ],
+    "ap": 25
+  },
+  "4005": {
+    "name": "Mandat impérial",
+    "cost": 2400,
+    "from": [
+      "1052",
+      "4642",
+      "1052"
+    ],
+    "ap": 60
+  },
+  "4401": {
+    "name": "Force de la nature",
+    "cost": 2800,
+    "from": [
+      "1057",
+      "1028",
+      "3066"
+    ],
+    "mr": 55,
+    "hp": 400
+  },
+  "4628": {
+    "name": "Concentration lointaine",
+    "cost": 2700,
+    "from": [
+      "3108",
+      "3108",
+      "1052"
+    ],
+    "ap": 75
+  },
+  "4629": {
+    "name": "Volonté cosmique",
+    "cost": 3000,
+    "from": [
+      "3067",
+      "3113",
+      "3108"
+    ],
+    "ap": 70,
+    "hp": 350
+  },
+  "4630": {
+    "name": "Joyau putréfiant",
+    "cost": 1100,
+    "from": [
+      "1052"
+    ],
+    "ap": 25
+  },
+  "4632": {
+    "name": "Barrière verdoyante",
+    "cost": 1600,
+    "from": [
+      "1052",
+      "1033",
+      "1052"
+    ],
+    "ap": 40,
+    "mr": 25
+  },
+  "4633": {
+    "name": "Créateur de failles",
+    "cost": 3100,
+    "from": [
+      "3147",
+      "3108"
+    ],
+    "ap": 70,
+    "hp": 350,
+    "heal": true
+  },
+  "4642": {
+    "name": "Miroir en verre de Bandle",
+    "cost": 900,
+    "from": [
+      "1004",
+      "1052",
+      "2022"
+    ],
+    "ap": 20
+  },
+  "4645": {
+    "name": "Flamme-ombre",
+    "cost": 3200,
+    "from": [
+      "3145",
+      "1058"
+    ],
+    "ap": 110
+  },
+  "4646": {
+    "name": "Onde orageuse",
+    "cost": 2800,
+    "from": [
+      "3145",
+      "3113"
+    ],
+    "ap": 90
+  },
+  "6333": {
+    "name": "Danse de la mort",
+    "cost": 3300,
+    "from": [
+      "2019",
+      "1037",
+      "3133"
+    ],
+    "ad": 60,
+    "armor": 50
+  },
+  "6609": {
+    "name": "Épée dentelée chimico-punk",
+    "cost": 3000,
+    "from": [
+      "3123",
+      "1011",
+      "3133"
+    ],
+    "ad": 45,
+    "hp": 450
+  },
+  "6610": {
+    "name": "Ciel éventré",
+    "cost": 3100,
+    "from": [
+      "2021",
+      "3133"
+    ],
+    "ad": 40,
+    "hp": 400
+  },
+  "6616": {
+    "name": "Bâton des flots",
+    "cost": 2250,
+    "from": [
+      "3108",
+      "3114"
+    ],
+    "ap": 35
+  },
+  "6617": {
+    "name": "Régénérateur de pierre de lune",
+    "cost": 2200,
+    "from": [
+      "3067",
+      "4642"
+    ],
+    "ap": 25,
+    "hp": 200
+  },
+  "6620": {
+    "name": "Échos d'Helia",
+    "cost": 2200,
+    "from": [
+      "3067",
+      "4642"
+    ],
+    "ap": 35,
+    "hp": 200
+  },
+  "6621": {
+    "name": "Cœur de l'aube",
+    "cost": 2500,
+    "from": [
+      "1026",
+      "3114",
+      "3114"
+    ],
+    "ap": 45
+  },
+  "6631": {
+    "name": "Estropieur",
+    "cost": 3300,
+    "from": [
+      "3077",
+      "3044",
+      "1042"
+    ],
+    "ad": 40,
+    "hp": 450
+  },
+  "6653": {
+    "name": "Tourment de Liandry",
+    "cost": 3000,
+    "from": [
+      "3147",
+      "2508"
+    ],
+    "ap": 60,
+    "hp": 300
+  },
+  "6655": {
+    "name": "Écho de Luden",
+    "cost": 2750,
+    "from": [
+      "3802",
+      "3145"
+    ],
+    "ap": 100
+  },
+  "6657": {
+    "name": "Bâton séculaire",
+    "cost": 2600,
+    "from": [
+      "1026",
+      "3803"
+    ],
+    "ap": 45,
+    "hp": 350
+  },
+  "6660": {
+    "name": "Cendres de Bami",
+    "cost": 900,
+    "from": [
+      "1028",
+      "2022"
+    ],
+    "hp": 150
+  },
+  "6662": {
+    "name": "Gantelet givrant",
+    "cost": 2900,
+    "from": [
+      "3057",
+      "1028",
+      "1031"
+    ],
+    "armor": 50,
+    "hp": 300
+  },
+  "6664": {
+    "name": "Rayonnement du vide",
+    "cost": 2800,
+    "from": [
+      "6660",
+      "3211"
+    ],
+    "mr": 40,
+    "hp": 400
+  },
+  "6665": {
+    "name": "Jak'Sho, le Protéiforme",
+    "cost": 3200,
+    "from": [
+      "1011",
+      "1031",
+      "1057"
+    ],
+    "armor": 45,
+    "mr": 45,
+    "hp": 350
+  },
+  "6670": {
+    "name": "Carquois zénithien",
+    "cost": 1300,
+    "from": [
+      "1036",
+      "1018"
+    ],
+    "ad": 15
+  },
+  "6672": {
+    "name": "Tueur de krakens",
+    "cost": 3000,
+    "from": [
+      "6690",
+      "3051",
+      "1043"
+    ],
+    "ad": 45
+  },
+  "6673": {
+    "name": "Arc-bouclier immortel",
+    "cost": 3000,
+    "from": [
+      "1037",
+      "6670"
+    ],
+    "ad": 55
+  },
+  "6675": {
+    "name": "Tremblelame navori",
+    "cost": 2650,
+    "from": [
+      "1042",
+      "3086",
+      "1042"
+    ]
+  },
+  "6676": {
+    "name": "Percepteur",
+    "cost": 3000,
+    "from": [
+      "1037",
+      "3134",
+      "1018"
+    ],
+    "ad": 50
+  },
+  "6690": {
+    "name": "Rectrix",
+    "cost": 775,
+    "from": [
+      "1036"
+    ],
+    "ad": 15
+  },
+  "6692": {
+    "name": "Éclipse",
+    "cost": 2900,
+    "from": [
+      "3133",
+      "1037",
+      "1036"
+    ],
+    "ad": 60
+  },
+  "6694": {
+    "name": "Rancune de Serylda",
+    "cost": 3000,
+    "from": [
+      "3133",
+      "3035"
+    ],
+    "ad": 45
+  },
+  "6695": {
+    "name": "Crochet de serpent",
+    "cost": 2500,
+    "from": [
+      "3134",
+      "1037"
+    ],
+    "ad": 55
+  },
+  "6696": {
+    "name": "Arc axiomatique",
+    "cost": 2750,
+    "from": [
+      "2020",
+      "3133"
+    ],
+    "ad": 55
+  },
+  "6697": {
+    "name": "Orgueil",
+    "cost": 2800,
+    "from": [
+      "3134",
+      "3133"
+    ],
+    "ad": 55
+  },
+  "6698": {
+    "name": "Hydre profane",
+    "cost": 2850,
+    "from": [
+      "3077",
+      "2020"
+    ],
+    "ad": 55
+  },
+  "6699": {
+    "name": "Cyclosabre voltaïque",
+    "cost": 3000,
+    "from": [
+      "2020",
+      "1036",
+      "1036"
+    ],
+    "ad": 55
+  },
+  "8010": {
+    "name": "Malédiction du sanguinaire",
+    "cost": 2900,
+    "from": [
+      "3147",
+      "3108"
+    ],
+    "ap": 65,
+    "hp": 400
+  },
+  "8020": {
+    "name": "Masque abyssal",
+    "cost": 2650,
+    "from": [
+      "3067",
+      "1057"
+    ],
+    "mr": 45,
+    "hp": 350
+  }
+}

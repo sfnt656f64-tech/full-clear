@@ -19,6 +19,38 @@
     <p id="client-account" class="muted small" hidden></p>
   </section>
 
+  <section>
+    <h2>Overlay en jeu</h2>
+    <p id="live-status" class="status idle">Pas de partie en cours.</p>
+    <div id="live-body"></div>
+    <label class="check"><input id="overlay-on" type="checkbox"> Afficher l'overlay pendant les parties</label>
+    <div class="row">
+      <label for="form-choice" class="small">Forme :</label>
+      <select id="form-choice">
+        <option value="auto">Recommandée (auto)</option>
+        <option value="blue">Bleu (assassin)</option>
+        <option value="red">Rouge (Rhaast)</option>
+      </select>
+      <button id="overlay-reset" type="button">Replacer l'overlay</button>
+    </div>
+    <h3>Raccourcis (actifs en partie)</h3>
+    <div class="shortcut-row">
+      <span>Masquer / afficher</span>
+      <button id="sc-toggle" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
+      <span id="sc-toggle-status" class="badge"></span>
+      <button id="sc-toggle-reset" type="button" class="link">Par défaut</button>
+    </div>
+    <div class="shortcut-row">
+      <span>Déplacer / verrouiller</span>
+      <button id="sc-move" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
+      <span id="sc-move-status" class="badge"></span>
+      <button id="sc-move-reset" type="button" class="link">Par défaut</button>
+    </div>
+    <p id="sc-error" class="warn-text small" hidden></p>
+    <p class="muted small">Clique sur une combinaison puis appuie sur la nouvelle (Ctrl, Alt et/ou Maj + une lettre, un chiffre ou F1–F24). Échap pour annuler. « Masquer / afficher » est aussi dans le menu clic droit de l'icône.</p>
+    <p id="window-mode" class="small"></p>
+  </section>
+
   <section id="draft" hidden>
     <h2 id="draft-title">Draft</h2>
     <div id="draft-body"></div>

@@ -1,5 +1,6 @@
 // Fenêtre d'état. Pas d'accès à Node : tout passe par window.kayn (preload.ts).
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
+import { acceleratorFromKey } from "../shortcuts.ts";
 
 declare global {
   interface Window { kayn: KaynApi }
@@ -127,8 +128,121 @@ function renderDraft(s: AppState): void {
   $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
 }
 
+// ---------- En jeu ----------
+
+const WINDOW_MODES: Record<string, [string, string]> = {
+  borderless: ["ok-text", "Jeu en mode « Sans bordure » : l'overlay peut s'afficher par-dessus."],
+  windowed: ["ok-text", "Jeu en mode fenêtré : l'overlay s'affiche, mais « Sans bordure » est conseillé."],
+  fullscreen: ["warn-text", "Jeu en plein écran : l'overlay sera invisible. Passe en « Sans bordure » (Options → Vidéo → Mode fenêtre)."],
+  unknown: ["muted", "Mode d'affichage du jeu inconnu : choisis « Sans bordure » dans Options → Vidéo."],
+};
+
+function renderLive(s: AppState): void {
+  const l = s.live;
+  const st = $("live-status");
+  st.className = `status ${l.inGame ? "ok" : "idle"}`;
+  st.textContent = !l.inGame ? "Pas de partie en cours."
+    : !l.overlayEnabled ? "En jeu · overlay désactivé"
+    : l.overlayMoving ? "En jeu · overlay en déplacement"
+    : l.hiddenByUser ? "En jeu · overlay masqué (raccourci)"
+    : "En jeu · overlay affiché";
+  const body: Child[] = [];
+  const v = l.view;
+  if (v) {
+    if (!v.next) body.push(h("p", { class: "ok-text" }, "Build terminé."));
+    else {
+      const n = v.next;
+      body.push(h("div", { class: "next" }, icon(n.item.icon, n.item.name), h("div", {},
+        h("b", {}, `Prochain : ${n.item.name}`),
+        h("div", { class: "small" }, n.missingGold ? h("span", { class: "gold" }, `${n.missingGold} po manquants (or : ${v.gold})`) : h("span", { class: "ok-text" }, "achetable maintenant"),
+          n.component ? ` · en attendant : ${n.component.name}` : ""))));
+    }
+    if (v.reasons.length) body.push(h("p", { class: "muted small" }, `Build ajusté : ${v.reasons.join(" ; ")}.`));
+  }
+  $("live-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
+  $<HTMLInputElement>("overlay-on").checked = l.overlayEnabled;
+  $<HTMLSelectElement>("form-choice").value = l.formChoice;
+  for (const name of ["toggle", "move"] as const) {
+    const sc = l.shortcuts[name];
+    if (capturing !== name) $(`sc-${name}`).textContent = sc.label;
+    const badge = $(`sc-${name}-status`);
+    const [cls, txt] = SHORTCUT_STATUS[sc.status];
+    badge.className = `badge ${cls}`;
+    badge.textContent = txt;
+  }
+  const [cls, msg] = WINDOW_MODES[l.windowMode] ?? WINDOW_MODES.unknown;
+  const wm = $("window-mode");
+  wm.className = `small ${cls}`;
+  wm.textContent = msg;
+}
+
+const SHORTCUT_STATUS: Record<string, [string, string]> = {
+  active: ["ok", "actif"],
+  free: ["ok", "libre"],
+  taken: ["warn", "déjà pris par une autre appli"],
+  unknown: ["idle", "non testé"],
+};
+
+// Saisie d'un raccourci : le prochain appui (avec modificateurs) devient la combinaison.
+let capturing: "toggle" | "move" | null = null;
+
+function showShortcutError(msg: string | null): void {
+  const el = $("sc-error");
+  el.hidden = !msg;
+  el.textContent = msg ?? "";
+}
+
+async function stopCapture(): Promise<void> {
+  if (!capturing) return;
+  const name = capturing;
+  capturing = null;
+  $(`sc-${name}`).classList.remove("capturing");
+  await window.kayn.setCapturing(false);
+  render(await window.kayn.getState());
+}
+
+for (const name of ["toggle", "move"] as const) {
+  $(`sc-${name}`).addEventListener("click", async () => {
+    if (capturing) await stopCapture();
+    capturing = name;
+    showShortcutError(null);
+    const btn = $(`sc-${name}`);
+    btn.classList.add("capturing");
+    btn.textContent = "Appuie sur la combinaison…";
+    await window.kayn.setCapturing(true);
+  });
+  $(`sc-${name}-reset`).addEventListener("click", async () => {
+    await stopCapture();
+    const r = await window.kayn.setShortcut(name, null);
+    showShortcutError(r.error);
+    render(r.state);
+  });
+}
+
+window.addEventListener("keydown", async (e) => {
+  if (!capturing) return;
+  e.preventDefault();
+  if (e.key === "Escape") { await stopCapture(); return; }
+  if (["Control", "Shift", "Alt", "Meta", "AltGraph"].includes(e.key)) return; // on attend la touche principale
+  const acc = acceleratorFromKey(e);
+  if (!acc) { showShortcutError("Combinaison non prise en charge : Ctrl, Alt et/ou Maj + une lettre, un chiffre ou F1–F24."); return; }
+  const name = capturing;
+  capturing = null;
+  $(`sc-${name}`).classList.remove("capturing");
+  await window.kayn.setCapturing(false);
+  const r = await window.kayn.setShortcut(name, acc);
+  showShortcutError(r.error);
+  render(r.state);
+});
+window.addEventListener("blur", () => void stopCapture());
+
+$<HTMLInputElement>("overlay-on").addEventListener("change", async (e) => render(await window.kayn.setOverlayEnabled((e.target as HTMLInputElement).checked)));
+$<HTMLSelectElement>("form-choice").addEventListener("change", async (e) => render(await window.kayn.setFormChoice((e.target as HTMLSelectElement).value as "auto" | "blue" | "red")));
+$("overlay-reset").addEventListener("click", async () => render(await window.kayn.resetOverlayPosition()));
+
 function render(s: AppState): void {
   renderClient(s);
+  renderLive(s);
   renderDraft(s);
   $("version").textContent = `v${s.version}${s.dev ? " (dev)" : ""}`;
   const rid = $("riot-id");
