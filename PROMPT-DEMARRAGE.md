@@ -1,7 +1,7 @@
 # Projet : simulateur de builds Kayn (jungle)
 
 ## Contexte
-Je joue Kayn jungle en classé (EUW, Émeraude 4, objectif Diamant). J'ai une première version d'un simulateur sous forme d'une seule page HTML : `kayn-simulator.html` (dans ce dossier). Elle contient :
+Je joue Kayn jungle en classé. J'ai une première version d'un simulateur sous forme d'une seule page HTML : `kayn-simulator.html` (dans ce dossier). Elle contient :
 - des guides de build par compo adverse, pour les formes bleue (Shadow Assassin) et rouge (Rhaast) ;
 - un modèle de dégâts en JavaScript (combo bleu, combat de 6 s en rouge) ;
 - un benchmark du 4ᵉ item et un classement des items selon la rentabilité de leurs stats ;
@@ -54,7 +54,7 @@ Ajouter ensuite au modèle Dark Harvest (bleu) et Conqueror (rouge), en option d
 
 ### 5. (Optionnel, demande-moi avant) Mes vraies parties
 Avec une clé API Riot personnelle :
-- récupérer mes dernières parties classées sur Kayn (EUW) ;
+- récupérer mes dernières parties classées sur Kayn ;
 - comparer mon build réel à celui que recommande le moteur pour la même compo adverse ;
 - afficher mon taux de victoire par forme et par item.
 
