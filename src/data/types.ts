@@ -11,7 +11,7 @@ export type ItemKey =
 export type BootKey = "lucidity" | "steelcaps" | "mercury" | "swiftness";
 
 /** Effets d'items que le modèle sait simuler. */
-export type ItemFlag = "volt" | "hubris" | "axiom" | "serpent" | "dd" | "sterak";
+export type ItemFlag = "volt" | "hubris" | "axiom" | "serpent" | "dd" | "sterak" | "bastion";
 
 export interface Item {
   /** Nom anglais (affiché tel quel dans l'interface). */

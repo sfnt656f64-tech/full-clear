@@ -22,7 +22,8 @@ describe("interface", () => {
     expect($("guides").querySelectorAll(".grid .card")).toHaveLength(6);
     expect($("s-out").textContent).toContain("Dégâts du combo");
     expect($("bench").textContent).toContain("Serylda's Grudge");
-    expect($("bench").textContent).toContain("65 %");
+    expect($("bench").textContent).toContain("Rembourse 21,5 % du CD du R");
+    expect($("s-out").textContent).toContain("Dark Harvest");
   });
 
   it("l'onglet Rhaast bascule guides, simulateur et benchmark", () => {
@@ -53,6 +54,20 @@ describe("interface", () => {
     btn.click();
     expect($("picker").classList.contains("hide")).toBe(true);
     expect($("slots-al").textContent).toContain("Zed");
+  });
+});
+
+describe("réglages des runes", () => {
+  it("désactiver Dark Harvest le retire du simulateur", () => {
+    (document.querySelector('[data-form="blue"]') as HTMLElement).click();
+    const cb = $("st-dh") as HTMLInputElement;
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change"));
+    expect($("s-out").textContent).not.toContain("Dark Harvest");
+    expect(($("st-souls") as HTMLSelectElement).disabled).toBe(true);
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change"));
+    expect($("s-out").textContent).toContain("Dark Harvest");
   });
 });
 

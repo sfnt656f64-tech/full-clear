@@ -48,8 +48,10 @@ chaque écart, puis mettre la référence à jour.
 ## Valeurs de jeu
 
 Aucune valeur n'est inventée : elle vient de Data Dragon ou du wiki officiel, sinon elle est marquée
-« non vérifiée » dans l'interface. Les valeurs actuelles sont celles de la première version et seront
-vérifiées (étapes 2 et 4).
+« non vérifiée » dans l'interface. `src/model/constants.ts` donne la source de chaque valeur (vérifiées le
+18/11/2026, patch 26.23) et sépare les **hypothèses** de modélisation (durée du combat, temps d'auto-attaque…).
+Les règles d'origine (Voltaic 9 %, Death's Dance 35 %…) restent dans `tests/fixtures/legacy-data.ts` pour le
+test de non-régression ; `tests/claims.test.ts` vérifie que les chiffres cités dans les guides suivent le modèle.
 
 ## Déploiement
 

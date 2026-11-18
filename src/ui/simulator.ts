@@ -7,6 +7,7 @@ import { redFight } from "../model/red";
 import { stats } from "../model/stats";
 import { $, esc, fmt, pct } from "./html";
 import { itemIcon } from "./icons";
+import { runeOptions } from "./settings";
 
 let form: Form = "blue";
 
@@ -32,14 +33,14 @@ export function setSimulatorForm(f: Form): void {
 
 const val = (id: string) => $<HTMLSelectElement>(id).value;
 
-function sim(): void {
+export function sim(): void {
   const guide = GUIDES[form][+val("s-build")];
   const stage = val("s-stage") as Stage, tk = val("s-tgt") as TargetKey;
   const L = STAGE_LEVEL[stage], b = buildAtStage(guide.b, stage), tgt = TARGETS[stage][tk], hub = +val("s-hub");
   let h = `<div class="path">${b.map(itemIcon).join("")}</div>`
     + `<div class="sub" style="margin:-6px 0 12px">Niv. ${L} · ${fmt(stats(b, L).cost)} po · cible : ${esc(tgt.n)} (${fmt(tgt.hp)} PV, ${tgt.armor} armure${tgt.shield ? `, bouclier ${tgt.shield}` : ""})</div>`;
   if (form === "blue") {
-    const r = blueCombo(b, L, tgt, { hubrisStacks: hub });
+    const r = blueCombo(b, L, tgt, { hubrisStacks: hub, runes: runeOptions() });
     const mx = Math.max(...r.log.map((x) => x[1]));
     h += `<div class="kpis">
         <div class="kpi"><div class="sub">Dégâts du combo</div><div class="big">${fmt(r.total)}</div></div>
@@ -49,13 +50,14 @@ function sim(): void {
       <h3 style="margin-top:14px">Combo W › Q › AA › R › AA (passif Assassin inclus)</h3>`
       + r.log.map(([n, d]) => `<div class="row"><span>${esc(n)}</span><div class="bar"><i style="width:${(100 * d) / mx}%;background:var(--blue)"></i></div><span>${fmt(d)}</span></div>`).join("");
   } else {
-    const r = redFight(b, L, tgt);
+    const r = redFight(b, L, tgt, { runes: runeOptions() });
     const mx = Math.max(...Object.values(r.parts));
     h += `<div class="kpis">
         <div class="kpi"><div class="sub">DPS (combat de 6 s)</div><div class="big">${fmt(r.dps)}</div></div>
         <div class="kpi"><div class="sub">% PV max retirés</div><div class="big">${pct(r.pct)}</div></div>
         <div class="kpi"><div class="sub">Soins sur 6 s</div><div class="big" style="color:var(--green)">${fmt(r.heal)}</div></div>
         <div class="kpi"><div class="sub">PV eff. phys / mag</div><div class="big">${fmt(r.ehpPhys)}<span class="sub"> / ${fmt(r.ehpMag)}</span></div></div></div>
+      <div class="sub" style="margin-top:6px">Soins : passif ${fmt(r.heals.passive)} · R ${fmt(r.heals.R)}${r.heals.conqueror ? ` · Conqueror ${fmt(r.heals.conqueror)}` : ""}</div>
       <h3 style="margin-top:14px">Répartition (${r.nQ} Q, ${r.nW} W, 1 R, ${r.nAA} AA)</h3>`
       + Object.entries(r.parts).map(([n, d]) => `<div class="row"><span>${n}</span><div class="bar"><i style="width:${(100 * d) / mx}%;background:var(--red)"></i></div><span>${fmt(d)}</span></div>`).join("");
   }
