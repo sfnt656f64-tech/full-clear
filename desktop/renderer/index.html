@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://ddragon.leagueoflegends.com">
   <title>Kayn Sim</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -17,6 +17,11 @@
     <h2>Client League of Legends</h2>
     <p id="client" class="status idle">Recherche du client…</p>
     <p id="client-account" class="muted small" hidden></p>
+  </section>
+
+  <section id="draft" hidden>
+    <h2 id="draft-title">Draft</h2>
+    <div id="draft-body"></div>
   </section>
 
   <section>

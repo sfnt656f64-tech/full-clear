@@ -5,6 +5,7 @@ import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ClientWatcher } from "./client-watch.ts";
 import { envCandidates, loadDesktopConfig, type DesktopConfig } from "./config.ts";
+import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { IPC, type AppState } from "./ipc.ts";
 
 /** Lancé par Windows à l'ouverture de session : on reste discret dans la zone de notification. */
@@ -16,10 +17,32 @@ let tray: Tray | null = null;
 let win: BrowserWindow | null = null;
 let config: DesktopConfig;
 let quitting = false;
-const watcher = new ClientWatcher(() => config?.riotId ?? null, (s) => {
-  pushState();
-  if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
-});
+let draft: DraftView | null = null;
+let draftAt = 0;
+let prevPhase = "";
+/** Phases après lesquelles la dernière draft n'a plus d'intérêt. */
+const CLEAR_DRAFT = new Set(["None", "Lobby", "Matchmaking", "ReadyCheck"]);
+
+const watcher = new ClientWatcher(
+  () => config?.riotId ?? null,
+  (s) => {
+    const phase = s.kind === "connected" ? s.phase : "";
+    if (phase === "ChampSelect" && prevPhase !== "ChampSelect") {
+      draft = null;
+      // Fenêtre affichée sans prendre le focus : le client LoL garde le clavier.
+      showWindow(false);
+    }
+    if (s.kind === "closed" || CLEAR_DRAFT.has(phase)) draft = null;
+    prevPhase = phase;
+    pushState();
+    if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
+  },
+  (snap) => {
+    draft = buildDraftView(snap);
+    draftAt = Date.now();
+    pushState();
+  },
+);
 
 function readConfig(): DesktopConfig {
   const userData = app.getPath("userData");
@@ -44,6 +67,9 @@ function setOpenAtLogin(on: boolean): void {
 function state(): AppState {
   return {
     client: watcher.status,
+    draft,
+    draftLive: watcher.status.kind === "connected" && watcher.status.phase === "ChampSelect",
+    draftAt,
     version: app.getVersion(),
     envFile: config.envFile,
     searched: config.searched,
@@ -58,11 +84,11 @@ function pushState(): void {
   win?.webContents.send(IPC.state, state());
 }
 
-function showWindow(): void {
+function showWindow(focus = true): void {
   if (!win) {
     win = new BrowserWindow({
       width: 460,
-      height: 560,
+      height: 720,
       minWidth: 380,
       minHeight: 420,
       title: "Kayn Sim",
@@ -80,10 +106,11 @@ function showWindow(): void {
     win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) void shell.openExternal(url); return { action: "deny" }; });
     win.webContents.on("will-navigate", (e) => e.preventDefault());
     void win.loadFile(join(here, "renderer", "index.html"));
-    win.once("ready-to-show", () => win?.show());
+    win.once("ready-to-show", () => (focus ? win?.show() : win?.showInactive()));
     return;
   }
   if (win.isMinimized()) win.restore();
+  if (!focus) { if (!win.isVisible()) win.showInactive(); return; }
   win.show();
   win.focus();
 }
@@ -91,7 +118,7 @@ function showWindow(): void {
 function refreshTrayMenu(): void {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Ouvrir Kayn Sim", click: showWindow },
+    { label: "Ouvrir Kayn Sim", click: () => showWindow() },
     { type: "separator" },
     { label: "Lancer au démarrage de Windows", type: "checkbox", checked: openAtLogin(), click: (item) => { setOpenAtLogin(item.checked); pushState(); } },
     { type: "separator" },
@@ -103,7 +130,7 @@ function createTray(): void {
   const icon = nativeImage.createFromPath(join(here, "icon.png")).resize({ width: 16, height: 16, quality: "best" });
   tray = new Tray(icon);
   tray.setToolTip("Kayn Sim");
-  tray.on("click", showWindow);
+  tray.on("click", () => showWindow());
   refreshTrayMenu();
 }
 
@@ -112,13 +139,16 @@ function registerIpc(): void {
   ipcMain.handle(IPC.setOpenAtLogin, (_e, on: unknown) => { setOpenAtLogin(on === true); return state(); });
   ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); return state(); });
   ipcMain.handle(IPC.openUserDataDir, async () => { await shell.openPath(app.getPath("userData")); });
+  ipcMain.handle(IPC.openDraftInSimulator, async () => {
+    if (draft) await shell.openExternal(`${config.siteUrl.replace(/#.*$/, "")}#${draft.link}`);
+  });
 }
 
 // Une seule instance : relancer l'appli ré-affiche simplement la fenêtre.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", showWindow);
+  app.on("second-instance", () => showWindow());
   app.setAppUserModelId("io.github.kayn-sim");
   app.whenReady().then(() => {
     config = readConfig();

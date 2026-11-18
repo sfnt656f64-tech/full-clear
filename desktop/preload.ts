@@ -7,6 +7,7 @@ const api: KaynApi = {
   setOpenAtLogin: (on) => ipcRenderer.invoke(IPC.setOpenAtLogin, on),
   reloadConfig: () => ipcRenderer.invoke(IPC.reloadConfig),
   openUserDataDir: () => ipcRenderer.invoke(IPC.openUserDataDir),
+  openDraftInSimulator: () => ipcRenderer.invoke(IPC.openDraftInSimulator),
   onState: (cb) => { ipcRenderer.on(IPC.state, (_e, s: AppState) => cb(s)); },
 };
 

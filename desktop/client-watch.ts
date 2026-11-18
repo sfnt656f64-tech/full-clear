@@ -2,11 +2,13 @@
 // Client fermé : lockfile relu toutes les 3 s, processus inspecté toutes les 12 s au plus.
 // Client ouvert : phase relue toutes les 2 s.
 import { DEFAULT_INSTALL_DIRS, discover, lcuGet, phaseLabel, sameRiotId, toLocalAccount, type LcuCredentials, type LocalAccount } from "./lcu.ts";
+import { toDraftSnapshot, type DraftSnapshot } from "./champ-select.ts";
 import type { ClientStatus } from "./ipc.ts";
 
 const CLOSED_INTERVAL = 3000;
 const SCAN_EVERY = 4; // 4 × 3 s
 const CONNECTED_INTERVAL = 2000;
+const CHAMP_SELECT_INTERVAL = 1000;
 
 export class ClientWatcher {
   private creds: LcuCredentials | null = null;
@@ -20,13 +22,18 @@ export class ClientWatcher {
 
   private readonly expected: () => { gameName: string; tagLine: string } | null;
   private readonly onChange: (s: ClientStatus, creds: LcuCredentials | null) => void;
+  private readonly onDraft: (d: DraftSnapshot) => void;
+  private lastDraft = "";
 
   constructor(
     expected: () => { gameName: string; tagLine: string } | null,
     onChange: (s: ClientStatus, creds: LcuCredentials | null) => void,
+    /** Appelé à chaque changement de la draft (pendant la sélection des champions seulement). */
+    onDraft: (d: DraftSnapshot) => void = () => {},
   ) {
     this.expected = expected;
     this.onChange = onChange;
+    this.onDraft = onDraft;
   }
 
   start(): void { this.stopped = false; void this.loop(); }
@@ -72,6 +79,15 @@ export class ClientWatcher {
           phase,
           phaseLabel: phaseLabel(phase),
         });
+        if (phase === "ChampSelect") {
+          delay = CHAMP_SELECT_INTERVAL;
+          const snap = toDraftSnapshot(await lcuGet(this.creds, "/lol-champ-select/v1/session"));
+          // Le chrono change à chaque lecture : on ne compare que la composition pour éviter de tout recalculer.
+          const key = snap && JSON.stringify({ ...snap, timeLeftMs: 0 });
+          if (snap && key !== this.lastDraft) { this.lastDraft = key!; this.onDraft(snap); }
+        } else {
+          this.lastDraft = "";
+        }
       }
     } catch {
       // Client fermé entre-temps (connexion refusée) ou en cours de démarrage : on recommence la détection.
