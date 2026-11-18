@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "desktop/dist/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -13,10 +14,14 @@
     "fixtures:legacy": "node scripts/legacy/extract-fixtures.mjs",
     "sync": "node scripts/sync-ddragon.ts",
     "live": "node scripts/riot/live.ts",
-    "stats": "tsx scripts/riot/stats.ts"
+    "stats": "tsx scripts/riot/stats.ts",
+    "desktop:build": "node scripts/desktop/build.ts",
+    "desktop": "node scripts/desktop/build.ts && electron ."
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "electron": "45.2.2",
+    "esbuild": "0.28.2",
     "jsdom": "^31.0.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
