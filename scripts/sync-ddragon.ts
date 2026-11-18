@@ -13,7 +13,7 @@
 // Ce script n'importe rien de src/ pour pouvoir tourner avec `node` seul (type stripping).
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = resolve(ROOT, "src/data/generated");
@@ -252,6 +252,6 @@ async function main() {
   if (warnings.length) console.log(`\n⚠️  ${warnings.length} avertissement(s) :\n- ` + warnings.join("\n- "));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => { console.error(`❌ ${e.message}`); process.exit(1); });
 }
