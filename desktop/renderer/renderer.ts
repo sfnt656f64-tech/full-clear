@@ -7,7 +7,27 @@ declare global {
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+function renderClient(s: AppState): void {
+  const el = $("client");
+  const acc = $("client-account");
+  const c = s.client;
+  if (c.kind === "closed") {
+    el.textContent = "Client LoL fermé : lance-le, l'appli le détecte toute seule.";
+    el.className = "status idle";
+    acc.hidden = true;
+    return;
+  }
+  el.textContent = `Client connecté · ${c.phaseLabel}`;
+  el.className = `status ${c.matchesEnv === false ? "warn" : "ok"}`;
+  acc.hidden = false;
+  acc.textContent = !c.account ? "Compte : en cours de chargement…"
+    : c.matchesEnv === false ? `Compte : ${c.account}, différent du RIOT_ID du .env (${s.riotId}).`
+    : c.matchesEnv ? `Compte : ${c.account} (identique au .env)`
+    : `Compte : ${c.account}`;
+}
+
 function render(s: AppState): void {
+  renderClient(s);
   $("version").textContent = `v${s.version}${s.dev ? " (dev)" : ""}`;
   const rid = $("riot-id");
   rid.textContent = s.riotId ? `Riot ID : ${s.riotId}` : "Riot ID non configuré";

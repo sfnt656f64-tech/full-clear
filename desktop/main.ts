@@ -3,6 +3,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { ClientWatcher } from "./client-watch.ts";
 import { envCandidates, loadDesktopConfig, type DesktopConfig } from "./config.ts";
 import { IPC, type AppState } from "./ipc.ts";
 
@@ -15,6 +16,10 @@ let tray: Tray | null = null;
 let win: BrowserWindow | null = null;
 let config: DesktopConfig;
 let quitting = false;
+const watcher = new ClientWatcher(() => config?.riotId ?? null, (s) => {
+  pushState();
+  if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
+});
 
 function readConfig(): DesktopConfig {
   const userData = app.getPath("userData");
@@ -38,6 +43,7 @@ function setOpenAtLogin(on: boolean): void {
 
 function state(): AppState {
   return {
+    client: watcher.status,
     version: app.getVersion(),
     envFile: config.envFile,
     searched: config.searched,
@@ -104,7 +110,7 @@ function createTray(): void {
 function registerIpc(): void {
   ipcMain.handle(IPC.getState, () => state());
   ipcMain.handle(IPC.setOpenAtLogin, (_e, on: unknown) => { setOpenAtLogin(on === true); return state(); });
-  ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); return state(); });
+  ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); return state(); });
   ipcMain.handle(IPC.openUserDataDir, async () => { await shell.openPath(app.getPath("userData")); });
 }
 
@@ -118,9 +124,10 @@ if (!app.requestSingleInstanceLock()) {
     config = readConfig();
     registerIpc();
     createTray();
+    watcher.start();
     if (!process.argv.includes(HIDDEN_ARG)) showWindow();
   });
   // Toutes les fenêtres fermées : on reste dans la zone de notification.
   app.on("window-all-closed", () => { /* rien */ });
-  app.on("before-quit", () => { quitting = true; });
+  app.on("before-quit", () => { quitting = true; watcher.stop(); });
 }

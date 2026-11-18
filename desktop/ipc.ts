@@ -1,6 +1,19 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
 
+export type ClientStatus =
+  | { kind: "closed" }
+  | {
+    kind: "connected";
+    /** Ton Riot ID d'après le client (« Nom#TAG »), seul compte jamais lu. */
+    account: string | null;
+    /** Le compte connecté est-il celui du .env ? null si l'un des deux manque. */
+    matchesEnv: boolean | null;
+    phase: string;
+    phaseLabel: string;
+  };
+
 export interface AppState {
+  client: ClientStatus;
   version: string;
   envFile: string | null;
   searched: string[];
