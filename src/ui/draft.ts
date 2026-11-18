@@ -5,6 +5,7 @@ import type { Champion, Form, Profile, Stage } from "../data/types";
 import { draftReport, MIN_ENEMIES, type DraftReport } from "../engine/draft";
 import { $, esc, fmt, pct } from "./html";
 import { champTile, itemIcon } from "./icons";
+import { runeOptions } from "./settings";
 
 type Team = "en" | "al";
 
@@ -118,11 +119,11 @@ function drawPicker(): void {
 
 // ---------- Analyse ----------
 
-function run(): void {
+export function run(): void {
   const out = $("d-out");
   const stage = $<HTMLSelectElement>("d-stage").value as Stage;
   const fsel = $<HTMLSelectElement>("d-form").value as Form | "auto";
-  const rep = draftReport(state.en, state.al, stage, fsel);
+  const rep = draftReport(state.en, state.al, stage, fsel, { runes: runeOptions() });
   if (!rep) {
     out.className = "note";
     out.innerHTML = `Ajoute au moins ${MIN_ENEMIES} adversaires pour lancer l'analyse.`;

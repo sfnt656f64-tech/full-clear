@@ -140,3 +140,12 @@ th { color: var(--mut); font-weight: 600; }
 
 footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--mut); line-height: 1.5; }
 footer p { margin: 0 0 6px; }
+
+/* Réglages des runes */
+.settings { padding: 10px 14px; }
+.setrow { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 4px; }
+.setrow select { width: auto; padding: 6px 8px; }
+.setrow select:disabled { opacity: .5; }
+.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--txt); margin: 0; cursor: pointer; }
+.chk input { width: 18px; height: 18px; accent-color: var(--blue); }
+.note p { margin: 6px 0 0; }

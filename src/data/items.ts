@@ -8,7 +8,7 @@ interface LocalMeta {
   boots?: true;
   /**
    * Réduction d'armure en % : c'est un passif, absent des stats Data Dragon.
-   * Black Cleaver à 5 stacks (30 %), valeur reprise de la première version, non vérifiée (étape 4).
+   * Black Cleaver (Carve) : 6 % par stack, 30 % à 5 stacks (wiki, Module:ItemData).
    */
   shred?: number;
 }
@@ -21,7 +21,7 @@ const META: Record<ItemKey, LocalMeta> = {
   serylda: { s: "SG" },
   serpent: { s: "SF", flags: ["serpent"] },
   youmuu: { s: "YG" },
-  bastion: { s: "BB" },
+  bastion: { s: "BB", flags: ["bastion"] },
   profane: { s: "PH" },
   cleaver: { s: "BC", shred: 30 },
   dd: { s: "DD", flags: ["dd"] },

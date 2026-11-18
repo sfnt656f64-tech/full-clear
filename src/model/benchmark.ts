@@ -3,6 +3,7 @@ import { TARGETS } from "../data/targets";
 import type { ItemKey, ItemTable, TargetKey } from "../data/types";
 import { blueCombo } from "./blue";
 import { redFight } from "./red";
+import type { StatOptions } from "./stats";
 
 export const BENCH_LEVEL = 14;
 
@@ -22,20 +23,20 @@ export const BENCH_RED = {
 export interface BenchRow { k: ItemKey; v: number[] }
 
 /** % de PV retirés par le combo bleu, pour chaque 4ᵉ item et chaque cible (mi-partie). */
-export function benchBlue(items?: ItemTable): BenchRow[] {
+export function benchBlue(opt: StatOptions = {}): BenchRow[] {
   const { base, candidates, targets, hubrisStacks } = BENCH_BLUE;
   return candidates.map((k) => ({
     k,
-    v: targets.map((t) => blueCombo([...base, k], BENCH_LEVEL, TARGETS.mid[t], { hubrisStacks, items }).pct),
+    v: targets.map((t) => blueCombo([...base, k], BENCH_LEVEL, TARGETS.mid[t], { ...opt, hubrisStacks }).pct),
   }));
 }
 
 /** DPS, soins et PV effectifs de Rhaast pour chaque 4ᵉ item (mi-partie). */
-export function benchRed(items?: ItemTable): BenchRow[] {
+export function benchRed(opt: StatOptions = {}): BenchRow[] {
   const { base, candidates } = BENCH_RED;
   return candidates.map((k) => {
-    const t = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.tank, { items });
-    const b = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.bruiser, { items });
+    const t = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.tank, opt);
+    const b = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.bruiser, opt);
     return { k, v: [t.dps, b.dps, t.heal, t.ehpPhys, t.ehpMag] };
   });
 }

@@ -2,6 +2,7 @@
 // Elles servent uniquement au test de non-régression du modèle et du moteur :
 // le site, lui, utilise les données Data Dragon (src/data/generated/).
 import type { Champion, ItemTable } from "../../src/data/types";
+import { RULES, type Rules } from "../../src/model/constants";
 import legacyChampions from "./legacy-champions.json";
 
 export const LEGACY_ITEMS: ItemTable = {
@@ -31,4 +32,16 @@ export const legacyChamp = (name: string): Champion => {
   const c = byName.get(name);
   if (!c) throw new Error(`Champion inconnu (données d'origine) : ${name}`);
   return c;
+};
+
+/**
+ * Règles de la première version : Voltaic 9 %, Death's Dance 35 % sur le physique seulement,
+ * pas de fragment de PV évolutifs, pas de passif Bastionbreaker.
+ */
+export const LEGACY_RULES: Rules = {
+  ...RULES,
+  voltaic: { currentHp: 0.09, lethality: 15 },
+  deathsDance: { deferred: 0.35, cleansed: 0.5, magic: false },
+  bastion: null,
+  healthShard: false,
 };

@@ -1,14 +1,18 @@
 import "./ui/style.css";
 import type { Form } from "./data/types";
 import { renderBench, renderGold } from "./ui/benchmark";
-import { mountDraft } from "./ui/draft";
+import { mountDraft, run as runDraft } from "./ui/draft";
 import { renderGuides } from "./ui/guides";
 import { $ } from "./ui/html";
 import { installImageFallback } from "./ui/icons";
 import { renderFooter, renderHeader, renderMethod } from "./ui/method";
-import { mountSimulator, setSimulatorForm } from "./ui/simulator";
+import { mountSettings, onSettingsChange } from "./ui/settings";
+import { mountSimulator, setSimulatorForm, sim } from "./ui/simulator";
+
+let form: Form = "blue";
 
 function setForm(f: Form): void {
+  form = f;
   for (const t of document.querySelectorAll<HTMLButtonElement>("#tabs .tab")) {
     const on = t.dataset.form === f;
     t.classList.toggle("on", on);
@@ -21,12 +25,19 @@ function setForm(f: Form): void {
 
 installImageFallback();
 renderHeader();
+mountSettings();
 mountDraft();
 mountSimulator();
 setForm("blue");
 renderGold();
 renderMethod();
 renderFooter();
+
+onSettingsChange(() => {
+  runDraft();
+  sim();
+  renderBench(form);
+});
 
 $("tabs").addEventListener("click", (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>("[data-form]");
