@@ -50,3 +50,11 @@ chaque écart, puis mettre la référence à jour.
 Aucune valeur n'est inventée : elle vient de Data Dragon ou du wiki officiel, sinon elle est marquée
 « non vérifiée » dans l'interface. Les valeurs actuelles sont celles de la première version et seront
 vérifiées (étapes 2 et 4).
+
+## Déploiement
+
+- `.github/workflows/deploy.yml` : à chaque push sur `main`, tests + build + déploiement sur GitHub Pages.
+  Chaque jeudi, synchronisation Data Dragon : si le patch a changé, les nouvelles données sont testées,
+  commitées sur `main` puis déployées. Lancement manuel possible (onglet Actions → Déploiement → Run workflow).
+- `.github/workflows/ci.yml` : tests et build sur les autres branches et les pull requests.
+- Prérequis (une fois) : Settings → Pages → Source : « GitHub Actions ».
