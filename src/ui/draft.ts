@@ -1,8 +1,9 @@
-import { CHAMPIONS, PROFILE_LABEL, champ, matchesQuery } from "../data/champions";
+import { CHAMPIONS, PROFILE_LABEL, champ, findChamp, matchesQuery } from "../data/champions";
 import { EXAMPLE_DRAFTS } from "../data/guides";
 import { BOOTS_T3, ITEMS, isBoots } from "../data/items";
 import type { Champion, Form, Profile, Stage } from "../data/types";
 import { draftReport, MIN_ENEMIES, type DraftReport } from "../engine/draft";
+import { decodeDraft, encodeDraft } from "../engine/draft-link";
 import { $, esc, fmt, pct } from "./html";
 import { champTile, itemIcon } from "./icons";
 import { runeOptions } from "./settings";
@@ -28,6 +29,7 @@ export function mountDraft(): void {
       <div><label for="d-form">Forme</label><select id="d-form"><option value="auto">Recommandée</option><option value="blue">Forcer bleu</option><option value="red">Forcer rouge</option></select></div>
       <div><label for="d-ex">Exemples</label><select id="d-ex"><option value="">—</option>${Object.keys(EXAMPLE_DRAFTS).map((k) => `<option>${esc(k)}</option>`).join("")}</select></div>
     </div>
+    <div id="d-src" class="sub hide" role="status"></div>
     <div id="d-out" class="note"></div>`;
 
   root.addEventListener("click", (e) => {
@@ -41,12 +43,52 @@ export function mountDraft(): void {
     if (!v) return;
     state.en = v[0].map(champ);
     state.al = v[1].map(champ);
-    drawSlots();
-    run();
+    changed();
   };
 
   mountPicker();
+  applyLink();
+  window.addEventListener("hashchange", () => { if (applyLink()) { drawSlots(); run(); } });
   drawSlots();
+  run();
+}
+
+// ---------- Lien de draft (#draft=…) ----------
+
+/** Pré-remplit la draft depuis l'URL (lien partagé ou npm run live). Renvoie false s'il n'y en a pas. */
+function applyLink(): boolean {
+  const d = decodeDraft(location.hash);
+  if (!d) return false;
+  const unknown: string[] = [];
+  const toChamp = (id: string | null) => {
+    if (!id) return null;
+    const c = findChamp(id);
+    if (!c) unknown.push(id);
+    return c ?? null;
+  };
+  state.en = d.en.map(toChamp);
+  state.al = d.al.map(toChamp);
+  const src = $("d-src");
+  const msg = [d.src === "live" ? "📡 Draft importée de ta partie en cours (npm run live)." : "🔗 Draft importée depuis le lien.",
+    unknown.length ? `Champion(s) inconnu(s) ignoré(s) : ${unknown.map(esc).join(", ")}.` : ""].filter(Boolean).join(" ");
+  src.innerHTML = msg;
+  src.classList.remove("hide");
+  return true;
+}
+
+/** Met le lien de la draft à jour dans l'URL (sans recharger la page), pour pouvoir la partager. */
+function syncLink(): void {
+  const ids = (cs: (Champion | null)[]) => cs.map((c) => c?.id ?? null);
+  const empty = [...state.en, ...state.al].every((c) => !c);
+  const url = empty ? location.pathname + location.search : `#${encodeDraft({ en: ids(state.en), al: ids(state.al) })}`;
+  history.replaceState(null, "", url);
+  $("d-src").classList.add("hide");
+}
+
+/** Après une modification manuelle de la draft. */
+function changed(): void {
+  drawSlots();
+  syncLink();
   run();
 }
 
@@ -104,6 +146,7 @@ function setSlot(c: Champion | null): void {
   const [t, i] = state.slot;
   state[t][i] = c;
   closePicker();
+  syncLink();
   run();
 }
 

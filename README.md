@@ -14,6 +14,41 @@ npm run sync       # synchronise les données avec Data Dragon (dernière versio
 npm run sync -- 16.22.1   # … ou une version précise
 ```
 
+Installation sur Windows pas à pas : [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md).
+
+## Mes parties (`npm run stats`, sur ton PC, rien n'est publié)
+
+Analyse tes parties **Solo/Duo de la saison en cours** (depuis le patch 26.01, le 8 janvier 2026) sur Kayn :
+win rate global, par forme (bleu, rouge, sans transformation), par 1er item et par item de l'inventaire final,
+et comparaison entre ton build réel et celui que le moteur recommande pour la même compo (forme, 1er item,
+3 premiers items, bottes). Résultat : un résumé dans la console et un rapport `.cache/riot/rapport.html`
+qui s'ouvre dans le navigateur.
+
+- Options : `--since=AAAA-MM-JJ`, `--refresh` (ignore le cache), `--no-open`.
+- Les parties déjà analysées restent dans `.cache/riot/` (ignoré par git) : le 1er lancement prend quelques
+  minutes (limite de 100 requêtes / 2 min), les suivants quelques secondes. Ctrl+C ne perd rien.
+- Seuls les résumés utiles sont gardés en cache (champions, items, forme, résultat) : ni PUUID d'autres joueurs,
+  ni noms.
+
+## Partie en cours (`npm run live`, sur ton PC)
+
+Prérequis : Node 22.18 ou plus récent (le script TypeScript tourne directement avec `node`).
+
+1. Copier `.env.example` en `.env` et y mettre ta clé personnelle Riot (`RIOT_API_KEY`) et ton Riot ID
+   (`RIOT_ID=Nom#TAG`). `.env` est dans `.gitignore` : il n'est jamais commité.
+2. Lancer une partie, puis `npm run live` une fois l'écran de chargement affiché (spectator-v5 ne voit pas
+   la sélection des champions). Options : `--watch` (vérifie toutes les 30 s), `--local` (ouvre `npm run dev`
+   au lieu du site), `--no-open` (affiche seulement le lien).
+3. Le navigateur s'ouvre sur le simulateur de draft pré-rempli : adversaires en face, tes 4 coéquipiers
+   dans ton équipe, toi dans la case « Toi ».
+
+La clé n'est envoyée qu'à l'API Riot, dans l'en-tête `X-Riot-Token`. Le lien ouvert ne contient que des
+identifiants de champions, dans le fragment `#draft=…` (jamais envoyé au serveur). Le client
+(`scripts/riot/client.ts`) respecte les limites de la clé personnelle (20 requêtes/s et 100 par 2 minutes)
+et attend la durée `Retry-After` en cas de réponse 429.
+
+Le même lien sert à partager une draft : la page met l'adresse à jour quand tu modifies les équipes.
+
 ## Données du jeu
 
 - `scripts/sync-ddragon.ts` télécharge `item.json`, `champion.json` et `champion/Kayn.json` (fr_FR et en_US)

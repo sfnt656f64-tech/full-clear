@@ -11,13 +11,19 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "fixtures:legacy": "node scripts/legacy/extract-fixtures.mjs",
-    "sync": "NODE_USE_ENV_PROXY=1 node scripts/sync-ddragon.ts"
+    "sync": "node scripts/sync-ddragon.ts",
+    "live": "node scripts/riot/live.ts",
+    "stats": "tsx scripts/riot/stats.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "jsdom": "^31.0.1",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

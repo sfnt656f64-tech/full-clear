@@ -29,7 +29,7 @@ export const PROFILE_FROM_TAG: Record<string, Profile> = {
 };
 
 export function buildChampion(g: GeneratedChampion, o: ChampionOverride | undefined): Champion {
-  const base = { id: g.id, name: g.name, nameEn: g.nameEn, image: g.image, tags: g.tags };
+  const base = { id: g.id, key: g.key, name: g.name, nameEn: g.nameEn, image: g.image, tags: g.tags };
   if (o) {
     return { ...base, profile: o.profile, range: o.range ?? g.range, damage: o.damage, cc: o.cc, shields: o.shields, heals: o.heals, slows: o.slows };
   }
@@ -51,6 +51,10 @@ export const CHAMPIONS: Champion[] = (generated as GeneratedChampion[])
 
 const index = new Map<string, Champion>();
 for (const c of CHAMPIONS) for (const k of [c.id!, c.name, c.nameEn!]) index.set(k, c);
+
+const byKey = new Map(CHAMPIONS.map((c) => [c.key!, c]));
+/** Recherche par clé numérique Riot (championId de l'API). */
+export const champByKey = (key: number): Champion | undefined => byKey.get(key);
 
 /** Recherche par identifiant Data Dragon, nom français ou nom anglais. */
 export const findChamp = (key: string): Champion | undefined => index.get(key);
