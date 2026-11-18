@@ -35,10 +35,11 @@ function render(v: OverlayView | null): void {
     out.push(h("div", { class: "row" },
       icon(n.item),
       h("div", {},
-        h("div", {}, h("span", { class: "title" }, `${n.rank}. ${n.item.name}`), formTag),
+        h("div", {}, h("span", { class: "title" }, `${n.rank ? `${n.rank}.` : "Départ :"} ${n.item.name}`), formTag),
         n.missingGold === 0
           ? h("div", { class: "ok" }, `Achetable maintenant (${po(n.item.cost)})`)
           : h("div", { class: "small" }, h("span", { class: "gold" }, `${po(n.missingGold)} manquants`), ` · reste ${po(n.item.cost)}`))));
+    if (n.why) out.push(h("p", { class: "small muted", style: "margin-top:4px" }, n.why));
     if (n.component) {
       out.push(h("div", { class: "row small", style: "margin-top:4px" },
         icon(n.component, "ic sm"), `En attendant : ${n.component.name} (${po(n.component.cost)})`));

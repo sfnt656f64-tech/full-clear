@@ -113,8 +113,14 @@ function renderDraft(s: AppState): void {
   if (d.build) {
     const b = d.build;
     body.push(h("h3", {}, "Build (ordre d'achat)"));
-    body.push(h("div", { class: "items" }, ...b.items.map((it, i) =>
+    const [pet, ...petAlts] = b.starter;
+    body.push(h("div", { class: "items" },
+      h("div", { class: "item", title: `${pet.nameFr} (${pet.name}) · ${pet.cost} po` }, icon(pet.icon, pet.nameFr), h("span", { class: "small" }, `Départ. ${pet.nameFr}`)),
+      ...b.items.map((it, i) =>
       h("div", { class: "item", title: `${it.name} · ${it.cost} po` }, it.icon ? icon(it.icon, it.name) : null, h("span", { class: "small" }, `${i + 1}. ${it.name}`)))));
+    body.push(h("p", { class: "small" }, h("b", {}, `Familier : ${pet.nameFr}`), ` (${pet.name}, ${pet.cost} po) : ${pet.why}`));
+    body.push(h("p", { class: "small muted" }, `Adulte : ${pet.effect}`));
+    for (const a of petAlts) body.push(h("p", { class: "small muted" }, `Sinon ${a.nameFr} : ${a.why}`));
     const [boot, ...alts] = b.boots;
     body.push(h("p", { class: "small" }, h("b", {}, `Bottes : ${boot.name}`), ` (${boot.t3}) : ${boot.why}`));
     for (const a of alts) body.push(h("p", { class: "small muted" }, `Sinon ${a.name} : ${a.why}`));
@@ -153,7 +159,7 @@ function renderLive(s: AppState): void {
     else {
       const n = v.next;
       body.push(h("div", { class: "next" }, icon(n.item.icon, n.item.name), h("div", {},
-        h("b", {}, `Prochain : ${n.item.name}`),
+        h("b", {}, `${n.rank ? "Prochain" : "Départ"} : ${n.item.name}`),
         h("div", { class: "small" }, n.missingGold ? h("span", { class: "gold" }, `${n.missingGold} po manquants (or : ${v.gold})`) : h("span", { class: "ok-text" }, "achetable maintenant"),
           n.component ? ` · en attendant : ${n.component.name}` : ""))));
     }

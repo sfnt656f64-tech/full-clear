@@ -76,12 +76,14 @@ Le même lien sert à partager une draft : la page met l'adresse à jour quand t
 
 - `scripts/sync-ddragon.ts` télécharge `item.json`, `champion.json` et `champion/Kayn.json` (fr_FR et en_US)
   et écrit `src/data/generated/` : version et patch, stats des items utilisés, champions (nom FR/EN, tags Riot,
-  portée, mêlée si ≤ 325), stats et sorts de Kayn, et tous les items achetables (`shop.json` : prix, recette, stats). Les fichiers sont déterministes : un diff git vide = rien n'a changé.
+  portée, mêlée si ≤ 325), stats et sorts de Kayn, et tous les items achetables (`shop.json` : prix, recette, stats), et les 3 familiers de jungle
+  (`starters.json` : noms FR/EN, prix, effet une fois adulte). Les fichiers sont déterministes : un diff git vide = rien n'a changé.
   Le script s'arrête si Riot renumérote un item, et signale les nouveaux champions sans override.
 - La létalité, la haste et la pénétration en % ne figurent pas dans les stats numériques de Data Dragon :
   elles sont lues dans le bloc `<stats>` de la description anglaise, recoupée avec les stats numériques.
 - `src/data/overrides.json` (édité à la main) : ce que Data Dragon ne donne pas (profil, type de dégâts,
-  CC de 0 à 3, boucliers, soins, ralentissements, portée forcée) et les corrections sourcées
+  CC de 0 à 3, boucliers, soins, ralentissements, portée forcée, `early` = early game très agressif ou invades
+  fréquentes, qui sert au choix du familier de jungle) et les corrections sourcées
   (croissance d'AD de Kayn : 3,3 selon le wiki, Data Dragon donnant 0).
 
 ## Structure

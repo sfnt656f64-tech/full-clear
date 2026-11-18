@@ -3,9 +3,10 @@
 import shopJson from "../src/data/generated/shop.json";
 import { findChamp } from "../src/data/champions";
 import { ITEMS } from "../src/data/items";
+import { STARTER_ITEM_IDS, STARTERS } from "../src/data/starters";
 import type { Champion, Form, ItemKey } from "../src/data/types";
 import { analyse, resolveForm, type Analysis } from "../src/engine/analyse";
-import { chooseBuild } from "../src/engine/build";
+import { chooseBuild, chooseStarter } from "../src/engine/build";
 import { DDRAGON_IMG } from "./draft-view.ts";
 import type { LiveSnapshot } from "./live-client.ts";
 
@@ -118,8 +119,10 @@ export interface OverlayView {
   /** null : build terminé. */
   next: null | {
     item: ItemLite;
-    /** Position dans le build (1 à 6). */
+    /** Position dans le build (1 à 6), 0 pour le familier de jungle (item de départ). */
     rank: number;
+    /** Justification (familier de jungle). */
+    why?: string;
     /** Or manquant pour le finir (0 : achetable maintenant). */
     missingGold: number;
     /** Composant le plus cher achetable maintenant, si l'item complet ne l'est pas. */
@@ -147,7 +150,20 @@ export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", sho
   const ownedFlags = ids.map((id) => owns(bag, id, shop));
   const idx = ownedFlags.indexOf(false);
   let next: OverlayView["next"] = null;
-  if (idx >= 0) {
+  // Début de partie : ni familier ni item du build → le familier d'abord.
+  const petOwned = s.me.items.some((id) => STARTER_ITEM_IDS.has(String(id)));
+  const starterFirst = !petOwned && !ownedFlags.some(Boolean);
+  if (starterFirst) {
+    const [key, why] = chooseStarter(base)[0];
+    const pet = STARTERS[key];
+    next = {
+      item: { id: pet.id, name: pet.nameFr, icon: icon(pet.id), cost: pet.cost },
+      rank: 0,
+      why,
+      missingGold: Math.max(0, pet.cost - s.gold),
+      component: null,
+    };
+  } else if (idx >= 0) {
     const id = ids[idx];
     const r = remainingCost(id, bagOf(s.me.items), shop);
     const missingGold = Math.max(0, r.gold - s.gold);
@@ -167,7 +183,7 @@ export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", sho
     form,
     formForced: formChoice !== "auto",
     next,
-    then: ids.filter((_, i) => !ownedFlags[i] && i !== idx).slice(0, 2).map((id) => lite(id, shop)),
+    then: ids.filter((_, i) => !ownedFlags[i] && (starterFirst || i !== idx)).slice(0, 2).map((id) => lite(id, shop)),
     owned: ownedFlags.filter(Boolean).length,
     reasons,
     notKayn: !!s.me.champion && s.me.champion !== "Kayn",

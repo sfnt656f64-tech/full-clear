@@ -5,7 +5,7 @@ import { blueCombo } from "../model/blue";
 import { redFight } from "../model/red";
 import type { StatOptions } from "../model/stats";
 import { analyse, resolveForm, type Analysis } from "./analyse";
-import { chooseBoots, chooseBuild, type BootChoice } from "./build";
+import { chooseBoots, chooseBuild, chooseStarter, type BootChoice, type StarterChoice } from "./build";
 
 /** Nombre minimal d'adversaires pour lancer l'analyse. */
 export const MIN_ENEMIES = 3;
@@ -37,6 +37,8 @@ export interface DraftReport {
   formChoice: Form | "auto";
   stage: Stage;
   level: number;
+  /** Familier de jungle (item de départ), avant le build. */
+  starter: StarterChoice[];
   boots: BootChoice[];
   build: ItemKey[];
   notes: string[];
@@ -61,6 +63,7 @@ export function draftReport(
   const level = STAGE_LEVEL[stage];
   const form = resolveForm(x, formChoice);
   const boots = chooseBoots(x, form);
+  const starter = chooseStarter(x);
   const { b, notes } = chooseBuild(x, form);
   // Comme la page d'origine : en mi-partie, 3 items + bottes.
   const simBuild = stage === "mid" ? buildAtStage(b, "mid") : b;
@@ -78,5 +81,5 @@ export function draftReport(
     const r0 = redFight(simBuild, level, targetFor(x.E[0], stage, x), opt);
     resist = { ehpPhys: r0.ehpPhys, ehpMag: r0.ehpMag };
   }
-  return { analysis: x, form, formChoice, stage, level, boots, build: b, notes, simBuild, vs, resist };
+  return { analysis: x, form, formChoice, stage, level, starter, boots, build: b, notes, simBuild, vs, resist };
 }

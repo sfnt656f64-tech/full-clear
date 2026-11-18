@@ -2,7 +2,8 @@
 import { champByKey } from "../src/data/champions";
 import { RUNES, type RunePage } from "../src/data/guides";
 import { BOOTS_T3, ITEMS } from "../src/data/items";
-import type { Champion, Form, ItemKey } from "../src/data/types";
+import { STARTERS } from "../src/data/starters";
+import type { Champion, Form, ItemKey, StarterKey } from "../src/data/types";
 import { DDRAGON_VERSION } from "../src/data/version";
 import { analyse, resolveForm } from "../src/engine/analyse";
 import { draftReport, MIN_ENEMIES } from "../src/engine/draft";
@@ -14,6 +15,7 @@ export const DDRAGON_IMG = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VE
 
 export interface ChampLite { id: string; name: string; icon: string }
 export interface ItemLite { key: ItemKey; name: string; icon: string; cost: number }
+export interface StarterLite { key: StarterKey; name: string; nameFr: string; icon: string; cost: number; why: string; effect: string }
 
 export interface DraftView {
   timerPhase: string;
@@ -39,6 +41,8 @@ export interface DraftView {
   runes: RunePage | null;
   /** À partir de 3 adversaires. */
   build: null | {
+    /** Familier de jungle (item de départ) : recommandation puis alternatives. */
+    starter: StarterLite[];
     boots: { name: string; t3: string; why: string }[];
     items: ItemLite[];
     /** Justifications : seul <b> est autorisé (texte produit par le moteur). */
@@ -90,6 +94,10 @@ export function buildDraftView(s: DraftSnapshot): DraftView {
     form,
     runes: form ? RUNES[form.value] : null,
     build: rep && {
+      starter: rep.starter.map(([k, why]) => {
+        const s = STARTERS[k];
+        return { key: k, name: s.name, nameFr: s.nameFr, icon: `${DDRAGON_IMG}/item/${s.image}`, cost: s.cost, why, effect: s.effectFr };
+      }),
       boots: rep.boots.map(([k, why]) => ({ name: ITEMS[k].nFr ?? ITEMS[k].n, t3: BOOTS_T3[k], why })),
       items: rep.build.map(itemLite),
       notes: rep.notes,

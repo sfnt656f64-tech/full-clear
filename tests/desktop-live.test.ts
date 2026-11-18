@@ -21,7 +21,8 @@ const p = (champion: string, team: "ORDER" | "CHAOS", n: number, items: number[]
   items: items.map((itemID, slot) => ({ itemID, count: 1, slot, price: 0, displayName: "x", canUse: false, consumable: false, rawDisplayName: "x" })),
 });
 
-function game(myItems: number[] = [], enemyItems: number[][] = []) {
+/** Par défaut, le familier de jungle est déjà acheté (Bébé Chardent) : l'overlay propose alors le build. */
+function game(myItems: number[] = [1101], enemyItems: number[][] = []) {
   const active = { currentGold: 1234.7, level: 9, riotId: "joueur3#tag3", summonerName: "Joueur3#TAG3", championStats: {}, abilities: {}, fullRunes: {} };
   const players = [
     p("Ornn", "ORDER", 1), p("Syndra", "ORDER", 2), p("Kayn", "ORDER", 3, myItems), p("Jhin", "ORDER", 4), p("Nautilus", "ORDER", 5),
@@ -120,6 +121,30 @@ describe("prochain item", () => {
     const v = buildOverlayView(s, "red");
     expect(v.next?.missingGold).toBe(0);
     expect(v.next?.component).toBeNull();
+  });
+});
+
+describe("familier de jungle dans l'overlay", () => {
+  it("le propose en premier en début de partie, avec sa justification", () => {
+    const { active, players } = game([]);
+    const s = toLiveSnapshot(active, players)!;
+    const v = buildOverlayView(s, "blue");
+    // Ornn, Syndra et Nautilus ont du CC pour suivre les ganks → Gustwalker (vent).
+    expect(v.next).toMatchObject({ rank: 0, item: { id: "1102", name: "Bébé Saute-nuages", cost: 450 }, missingGold: 0, component: null });
+    expect(v.next?.why).toMatch(/ganks/);
+    // Les deux premiers items du build restent visibles en aperçu.
+    expect(v.then.map((t) => t.id)).toEqual([ITEMS.voltaic.id, ITEMS.hubris.id]);
+    expect(buildOverlayView({ ...s, gold: 300 }, "blue").next?.missingGold).toBe(150);
+  });
+
+  it("passe au build dès qu'un familier (toutes variantes) ou un item du build est acheté", () => {
+    const { active, players } = game([]);
+    const s = toLiveSnapshot(active, players)!;
+    for (const pet of [1101, 1102, 1103, 1105, 1106, 1107]) {
+      expect(buildOverlayView({ ...s, me: { ...s.me, items: [pet] } }, "blue").next?.rank).toBe(1);
+    }
+    // Sans familier (pas en jungle ?) mais avec un premier item : on ne le propose plus.
+    expect(buildOverlayView({ ...s, me: { ...s.me, items: [Number(ITEMS.voltaic.id)] } }, "blue").next?.rank).toBe(2);
   });
 });
 
