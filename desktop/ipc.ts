@@ -1,6 +1,7 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
 import type { DraftView } from "./draft-view.ts";
 import type { HostState } from "./collector-host.ts";
+import type { MyGameRow } from "./stats/my-stats.ts";
 
 export type { DraftView };
 
@@ -62,6 +63,9 @@ export interface KaynApi {
   reloadConfig(): Promise<AppState>;
   openUserDataDir(): Promise<void>;
   setCollectorPaused(on: boolean): Promise<AppState>;
+  /** Tes parties enregistrées (pour la fenêtre « Mes stats »). */
+  getMyGames(): Promise<MyGameRow[]>;
+  openStatsWindow(): Promise<void>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
   setFormChoice(f: "auto" | "blue" | "red"): Promise<AppState>;
@@ -79,6 +83,8 @@ export const IPC = {
   reloadConfig: "kayn:reload-config",
   openUserDataDir: "kayn:open-user-data",
   setCollectorPaused: "kayn:set-collector-paused",
+  getMyGames: "kayn:get-my-games",
+  openStatsWindow: "kayn:open-stats-window",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",
   setFormChoice: "kayn:set-form-choice",

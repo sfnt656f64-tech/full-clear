@@ -15,6 +15,7 @@ const OUT = resolve(SRC, "dist");
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(resolve(OUT, "renderer"), { recursive: true });
 mkdirSync(resolve(OUT, "overlay"), { recursive: true });
+mkdirSync(resolve(OUT, "stats-window"), { recursive: true });
 
 const common = { bundle: true, sourcemap: "linked", logLevel: "warning", target: "es2023" } as const;
 
@@ -24,9 +25,11 @@ await Promise.all([
   build({ ...common, entryPoints: [resolve(SRC, "collector/collector-main.ts")], outfile: resolve(OUT, "collector.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "preload-overlay.ts")], outfile: resolve(OUT, "preload-overlay.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "renderer/renderer.ts")], outfile: resolve(OUT, "renderer/renderer.js"), platform: "browser", format: "iife" }),
+  build({ ...common, entryPoints: [resolve(SRC, "stats-window/stats.ts")], outfile: resolve(OUT, "stats-window/stats.js"), platform: "browser", format: "iife" }),
   build({ ...common, entryPoints: [resolve(SRC, "overlay/overlay.ts")], outfile: resolve(OUT, "overlay/overlay.js"), platform: "browser", format: "iife" }),
 ]);
 for (const f of ["index.html", "style.css"]) copyFileSync(resolve(SRC, "renderer", f), resolve(OUT, "renderer", f));
 for (const f of ["index.html", "overlay.css"]) copyFileSync(resolve(SRC, "overlay", f), resolve(OUT, "overlay", f));
+for (const f of ["index.html", "stats.css"]) copyFileSync(resolve(SRC, "stats-window", f), resolve(OUT, "stats-window", f));
 writeFileSync(resolve(OUT, "icon.png"), iconPng(256));
 console.log("Appli de bureau compilée dans desktop/dist.");

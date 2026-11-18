@@ -7,6 +7,7 @@ import { ClientWatcher } from "./client-watch.ts";
 import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
 import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
+import { readMyGames } from "./stats/read.ts";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildOverlayView, type OverlayView } from "./next-item.ts";
@@ -154,7 +155,40 @@ function state(): AppState {
 }
 
 function pushState(): void {
-  win?.webContents.send(IPC.state, state());
+  if (!win && !statsWin) return;
+  const s = state();
+  win?.webContents.send(IPC.state, s);
+  statsWin?.webContents.send(IPC.state, s);
+}
+
+let statsWin: BrowserWindow | null = null;
+const dbFile = () => join(app.getPath("userData"), "riot.db");
+
+/** Fenêtre « Mes stats » (une seule à la fois). */
+function showStatsWindow(): void {
+  if (statsWin) {
+    if (statsWin.isMinimized()) statsWin.restore();
+    statsWin.focus();
+    return;
+  }
+  statsWin = new BrowserWindow({
+    width: 1080,
+    height: 720,
+    minWidth: 640,
+    minHeight: 400,
+    title: "Kayn Sim · Mes stats",
+    icon: join(here, "icon.png"),
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: "#14141c",
+    webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  statsWin.removeMenu();
+  statsWin.on("closed", () => { statsWin = null; });
+  statsWin.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  statsWin.webContents.on("will-navigate", (e) => e.preventDefault());
+  void statsWin.loadFile(join(here, "stats-window", "index.html"));
+  statsWin.once("ready-to-show", () => statsWin?.show());
 }
 
 function showWindow(focus = true): void {
@@ -192,6 +226,7 @@ function refreshTrayMenu(): void {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Ouvrir Kayn Sim", click: () => showWindow() },
+    { label: "Mes stats", click: () => showStatsWindow() },
     { type: "separator" },
     {
       label: `Masquer / afficher l'overlay (${displayAccelerator(settings.shortcuts.toggle)})`,
@@ -247,6 +282,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getState, () => state());
   ipcMain.handle(IPC.setOpenAtLogin, (_e, on: unknown) => { setOpenAtLogin(on === true); return state(); });
   ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); configureCollector(); return state(); });
+  ipcMain.handle(IPC.getMyGames, () => readMyGames(dbFile()));
+  ipcMain.handle(IPC.openStatsWindow, () => showStatsWindow());
   ipcMain.handle(IPC.setCollectorPaused, (_e, on: unknown) => {
     settings.collectorPaused = on === true;
     saveSettings(settingsFile, settings);
@@ -277,7 +314,7 @@ if (!app.requestSingleInstanceLock()) {
       onChange: () => { pushState(); refreshTrayMenu(); },
     });
     overlay.enabled = settings.overlay.enabled;
-    collector = new CollectorHost(here, join(app.getPath("userData"), "riot.db"), pushState);
+    collector = new CollectorHost(here, dbFile(), pushState);
     configureCollector();
     registerIpc();
     createTray();

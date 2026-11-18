@@ -285,6 +285,7 @@ function renderCollector(s: AppState): void {
   $("accounts").textContent = s.riotIds.length > 1 ? `Comptes suivis : ${s.riotIds.join(", ")}` : s.riotIds.length ? `Compte suivi : ${s.riotIds[0]} (ajoute RIOT_ID_2 pour un 2ᵉ compte)` : "";
 }
 
+$("col-stats").addEventListener("click", () => void window.kayn.openStatsWindow());
 $("col-pause").addEventListener("click", async () => {
   const s = await window.kayn.getState();
   render(await window.kayn.setCollectorPaused(!s.collectorPaused));
