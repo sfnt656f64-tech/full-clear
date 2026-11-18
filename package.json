@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "fixtures:legacy": "node scripts/legacy/extract-fixtures.mjs"
+    "fixtures:legacy": "node scripts/legacy/extract-fixtures.mjs",
+    "sync": "NODE_USE_ENV_PROXY=1 node scripts/sync-ddragon.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

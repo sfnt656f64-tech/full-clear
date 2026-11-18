@@ -2,11 +2,13 @@
 // de la page d'origine (kayn-simulator.html), enregistrés par
 // scripts/legacy/extract-fixtures.mjs dans tests/fixtures/legacy.json.
 //
+// Le modèle et le moteur reçoivent les données d'origine (items et champions figés dans
+// tests/fixtures/), pour tester la LOGIQUE indépendamment des mises à jour de Data Dragon.
 // Quand le modèle est corrigé volontairement (étape 4), ces tests échoueront :
 // c'est voulu, chaque écart doit être relu puis la référence mise à jour.
 import { describe, expect, it } from "vitest";
 import legacy from "./fixtures/legacy.json";
-import { champ } from "../src/data/champions";
+import { LEGACY_ITEMS as items, legacyChamp } from "./fixtures/legacy-data";
 import { GUIDES } from "../src/data/guides";
 import { TARGETS, STAGE_LEVEL } from "../src/data/targets";
 import type { Form, ItemKey, Stage, TargetKey } from "../src/data/types";
@@ -26,7 +28,7 @@ describe("modèle — identique à la page d'origine", () => {
 
   it(`stats de Kayn (${legacy.stats.length} cas)`, () => {
     for (const c of legacy.stats) {
-      const s = stats(c.build as ItemKey[], c.lvl, c.hub == null ? {} : { hubrisStacks: c.hub });
+      const s = stats(c.build as ItemKey[], c.lvl, c.hub == null ? { items } : { hubrisStacks: c.hub, items });
       expect({ baseAD: r6(s.baseAD), bonusAD: r6(s.bonusAD), totalAD: r6(s.totalAD), maxHP: r6(s.maxHP), armorT: r6(s.armorT), mrT: r6(s.mrT), cdr: r6(s.cdr), cost: s.cost }, JSON.stringify(c)).toEqual(c.v);
     }
   });
@@ -38,29 +40,29 @@ describe("modèle — identique à la page d'origine", () => {
       expect(b).toEqual(c.build);
       const tgt = TARGETS[stage][c.tgt as TargetKey], lvl = STAGE_LEVEL[stage];
       if (form === "blue") {
-        const r = blueCombo(b, lvl, tgt, { hubrisStacks: c.hub });
+        const r = blueCombo(b, lvl, tgt, { hubrisStacks: c.hub, items });
         expect({ total: r.total, pct: r.pct, kill: r.kill, log: r.log, totalAD: r6(r.s.totalAD), leth: r.s.leth, cost: r.s.cost }).toEqual(c.r);
       } else {
-        const r = redFight(b, lvl, tgt);
+        const r = redFight(b, lvl, tgt, { items });
         expect({ total: r.total, dps: r.dps, pct: r.pct, heal: r.heal, ehpPhys: r.ehpPhys, ehpMag: r.ehpMag, parts: r.parts, nQ: r.nQ, nW: r.nW, nAA: r.nAA }).toEqual(c.r);
       }
     }
   });
 
   it("benchmark du 4ᵉ item (bleu et rouge)", () => {
-    expect(benchBlue()).toEqual(legacy.benchBlue);
-    expect(benchRed()).toEqual(legacy.benchRed);
+    expect(benchBlue(items)).toEqual(legacy.benchBlue);
+    expect(benchRed(items)).toEqual(legacy.benchRed);
   });
 
   it("valeur brute des items", () => {
-    expect(goldEfficiency()).toEqual(legacy.gold);
+    expect(goldEfficiency(undefined, items)).toEqual(legacy.gold);
   });
 });
 
 describe("moteur de draft — identique à la page d'origine", () => {
   it(`${legacy.drafts.length} drafts (4 exemples + 80 aléatoires) × 2 moments × 3 choix de forme`, () => {
     for (const d of legacy.drafts) {
-      const rep = draftReport(d.en.map(champ), d.al.map(champ), d.stage as Stage, d.fsel as Form | "auto");
+      const rep = draftReport(d.en.map(legacyChamp), d.al.map(legacyChamp), d.stage as Stage, d.fsel as Form | "auto", { items });
       const ctx = `${d.name} ${d.stage} ${d.fsel}`;
       if (d.out === null) { expect(rep, ctx).toBeNull(); continue; }
       expect(rep, ctx).not.toBeNull();

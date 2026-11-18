@@ -1,4 +1,4 @@
-import { CHAMPIONS, CHAMPIONS_BY_NAME, PROFILE_LABEL, champ } from "../data/champions";
+import { CHAMPIONS, PROFILE_LABEL, champ, matchesQuery } from "../data/champions";
 import { EXAMPLE_DRAFTS } from "../data/guides";
 import { BOOTS_T3, ITEMS, isBoots } from "../data/items";
 import type { Champion, Form, Profile, Stage } from "../data/types";
@@ -54,7 +54,7 @@ function drawSlots(): void {
     let h = state[t].map((c, i) =>
       `<button type="button" class="sl" data-team="${t}" data-slot="${i}" aria-label="${c ? esc(c.name) : "Case vide"}">${champTile(c, 48)}<span>${c ? esc(c.name) : ""}</span></button>`,
     ).join("");
-    if (t === "al") h += `<div class="sl me">${champTile(CHAMPIONS_BY_NAME["Kayn"], 48)}<span style="color:var(--blue)">Toi</span></div>`;
+    if (t === "al") h += `<div class="sl me">${champTile(champ("Kayn"), 48)}<span style="color:var(--blue)">Toi</span></div>`;
     $(`slots-${t}`).innerHTML = h;
   }
 }
@@ -79,7 +79,7 @@ function mountPicker(): void {
   };
   $("pk-grid").onclick = (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>("[data-name]");
-    if (b) setSlot(CHAMPIONS_BY_NAME[b.dataset.name!]);
+    if (b) setSlot(champ(b.dataset.name!));
   };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.slot) closePicker(); });
 }
@@ -107,13 +107,12 @@ function setSlot(c: Champion | null): void {
 }
 
 function drawPicker(): void {
-  const q = state.query.toLowerCase();
-  const used = new Set([...state.en, ...state.al].filter(Boolean).map((c) => c!.name));
+  const used = new Set([...state.en, ...state.al].filter(Boolean).map((c) => c!.id));
   const filters: [Profile | "all", string][] = [["all", "Tous"], ...(Object.entries(PROFILE_LABEL) as [Profile, string][])];
   $("pk-fil").innerHTML = filters.map(([k, l]) => `<button type="button" data-f="${k}" class="${state.filter === k ? "on" : ""}">${l}</button>`).join("");
   $("pk-grid").innerHTML = CHAMPIONS
-    .filter((c) => c.name !== "Kayn" && !used.has(c.name) && (state.filter === "all" || c.profile === state.filter) && c.name.toLowerCase().includes(q))
-    .map((c) => `<button type="button" class="pc" data-name="${esc(c.name)}">${champTile(c, 52)}<span>${esc(c.name)}</span></button>`)
+    .filter((c) => c.id !== "Kayn" && !used.has(c.id) && (state.filter === "all" || c.profile === state.filter) && matchesQuery(c, state.query))
+    .map((c) => `<button type="button" class="pc" data-name="${esc(c.id!)}">${champTile(c, 52)}<span>${esc(c.name)}</span></button>`)
     .join("");
 }
 

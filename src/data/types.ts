@@ -16,6 +16,12 @@ export type ItemFlag = "volt" | "hubris" | "axiom" | "serpent" | "dd" | "sterak"
 export interface Item {
   /** Nom anglais (affiché tel quel dans l'interface). */
   n: string;
+  /** Nom français (Data Dragon fr_FR). */
+  nFr?: string;
+  /** Identifiant Data Dragon. */
+  id?: string;
+  /** Fichier d'icône Data Dragon. */
+  image?: string;
   /** Abréviation affichée sous l'icône. */
   s: string;
   ad?: number;
@@ -30,7 +36,7 @@ export interface Item {
   shred?: number;
   cost: number;
   boots?: boolean;
-  /** Valeurs non vérifiées sur ce patch (badge ≈ dans l'interface). */
+  /** Valeurs non vérifiées (badge ≈ dans l'interface). */
   approx?: boolean;
   flags?: ItemFlag[];
 }
@@ -39,7 +45,18 @@ export type Profile = "tank" | "fighter" | "assassin" | "mage" | "marksman" | "e
 export type DamageType = "physical" | "magic" | "mixed";
 
 export interface Champion {
+  /** Identifiant Data Dragon (stable). Absent pour les données de la première version. */
+  id?: string;
+  /** Nom affiché (français). */
   name: string;
+  /** Nom anglais. */
+  nameEn?: string;
+  /** Fichier d'icône Data Dragon. */
+  image?: string;
+  /** Tags Riot (Tank, Fighter, Assassin, Mage, Marksman, Support). */
+  tags?: string[];
+  /** Pas d'entrée dans overrides.json : profil déduit des tags, CC/boucliers/soins inconnus. */
+  unverified?: boolean;
   profile: Profile;
   range: "melee" | "ranged";
   damage: DamageType;
@@ -58,5 +75,8 @@ export interface Target {
   mr: number;
   shield?: number;
 }
+
+/** Table d'items : celle du patch courant, ou une table figée (tests). */
+export type ItemTable = Record<ItemKey, Item>;
 
 export type TargetKey = "adc" | "mage" | "shield" | "bruiser" | "tank";

@@ -1,34 +1,74 @@
-import type { BootKey, Item, ItemKey } from "./types";
+import generated from "./generated/items.json";
+import type { BootKey, Item, ItemFlag, ItemKey, ItemTable } from "./types";
 
-// Stats reprises telles quelles de kayn-simulator.html (patch 26.22).
-// Elles seront remplacées par les données Data Dragon à l'étape 2.
-export const ITEMS: Record<ItemKey, Item> = {
-  voltaic: { n: "Voltaic Cyclosword", s: "VC", ad: 55, leth: 10, ah: 10, cost: 3000, flags: ["volt"] },
-  hubris: { n: "Hubris", s: "HB", ad: 55, leth: 18, ah: 10, cost: 2800, flags: ["hubris"] },
-  axiom: { n: "Axiom Arc", s: "AX", ad: 55, leth: 18, ah: 20, cost: 2750, flags: ["axiom"] },
-  edge: { n: "Edge of Night", s: "EN", ad: 50, leth: 15, hp: 250, cost: 3000 },
-  serylda: { n: "Serylda's Grudge", s: "SG", ad: 45, pen: 35, ah: 15, cost: 3000 },
-  serpent: { n: "Serpent's Fang", s: "SF", ad: 55, leth: 15, cost: 2500, flags: ["serpent"] },
-  youmuu: { n: "Youmuu's Ghostblade", s: "YG", ad: 55, leth: 18, cost: 2800 },
-  bastion: { n: "Bastionbreaker", s: "BB", ad: 55, leth: 18, ah: 15, cost: 3000 },
-  profane: { n: "Profane Hydra", s: "PH", ad: 55, leth: 18, ah: 10, cost: 2850 },
-  cleaver: { n: "Black Cleaver", s: "BC", ad: 45, hp: 400, ah: 20, cost: 3000, shred: 30 },
-  dd: { n: "Death's Dance", s: "DD", ad: 60, armor: 50, ah: 15, cost: 3300, flags: ["dd"] },
-  sterak: { n: "Sterak's Gage", s: "ST", hp: 400, cost: 3200, flags: ["sterak"] },
-  ga: { n: "Guardian Angel", s: "GA", ad: 55, armor: 45, cost: 3200, approx: true },
-  chempunk: { n: "Chempunk Chainsword", s: "CC", ad: 45, hp: 450, ah: 15, cost: 3000 },
-  lucidity: { n: "Ionian Boots of Lucidity", s: "IL", ah: 10, cost: 900, boots: true, approx: true },
-  steelcaps: { n: "Plated Steelcaps", s: "PS", armor: 25, cost: 1200, boots: true, approx: true },
-  mercury: { n: "Mercury's Treads", s: "MT", mr: 25, cost: 1250, boots: true, approx: true },
-  swiftness: { n: "Boots of Swiftness", s: "SW", cost: 1000, boots: true, approx: true },
+/** Ce que Data Dragon ne fournit pas : abréviation, effets simulés, bottes. */
+interface LocalMeta {
+  s: string;
+  flags?: ItemFlag[];
+  boots?: true;
+  /**
+   * Réduction d'armure en % : c'est un passif, absent des stats Data Dragon.
+   * Black Cleaver à 5 stacks (30 %), valeur reprise de la première version, non vérifiée (étape 4).
+   */
+  shred?: number;
+}
+
+const META: Record<ItemKey, LocalMeta> = {
+  voltaic: { s: "VC", flags: ["volt"] },
+  hubris: { s: "HB", flags: ["hubris"] },
+  axiom: { s: "AX", flags: ["axiom"] },
+  edge: { s: "EN" },
+  serylda: { s: "SG" },
+  serpent: { s: "SF", flags: ["serpent"] },
+  youmuu: { s: "YG" },
+  bastion: { s: "BB" },
+  profane: { s: "PH" },
+  cleaver: { s: "BC", shred: 30 },
+  dd: { s: "DD", flags: ["dd"] },
+  sterak: { s: "ST", flags: ["sterak"] },
+  ga: { s: "GA" },
+  chempunk: { s: "CC" },
+  lucidity: { s: "IL", boots: true },
+  steelcaps: { s: "PS", boots: true },
+  mercury: { s: "MT", boots: true },
+  swiftness: { s: "SW", boots: true },
 };
 
-/** Bottes de niveau 3 (affichage seulement). */
-export const BOOTS_T3: Record<BootKey, string> = {
-  lucidity: "Crimson Lucidity",
-  steelcaps: "Armored Advance",
-  mercury: "Chainlaced Crushers",
-  swiftness: "Swiftmarch",
+/** Stats d'un item telles que générées par scripts/sync-ddragon.ts. */
+export interface GeneratedItem {
+  id: string; name: string; nameFr: string; image: string; cost: number;
+  ad?: number; leth?: number; ah?: number; hp?: number; armor?: number; mr?: number; pen?: number;
+  ms?: number; msPct?: number; tenacity?: number;
+}
+export const GENERATED_ITEMS = generated as Record<string, GeneratedItem>;
+
+function fromGenerated(k: ItemKey): Item {
+  const g = GENERATED_ITEMS[k];
+  if (!g) throw new Error(`Item ${k} absent de src/data/generated/items.json : relancer npm run sync.`);
+  const m = META[k];
+  const it: Item = { n: g.name, nFr: g.nameFr, id: g.id, image: g.image, s: m.s, cost: g.cost };
+  for (const f of ["ad", "leth", "ah", "hp", "armor", "mr", "pen"] as const) if (g[f]) it[f] = g[f];
+  if (m.shred) it.shred = m.shred;
+  if (m.boots) it.boots = true;
+  if (m.flags) it.flags = m.flags;
+  return it;
+}
+
+/** Items du patch courant (Data Dragon + effets locaux). */
+export const ITEMS: ItemTable = Object.fromEntries(
+  (Object.keys(META) as ItemKey[]).map((k) => [k, fromGenerated(k)]),
+) as ItemTable;
+
+const T3_KEY: Record<BootKey, string> = {
+  lucidity: "crimsonLucidity",
+  steelcaps: "armoredAdvance",
+  mercury: "chainlacedCrushers",
+  swiftness: "swiftmarch",
 };
+
+/** Nom anglais des bottes de niveau 3 (affichage seulement). */
+export const BOOTS_T3: Record<BootKey, string> = Object.fromEntries(
+  (Object.keys(T3_KEY) as BootKey[]).map((k) => [k, GENERATED_ITEMS[T3_KEY[k]]?.name ?? "?"]),
+) as Record<BootKey, string>;
 
 export const isBoots = (k: ItemKey): boolean => !!ITEMS[k].boots;

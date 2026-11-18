@@ -1,6 +1,6 @@
 import { ITEMS } from "../data/items";
 import { PROFILE_STATS, STAGE_LEVEL } from "../data/targets";
-import type { Champion, Form, ItemKey, Stage, Target } from "../data/types";
+import type { Champion, Form, ItemKey, ItemTable, Stage, Target } from "../data/types";
 import { blueCombo } from "../model/blue";
 import { redFight } from "../model/red";
 import { analyse, resolveForm, type Analysis } from "./analyse";
@@ -52,6 +52,7 @@ export function draftReport(
   allies: (Champion | null)[],
   stage: Stage,
   formChoice: Form | "auto",
+  opt: { items?: ItemTable } = {},
 ): DraftReport | null {
   const x = analyse(enemies, allies);
   if (x.E.length < MIN_ENEMIES) return null;
@@ -64,15 +65,15 @@ export function draftReport(
   const vs: VersusResult[] = x.E.map((c) => {
     const target = targetFor(c, stage, x);
     if (form === "blue") {
-      const r = blueCombo(simBuild, level, target, { hubrisStacks: 4 });
+      const r = blueCombo(simBuild, level, target, { hubrisStacks: 4, items: opt.items });
       return { champion: c, target, form, pct: r.pct, kill: r.kill };
     }
-    const r = redFight(simBuild, level, target);
+    const r = redFight(simBuild, level, target, { items: opt.items });
     return { champion: c, target, form, ttk: (target.hp + (target.shield ?? 0)) / r.dps };
   });
   let resist: DraftReport["resist"];
   if (form === "red") {
-    const r0 = redFight(simBuild, level, targetFor(x.E[0], stage, x));
+    const r0 = redFight(simBuild, level, targetFor(x.E[0], stage, x), { items: opt.items });
     resist = { ehpPhys: r0.ehpPhys, ehpMag: r0.ehpMag };
   }
   return { analysis: x, form, formChoice, stage, level, boots, build: b, notes, simBuild, vs, resist };

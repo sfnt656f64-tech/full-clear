@@ -1,6 +1,6 @@
 import { ITEMS } from "../data/items";
 import { TARGETS } from "../data/targets";
-import type { ItemKey, TargetKey } from "../data/types";
+import type { ItemKey, ItemTable, TargetKey } from "../data/types";
 import { blueCombo } from "./blue";
 import { redFight } from "./red";
 
@@ -22,20 +22,20 @@ export const BENCH_RED = {
 export interface BenchRow { k: ItemKey; v: number[] }
 
 /** % de PV retirés par le combo bleu, pour chaque 4ᵉ item et chaque cible (mi-partie). */
-export function benchBlue(): BenchRow[] {
+export function benchBlue(items?: ItemTable): BenchRow[] {
   const { base, candidates, targets, hubrisStacks } = BENCH_BLUE;
   return candidates.map((k) => ({
     k,
-    v: targets.map((t) => blueCombo([...base, k], BENCH_LEVEL, TARGETS.mid[t], { hubrisStacks }).pct),
+    v: targets.map((t) => blueCombo([...base, k], BENCH_LEVEL, TARGETS.mid[t], { hubrisStacks, items }).pct),
   }));
 }
 
 /** DPS, soins et PV effectifs de Rhaast pour chaque 4ᵉ item (mi-partie). */
-export function benchRed(): BenchRow[] {
+export function benchRed(items?: ItemTable): BenchRow[] {
   const { base, candidates } = BENCH_RED;
   return candidates.map((k) => {
-    const t = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.tank);
-    const b = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.bruiser);
+    const t = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.tank, { items });
+    const b = redFight([...base, k], BENCH_LEVEL, TARGETS.mid.bruiser, { items });
     return { k, v: [t.dps, b.dps, t.heal, t.ehpPhys, t.ehpMag] };
   });
 }
@@ -52,10 +52,10 @@ export const GOLD_ITEMS: ItemKey[] = ["voltaic", "hubris", "axiom", "edge", "ser
 export interface GoldRow { k: ItemKey; /** valeur en po */ s: number; /** rentabilité en % du prix */ e: number }
 
 /** Valeur brute des stats de chaque item (hors passifs et hors % de pénétration), triée. */
-export function goldEfficiency(keys: ItemKey[] = GOLD_ITEMS): GoldRow[] {
+export function goldEfficiency(keys: ItemKey[] = GOLD_ITEMS, items: ItemTable = ITEMS): GoldRow[] {
   return keys
     .map((k) => {
-      const it = ITEMS[k];
+      const it = items[k];
       let s = 0;
       for (const f of Object.keys(STAT_GOLD) as (keyof typeof STAT_GOLD)[]) s += (it[f] ?? 0) * STAT_GOLD[f];
       return { k, s: Math.round(s), e: Math.round((100 * s) / it.cost) };

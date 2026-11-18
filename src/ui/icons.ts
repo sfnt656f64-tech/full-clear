@@ -60,7 +60,9 @@ export function champTile(c: Champion | null, size = 48): string {
   const dim = `width:${size}px;height:${size}px`;
   if (!c) return `<div class="ch empty" style="${dim}">+</div>`;
   const [g, color] = PROFILE_GLYPH[c.profile];
-  return `<div class="ch" style="${dim};background:linear-gradient(140deg,${color},#11151f)" title="${esc(c.name)} — ${PROFILE_LABEL[c.profile]}">`
-    + `<b>${initials(c.name)}</b><span class="cg">${svg(g, "#fff", 12)}</span>`
-    + `<span class="rg">${c.range === "melee" ? "⚔" : "➹"}</span></div>`;
+  const title = `${c.name} — ${PROFILE_LABEL[c.profile]}${c.unverified ? " (non vérifié : absent de overrides.json)" : ""}`;
+  return `<div class="ch" style="${dim};background:linear-gradient(140deg,${color},#11151f)" title="${esc(title)}">`
+    + `<b>${initials(c.nameEn ?? c.name)}</b><span class="cg">${svg(g, "#fff", 12)}</span>`
+    + `<span class="rg">${c.range === "melee" ? "⚔" : "➹"}</span>`
+    + (c.unverified ? `<span class="uv">?</span>` : "") + `</div>`;
 }

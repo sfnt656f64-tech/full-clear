@@ -1,5 +1,5 @@
 import { ITEMS } from "../data/items";
-import type { ItemFlag, ItemKey } from "../data/types";
+import type { ItemFlag, ItemKey, ItemTable } from "../data/types";
 import { ADAPTIVE_SHARDS_AD, HEALTH_SHARD_PER_LEVEL, ITEM_EFFECTS, KAYN_BASE, SKILL_ORDER } from "./constants";
 
 /** Croissance des stats de base de LoL : (L−1) × (0,7025 + 0,0175 × (L−1)). */
@@ -19,6 +19,8 @@ export interface StatOptions {
   hubrisStacks?: number;
   /** Fragment de PV évolutifs (jamais activé dans la page d'origine). */
   healthShard?: boolean;
+  /** Table d'items à utiliser (par défaut : patch courant). */
+  items?: ItemTable;
 }
 
 export interface KaynStats {
@@ -37,8 +39,9 @@ const SUMMED = ["ad", "leth", "ah", "hp", "armor", "mr", "pen", "shred", "cost"]
 export function stats(build: readonly ItemKey[], lvl: number, opt: StatOptions = {}): KaynStats {
   const sum = { ad: 0, leth: 0, ah: 0, hp: 0, armor: 0, mr: 0, pen: 0, shred: 0, cost: 0 };
   const flags: KaynStats["flags"] = {};
+  const table = opt.items ?? ITEMS;
   for (const k of build) {
-    const it = ITEMS[k];
+    const it = table[k];
     for (const f of SUMMED) sum[f] += it[f] ?? 0;
     for (const fl of it.flags ?? []) flags[fl] = true;
   }

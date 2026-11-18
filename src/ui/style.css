@@ -21,6 +21,7 @@ h3 { font-size: 14px; margin: 0 0 8px; }
 .pills { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 0; }
 .pill { background: var(--card2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
 .pill b { color: var(--green); }
+.patch { color: var(--gold); }
 
 /* Onglets bleu / rouge : collés en haut pendant le défilement */
 .tabs { display: flex; gap: 6px; margin: 16px 0 4px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 8px 0; }
@@ -55,6 +56,7 @@ h3 { font-size: 14px; margin: 0 0 8px; }
 .ch b { font-size: 15px; letter-spacing: .5px; }
 .ch .cg { position: absolute; top: 2px; right: 3px; opacity: .85; line-height: 0; }
 .ch .rg { position: absolute; bottom: 1px; left: 4px; font-size: 10px; opacity: .8; }
+.ch .uv { position: absolute; top: 1px; left: 4px; font-size: 10px; font-weight: 800; color: var(--gold); }
 .ch.empty { background: var(--card2); border: 2px dashed var(--line); color: var(--mut); font-size: 20px; }
 
 /* Draft */

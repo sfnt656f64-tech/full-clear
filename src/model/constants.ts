@@ -1,14 +1,19 @@
 // Toutes les valeurs de jeu utilisées par le modèle, regroupées ici pour être
 // vérifiées à l'étape 4 (wiki officiel + Data Dragon).
-// Valeurs reprises telles quelles de kayn-simulator.html : AUCUNE n'est vérifiée pour l'instant.
+// Sauf KAYN_BASE (Data Dragon), elles sont reprises telles quelles de kayn-simulator.html
+// et ne sont PAS vérifiées pour l'instant.
+import { KAYN_DD_STATS as S } from "../data/kayn";
 
-/** Stats de base de Kayn : valeur au niveau 1 et croissance par niveau. */
+/** % → fraction, sans résidu flottant (2,7 → 0,027 et non 0,027000000000000003). */
+const frac = (pct: number) => Number((pct / 100).toPrecision(12));
+
+/** Stats de base de Kayn : Data Dragon (corrigé par overrides.json), niveau 1 + croissance. */
 export const KAYN_BASE = {
-  ad: 68, adGrowth: 3.3,
-  hp: 655, hpGrowth: 103,
-  armor: 38, armorGrowth: 4.5,
-  mr: 32, mrGrowth: 2.05,
-  attackSpeed: 0.669, attackSpeedGrowth: 0.027,
+  ad: S.attackdamage, adGrowth: S.attackdamageperlevel,
+  hp: S.hp, hpGrowth: S.hpperlevel,
+  armor: S.armor, armorGrowth: S.armorperlevel,
+  mr: S.spellblock, mrGrowth: S.spellblockperlevel,
+  attackSpeed: S.attackspeed, attackSpeedGrowth: frac(S.attackspeedperlevel),
 } as const;
 
 /** 2 fragments adaptatifs = +10,8 AD. */
