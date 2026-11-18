@@ -1,0 +1,87 @@
+:root {
+  color-scheme: dark;
+  --bg: #14141c;
+  --panel: #1d1d29;
+  --line: #2c2c3c;
+  --text: #e8e6f0;
+  --muted: #9a97ab;
+  --blue: #5b8cff;
+  --red: #e0535d;
+  --ok: #4fc38a;
+  --warn: #e7b04b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+}
+header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+p { margin: 0 0 6px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.status::before { content: "●"; margin-right: 8px; }
+.status.ok::before { color: var(--ok); }
+.status.warn::before { color: var(--warn); }
+.status.idle::before { color: var(--muted); }
+.problems { margin: 0 0 6px; padding-left: 20px; color: var(--warn); }
+.problems:empty { display: none; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+button {
+  font: inherit; color: var(--text); background: #2a2a3a; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+button:hover { background: #34344a; }
+.check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.check input { margin-top: 3px; accent-color: var(--blue); }
+#env-file { user-select: text; word-break: break-all; }
+footer { margin-top: 4px; }
+
+/* Draft */
+h3 { font-size: 13px; margin: 10px 0 6px; }
+.warn-text { color: var(--warn); }
+.team { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.tl { width: 52px; font-size: 12px; font-weight: 600; }
+.tl.red { color: var(--red); }
+.tl.blue { color: var(--blue); }
+.slots { display: flex; gap: 4px; flex-wrap: wrap; }
+.champ { width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--line); background: #262636; display: inline-block; }
+.slots.en .champ:not(.empty) { border-color: var(--red); }
+.slots.al .champ:not(.empty) { border-color: var(--blue); }
+.champ.empty { border-style: dashed; }
+img.broken { visibility: hidden; }
+.form { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding: 8px 10px; border-radius: 6px; border-left: 4px solid; background: #242433; }
+.form.blue { border-color: var(--blue); }
+.form.red { border-color: var(--red); }
+.why { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+.runes { margin-top: 8px; padding-top: 2px; border-top: 1px solid var(--line); }
+.runes p { margin-bottom: 3px; }
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.item { display: flex; align-items: center; gap: 6px; }
+.item .ic { width: 28px; height: 28px; border-radius: 4px; flex: none; }
+
+/* Overlay en jeu (aperçu dans la fenêtre) */
+select { font: inherit; color: var(--text); background: #2a2a3a; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.row label.small { align-self: center; }
+.next { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.next .ic { width: 32px; height: 32px; border-radius: 6px; }
+.gold { color: #e7c86b; }
+.ok-text { color: var(--ok); }
+
+/* Raccourcis */
+.shortcut-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+.combo { min-width: 120px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
+.combo.capturing { border-color: var(--warn); color: var(--warn); }
+.badge { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #262636; white-space: nowrap; }
+.badge.ok { color: var(--ok); }
+.badge.warn { color: var(--warn); }
+.badge.idle { color: var(--muted); }
+button.link { background: none; border: none; padding: 2px 4px; color: var(--muted); font-size: 12px; text-decoration: underline; }
+button.link:hover { color: var(--text); background: none; }
+@media (max-width: 420px) { .shortcut-row { grid-template-columns: 1fr auto; } }

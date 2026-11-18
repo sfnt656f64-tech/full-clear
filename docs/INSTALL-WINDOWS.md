@@ -1,8 +1,8 @@
 # Installer Kayn Sim sur Windows (depuis zéro)
 
-Ce guide installe le projet sur ton PC pour utiliser **`npm run stats`** (tes parties) et **`npm run live`**
-(ta partie en cours). Le site lui-même n'a besoin d'aucune installation :
-https://sfnt656f64-tech.github.io/kayn-sim/
+Ce guide installe le projet sur ton PC pour utiliser **l'application de bureau** (draft et overlay en jeu),
+**`npm run stats`** (tes parties) et, en secours, **`npm run live`**. Le site lui-même n'a besoin d'aucune
+installation : https://sfnt656f64-tech.github.io/kayn-sim/
 
 Compte environ 15 minutes. Il te faut Windows 10 ou 11, et ta clé personnelle Riot
 (sur https://developer.riotgames.com, dans la page de ton application).
@@ -98,7 +98,87 @@ npm run stats -- --refresh            # retélécharge tout
 npm run stats -- --no-open            # n'ouvre pas le rapport
 ```
 
-## 6. Ta partie en cours : `npm run live`
+## 6. L'application de bureau (draft et overlay en jeu)
+
+Une petite application Windows, sans terminal, qui vit dans la **zone de notification** (à côté de
+l'horloge) :
+
+- **Pendant la sélection des champions**, sa fenêtre s'affiche (sans prendre le clavier au client) et se met
+  à jour à chaque pick, allié comme adverse : forme recommandée et page de runes dès le 1er adversaire,
+  bottes et build complet à partir de 3.
+- **En jeu**, un petit overlay transparent, toujours au premier plan, montre le **prochain item** du build
+  d'après ton inventaire et ton or (avec le composant achetable en attendant), ajusté aux items adverses
+  (armure, vol de vie, part de dégâts physiques / magiques). Il ne fait que suggérer : rien n'est acheté pour toi.
+
+### Créer l'installeur
+
+Depuis le dossier du projet (étapes 1 à 3) :
+
+```powershell
+npm run desktop:dist
+```
+
+Le premier lancement télécharge les outils d'empaquetage (quelques minutes). Le résultat est
+`release\KaynSim-Setup-<version>.exe`.
+
+### Installer
+
+1. Lance `KaynSim-Setup-<version>.exe`. L'installation se fait pour ton compte seulement (pas besoin d'être
+   administrateur), par défaut dans `%LOCALAPPDATA%\Programs\kayn-sim`.
+2. L'installeur n'est pas signé : Windows affiche « Windows a protégé votre ordinateur ». Clique sur
+   **Informations complémentaires** → **Exécuter quand même**.
+3. Copie ton `.env` dans le dossier de l'appli :
+
+   ```powershell
+   New-Item -ItemType Directory -Force "$env:APPDATA\kayn-sim" | Out-Null
+   Copy-Item "$HOME\Documents\kayn-sim\.env" "$env:APPDATA\kayn-sim\.env"
+   ```
+
+   L'appli n'y lit que `RIOT_ID` (pour vérifier que le compte connecté au client est le tien) et, s'il est
+   présent, `SITE_URL`. La clé API n'est pas utilisée par l'appli : elle ne parle qu'au client LoL de ton PC.
+   Le bouton **Ouvrir le dossier de l'appli** de la fenêtre ouvre ce dossier.
+4. Dans l'appli : coche **Lancer au démarrage de Windows** si tu veux qu'elle démarre discrètement à
+   l'ouverture de session (aussi dans le menu clic droit de l'icône).
+
+### Régler le jeu
+
+Dans League of Legends : **Options → Vidéo → Mode fenêtre : Sans bordure**. En plein écran, Windows
+n'affiche aucune autre fenêtre par-dessus le jeu. La fenêtre de l'appli te prévient si le réglage ne convient pas.
+
+### Utiliser l'overlay
+
+- Il apparaît tout seul au chargement de la partie et disparaît à la fin. Les clics le traversent (ils vont
+  au jeu) et il ne prend jamais le clavier.
+- **Ctrl+Maj+K** : masquer / afficher (aussi dans le menu clic droit de l'icône).
+- **Ctrl+Maj+L** : le déverrouiller (bord orange), le glisser où tu veux, puis **Ctrl+Maj+L** à nouveau pour
+  le verrouiller. La position est retenue.
+- Les deux raccourcis se changent dans la fenêtre principale. À côté de chacun : **libre** / **actif**, ou
+  **déjà pris par une autre appli** (Discord, navigateur…) : choisis alors une autre combinaison.
+- **Forme** : « Recommandée (auto) » suit la composition ; tu peux forcer bleu ou rouge.
+
+### Ce que l'appli lit (règles de Riot)
+
+Uniquement les API locales prévues par Riot, qui restent autorisées avec Vanguard : celle du client
+(sélection des champions, via le fichier `lockfile`) et celle du jeu (`https://127.0.0.1:2999`, ton or et le
+tableau des scores). Aucune injection ni lecture de la mémoire du jeu, et seulement des informations que tu
+vois déjà (tes picks, les picks adverses révélés, les items visibles avec Tab). Les pseudos des autres joueurs
+ne sont jamais affichés ni enregistrés. Pas de compteurs de sorts adverses, pas d'achat automatique.
+
+### Mettre à jour ou désinstaller
+
+- Mise à jour : après `git pull` et `npm ci` (étape 7), relance `npm run desktop:dist` et installe le nouvel
+  installeur par-dessus. Ton `.env` et tes réglages (dans `%APPDATA%\kayn-sim`) sont conservés.
+- Désinstallation : Paramètres → Applications → **Kayn Sim** → Désinstaller. Le lancement au démarrage est
+  retiré ; le dossier `%APPDATA%\kayn-sim` est conservé (supprime-le à la main si tu veux).
+
+### Pour développer
+
+`npm run desktop` compile et lance l'appli sans l'installer (le terminal reste ouvert ; l'appli lit alors
+le `.env` du projet).
+
+## 7. En secours : `npm run live`
+
+> L'application de bureau remplace ce script. Il reste disponible tant qu'elle n'a pas fait ses preuves.
 
 Lance une partie classée, puis, **une fois l'écran de chargement affiché** :
 
@@ -119,7 +199,7 @@ npm run live -- --watch
 > La sélection des champions n'est pas visible par l'API Riot : la détection marche à partir de l'écran
 > de chargement.
 
-## 7. Mettre à jour plus tard
+## 8. Mettre à jour plus tard
 
 ```powershell
 cd $HOME\Documents\kayn-sim
@@ -145,3 +225,7 @@ Ton `.env` et ton cache de parties sont conservés.
 | « Tu joues …, pas Kayn » | Simple avertissement : le simulateur te considère comme Kayn. |
 | Le navigateur ne s'ouvre pas | Copie le lien affiché dans le terminal et colle-le dans ton navigateur. |
 | Le script semble en pause pendant `npm run stats` | Normal au 1er lancement : il respecte la limite de 100 requêtes / 2 min de la clé. |
+| Appli : « Client LoL fermé » alors qu'il est ouvert | Attends 15 s (détection périodique). Si le client est lancé en administrateur, lance aussi l'appli en administrateur, ou plus simplement aucun des deux. |
+| Appli : compte « différent du RIOT_ID du .env » | Mets ton Riot ID actuel dans `%APPDATA%\kayn-sim\.env`, puis **Relire le .env**. |
+| Appli : l'overlay n'apparaît pas en jeu | Jeu en « Sans bordure » ? Case **Afficher l'overlay** cochée ? Pas masqué par le raccourci (menu de l'icône → Masquer / afficher) ? |
+| Appli : un raccourci ne réagit pas | S'il est marqué « déjà pris », change-le dans la fenêtre. Certaines applis (overlays de jeu, macros clavier) captent des touches sans les réserver : essaie une autre combinaison. |

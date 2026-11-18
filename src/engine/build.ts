@@ -1,5 +1,35 @@
-import type { BootKey, Form, ItemKey } from "../data/types";
+import type { BootKey, Form, ItemKey, StarterKey } from "../data/types";
 import type { Analysis } from "./analyse";
+
+/** [familier, justification]. La première entrée est la recommandation. */
+export type StarterChoice = [StarterKey, string];
+
+/** Adversaires à early agressif (overrides.json → early) à partir desquels on part sur Mosstomper. */
+export const STARTER_EARLY_ENEMIES = 2;
+/** Alliés avec du CC (niveau 2 ou plus) à partir desquels la compo est faite pour les ganks → Gustwalker. */
+export const STARTER_GANK_ALLIES = 3;
+
+const names = (cs: { name: string }[]) => cs.map((c) => c.name).join(", ");
+
+/**
+ * Familier de jungle (item de départ, 450 po) :
+ * - Mosstomper (terre) si l'adversaire a un early très agressif ou des invades probables ;
+ * - Gustwalker (vent) si la compo demande beaucoup de ganks ou de déplacements ;
+ * - sinon Scorchclaw (feu), le départ le plus joué sur Kayn.
+ */
+export function chooseStarter(x: Analysis): StarterChoice[] {
+  const early = x.E.filter((c) => c.early);
+  const setup = x.A.filter((c) => c.cc >= 2);
+  const o: StarterChoice[] = [];
+  if (early.length >= STARTER_EARLY_ENEMIES)
+    o.push(["mosstomper", `early agressif en face (${names(early)}) : invades probables, le bouclier sécurise ton début de jungle`]);
+  if (setup.length >= STARTER_GANK_ALLIES)
+    o.push(["gustwalker", `${setup.length} alliés avec du CC pour suivre tes ganks (${names(setup)}) : vitesse de déplacement dans les hautes herbes pour enchaîner les ganks`]);
+  const def: StarterChoice = ["scorchclaw", "par défaut : le départ le plus joué sur Kayn (brûlure et ralentissement pour les ganks et les duels)"];
+  if (!o.length) o.push(def);
+  else o.push([def[0], "alternative : " + def[1]]);
+  return o;
+}
 
 /** [bottes, justification]. La première entrée est la recommandation. */
 export type BootChoice = [BootKey, string];

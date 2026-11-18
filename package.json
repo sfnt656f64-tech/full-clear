@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "desktop/dist/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -13,10 +14,16 @@
     "fixtures:legacy": "node scripts/legacy/extract-fixtures.mjs",
     "sync": "node scripts/sync-ddragon.ts",
     "live": "node scripts/riot/live.ts",
-    "stats": "tsx scripts/riot/stats.ts"
+    "stats": "tsx scripts/riot/stats.ts",
+    "desktop:build": "node scripts/desktop/build.ts",
+    "desktop": "node scripts/desktop/build.ts && electron .",
+    "desktop:dist": "node scripts/desktop/build.ts && electron-builder --win nsis"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
     "jsdom": "^31.0.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
@@ -25,5 +32,40 @@
   },
   "engines": {
     "node": ">=22.18"
+  },
+  "description": "Simulateur de build pour Kayn, avec une application de bureau (draft et overlay en jeu).",
+  "build": {
+    "appId": "io.github.kayn-sim",
+    "productName": "Kayn Sim",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/dist/**/*",
+      "!desktop/dist/**/*.map",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/dist/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kayn Sim",
+      "artifactName": "KaynSim-Setup-${version}.${ext}",
+      "include": "desktop/installer.nsh",
+      "runAfterFinish": true
+    }
   }
 }

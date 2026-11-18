@@ -1,0 +1,41 @@
+{
+  "scorchclaw": {
+    "id": "1101",
+    "ids": [
+      "1101",
+      "1107"
+    ],
+    "name": "Scorchclaw Pup",
+    "nameFr": "Bébé Chardent",
+    "image": "1101.png",
+    "cost": 450,
+    "effect": "When fully grown, it completes your Jungle Quest and periodically imbues your next Attack or Ability to burn enemies and Slow them. Killing large monsters readies this immediately.",
+    "effectFr": "Quand votre compagnon a fini de grandir, il achève votre quête de jungle et renforce périodiquement votre prochaine attaque ou compétence pour qu'elle brûle les ennemis et les ralentisse. Tuer un grand monstre prépare immédiatement cet effet."
+  },
+  "gustwalker": {
+    "id": "1102",
+    "ids": [
+      "1102",
+      "1106"
+    ],
+    "name": "Gustwalker Hatchling",
+    "nameFr": "Bébé Saute-nuages",
+    "image": "1102.png",
+    "cost": 450,
+    "effect": "When fully grown, it completes your Jungle Quest and grants Move Speed upon entering brush, increased when killing large monsters.",
+    "effectFr": "Quand votre compagnon a fini de grandir, il achève votre quête de jungle et vous gagnez de la vitesse de déplacement quand vous entrez dans des hautes herbes. Ce bonus augmente quand vous tuez des grands monstres."
+  },
+  "mosstomper": {
+    "id": "1103",
+    "ids": [
+      "1103",
+      "1105"
+    ],
+    "name": "Mosstomper Seedling",
+    "nameFr": "Bébé Ixamandre",
+    "image": "1103.png",
+    "cost": 450,
+    "effect": "When fully grown, it completes your Jungle Quest and grants a Shield while out of combat and after killing large monsters.",
+    "effectFr": "Quand votre compagnon a fini de grandir, il achève votre quête de jungle et vous gagnez un bouclier quand vous n'êtes pas en combat et quand vous tuez des grands monstres."
+  }
+}

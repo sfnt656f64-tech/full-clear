@@ -17,6 +17,7 @@ export interface ChampionOverride {
   shields: boolean;
   heals: boolean;
   slows: boolean;
+  early?: boolean;
   range?: "melee" | "ranged";
   rangeNote?: string;
 }
@@ -31,7 +32,7 @@ export const PROFILE_FROM_TAG: Record<string, Profile> = {
 export function buildChampion(g: GeneratedChampion, o: ChampionOverride | undefined): Champion {
   const base = { id: g.id, key: g.key, name: g.name, nameEn: g.nameEn, image: g.image, tags: g.tags };
   if (o) {
-    return { ...base, profile: o.profile, range: o.range ?? g.range, damage: o.damage, cc: o.cc, shields: o.shields, heals: o.heals, slows: o.slows };
+    return { ...base, profile: o.profile, range: o.range ?? g.range, damage: o.damage, cc: o.cc, shields: o.shields, heals: o.heals, slows: o.slows, ...(o.early ? { early: true } : {}) };
   }
   // Pas d'override : profil et type de dégâts déduits de Data Dragon, le reste est inconnu.
   return {

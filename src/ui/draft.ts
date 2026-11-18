@@ -1,11 +1,12 @@
 import { CHAMPIONS, PROFILE_LABEL, champ, findChamp, matchesQuery } from "../data/champions";
 import { EXAMPLE_DRAFTS } from "../data/guides";
 import { BOOTS_T3, ITEMS, isBoots } from "../data/items";
+import { STARTERS } from "../data/starters";
 import type { Champion, Form, Profile, Stage } from "../data/types";
 import { draftReport, MIN_ENEMIES, type DraftReport } from "../engine/draft";
 import { decodeDraft, encodeDraft } from "../engine/draft-link";
 import { $, esc, fmt, pct } from "./html";
-import { champTile, itemIcon } from "./icons";
+import { champTile, itemIcon, starterIcon } from "./icons";
 import { runeOptions } from "./settings";
 
 type Team = "en" | "al";
@@ -188,12 +189,17 @@ export function renderReport(rep: DraftReport): string {
     + `<div>Gros CC<b>${x.hard}</b></div><div>Boucliers<b>${fmt(Math.round(x.shields * 10) / 10)}</b></div><div>Soins<b>${x.heals}</b></div>`
     + `<div>Ralentissements<b>${x.slows}</b></div><div>Tanks / combattants<b>${x.tanks} / ${x.fight}</b></div></div>`;
 
+  h += `<h3>🐾 Familier de départ</h3>` + rep.starter.map(([k, why], i) =>
+    `<div class="bootrow${i ? " alt" : ""}">${starterIcon(k)}<div><b>${esc(STARTERS[k].name)}</b>${i ? "" : ' <span class="tag wr">conseillé</span>'}<br><span class="sub">${esc(why)} · ${STARTERS[k].cost} po</span>`
+    + (i ? "" : `<br><span class="sub">Adulte : ${esc(STARTERS[k].effectFr)}</span>`) + `</div></div>`,
+  ).join("");
+
   h += `<h3>👟 Bottes</h3>` + rep.boots.map(([k, why], i) =>
     `<div class="bootrow${i ? " alt" : ""}">${itemIcon(k)}<div><b>${esc(ITEMS[k].n)}</b>${i ? "" : ' <span class="tag wr">conseillé</span>'}<br><span class="sub">${esc(why)} · niveau 3 : ${BOOTS_T3[k]}</span></div></div>`,
   ).join("");
 
-  h += `<h3 style="margin-top:14px">🛠️ Ordre de build</h3><div class="path">${rep.build.map((k, i) => (i ? '<span class="arr">›</span>' : "") + itemIcon(k)).join("")}</div>`
-    + `<div class="sub">${rep.build.map((k) => esc(ITEMS[k].n)).join(" → ")}</div>`;
+  h += `<h3 style="margin-top:14px">🛠️ Ordre de build</h3><div class="path">${starterIcon(rep.starter[0][0])}${rep.build.map((k) => '<span class="arr">›</span>' + itemIcon(k)).join("")}</div>`
+    + `<div class="sub">${[STARTERS[rep.starter[0][0]].name, ...rep.build.map((k) => ITEMS[k].n)].map(esc).join(" → ")}</div>`;
   if (rep.notes.length) h += `<div class="note" style="margin-top:8px">${rep.notes.map((n) => "• " + n).join("<br>")}</div>`;
 
   const nItems = rep.simBuild.filter((k) => !isBoots(k)).length;

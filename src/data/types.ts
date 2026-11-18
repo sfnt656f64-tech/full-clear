@@ -10,6 +10,9 @@ export type ItemKey =
 
 export type BootKey = "lucidity" | "steelcaps" | "mercury" | "swiftness";
 
+/** Familiers de jungle (item de départ). */
+export type StarterKey = "scorchclaw" | "gustwalker" | "mosstomper";
+
 /** Effets d'items que le modèle sait simuler. */
 export type ItemFlag = "volt" | "hubris" | "axiom" | "serpent" | "dd" | "sterak" | "bastion";
 
@@ -67,6 +70,8 @@ export interface Champion {
   shields: boolean;
   heals: boolean;
   slows: boolean;
+  /** Early game très agressif ou invades fréquentes (overrides.json, édité à la main). */
+  early?: boolean;
 }
 
 /** Cible d'une simulation : un profil type, pas un champion précis. */

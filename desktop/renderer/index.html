@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://ddragon.leagueoflegends.com">
+  <title>Kayn Sim</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <img src="../icon.png" alt="" width="28" height="28">
+    <h1>Kayn Sim</h1>
+    <span id="version" class="muted"></span>
+  </header>
+
+  <section>
+    <h2>Client League of Legends</h2>
+    <p id="client" class="status idle">Recherche du client…</p>
+    <p id="client-account" class="muted small" hidden></p>
+  </section>
+
+  <section>
+    <h2>Overlay en jeu</h2>
+    <p id="live-status" class="status idle">Pas de partie en cours.</p>
+    <div id="live-body"></div>
+    <label class="check"><input id="overlay-on" type="checkbox"> Afficher l'overlay pendant les parties</label>
+    <div class="row">
+      <label for="form-choice" class="small">Forme :</label>
+      <select id="form-choice">
+        <option value="auto">Recommandée (auto)</option>
+        <option value="blue">Bleu (assassin)</option>
+        <option value="red">Rouge (Rhaast)</option>
+      </select>
+      <button id="overlay-reset" type="button">Replacer l'overlay</button>
+    </div>
+    <h3>Raccourcis (actifs en partie)</h3>
+    <div class="shortcut-row">
+      <span>Masquer / afficher</span>
+      <button id="sc-toggle" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
+      <span id="sc-toggle-status" class="badge"></span>
+      <button id="sc-toggle-reset" type="button" class="link">Par défaut</button>
+    </div>
+    <div class="shortcut-row">
+      <span>Déplacer / verrouiller</span>
+      <button id="sc-move" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
+      <span id="sc-move-status" class="badge"></span>
+      <button id="sc-move-reset" type="button" class="link">Par défaut</button>
+    </div>
+    <p id="sc-error" class="warn-text small" hidden></p>
+    <p class="muted small">Clique sur une combinaison puis appuie sur la nouvelle (Ctrl, Alt et/ou Maj + une lettre, un chiffre ou F1–F24). Échap pour annuler. « Masquer / afficher » est aussi dans le menu clic droit de l'icône.</p>
+    <p id="window-mode" class="small"></p>
+  </section>
+
+  <section id="draft" hidden>
+    <h2 id="draft-title">Draft</h2>
+    <div id="draft-body"></div>
+  </section>
+
+  <section>
+    <h2>Configuration</h2>
+    <p id="riot-id" class="status"></p>
+    <ul id="problems" class="problems"></ul>
+    <p class="muted small">Fichier : <span id="env-file"></span></p>
+    <p class="muted small">Seul ton Riot ID est lu. La clé API n'est pas utilisée par l'appli : elle ne parle qu'au client local.</p>
+    <div class="row">
+      <button id="reload" type="button">Relire le .env</button>
+      <button id="open-dir" type="button">Ouvrir le dossier de l'appli</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Démarrage</h2>
+    <label class="check"><input id="login" type="checkbox"> Lancer au démarrage de Windows (discret, dans la zone de notification)</label>
+    <p id="dev-note" class="muted small" hidden>Mode développement : Windows lancera Electron avec ce dépôt. La version installée (étape 5) utilisera son propre exécutable.</p>
+  </section>
+
+  <footer class="muted small">Fermer cette fenêtre la cache : l'appli reste dans la zone de notification. Pour quitter : clic droit sur l'icône → Quitter.</footer>
+  <script src="renderer.js"></script>
+</body>
+</html>

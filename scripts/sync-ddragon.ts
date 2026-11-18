@@ -10,6 +10,9 @@
 //   kayn.json       stats de base et sorts de Kayn
 //   item-index.json tous les items terminés de la Faille (légendaires, bottes) : nom, icône, type
 //                   (sert aux stats de tes parties, npm run stats)
+//   shop.json       tous les items achetables de la Faille : prix, recette, stats principales
+//                   (sert à l'overlay en jeu de l'appli de bureau)
+//   starters.json   les 3 familiers de jungle (item de départ) : nom FR/EN, prix, effet une fois adulte
 //
 // Les fichiers sont déterministes (pas d'horodatage) : un diff git vide = rien n'a changé.
 // Ce script n'importe rien de src/ pour pouvoir tourner avec `node` seul (type stripping).
@@ -75,6 +78,13 @@ const STAT_FIELDS: Record<string, string> = {
 
 /** Portée d'attaque au-delà de laquelle un champion est considéré à distance. */
 const MELEE_MAX_RANGE = 325;
+
+/** Familiers de jungle : identifiant Data Dragon et nom anglais attendu (garde-fou si Riot renumérote). */
+const STARTER_IDS: Record<string, [id: string, name: string]> = {
+  scorchclaw: ["1101", "Scorchclaw Pup"],
+  gustwalker: ["1102", "Gustwalker Hatchling"],
+  mosstomper: ["1103", "Mosstomper Seedling"],
+};
 
 // ---------- Téléchargement ----------
 
@@ -190,6 +200,92 @@ export function buildItemIndex(en: DDFile<DDItem>, fr: DDFile<DDItem>): Record<s
   return out;
 }
 
+/** Une entrée de la boutique : prix total, recette et stats utiles pour lire l'inventaire adverse. */
+export interface ShopItem {
+  /** Nom français. */
+  name: string;
+  cost: number;
+  /** Composants directs (identifiants), dans l'ordre de Data Dragon. */
+  from?: string[];
+  ad?: number;
+  ap?: number;
+  armor?: number;
+  mr?: number;
+  hp?: number;
+  /** Vol de vie ou omnivampirisme. */
+  heal?: true;
+  boots?: true;
+}
+
+/** Tous les items achetables sur la Faille (composants compris), pour l'overlay en jeu. */
+export function buildShop(en: DDFile<DDItem>, fr: DDFile<DDItem>): Record<string, ShopItem> {
+  const out: Record<string, ShopItem> = {};
+  const stat: [keyof ShopItem, string][] = [["ad", "FlatPhysicalDamageMod"], ["ap", "FlatMagicDamageMod"], ["armor", "FlatArmorMod"], ["mr", "FlatSpellBlockMod"], ["hp", "FlatHPPoolMod"]];
+  for (const [id, it] of Object.entries(en.data).sort(([a], [b]) => Number(a) - Number(b))) {
+    if (!it.maps["11"] || !it.gold.purchasable || Number(id) >= 10000) continue;
+    const e: ShopItem = { name: fr.data[id]?.name ?? it.name, cost: it.gold.total };
+    const from = (it.from ?? []).filter((f) => en.data[f]);
+    if (from.length) e.from = from;
+    for (const [k, dd] of stat) if (it.stats[dd]) (e as unknown as Record<string, number>)[k] = it.stats[dd];
+    const tags = it.tags ?? [];
+    if (tags.includes("LifeSteal") || tags.includes("SpellVamp") || it.stats.PercentLifeStealMod) e.heal = true;
+    if (tags.includes("Boots")) e.boots = true;
+    out[id] = e;
+  }
+  return out;
+}
+
+/** Texte brut d'une description Data Dragon (balises retirées, espaces normalisés). */
+export function plainText(html: string): string {
+  return html.replace(/<br\s*\/?>/g, " ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Effet d'un familier une fois adulte : la dernière partie de la description, à partir de
+ * « When fully grown » / « Quand votre compagnon a fini de grandir » (sinon toute la description).
+ */
+export function starterEffect(description: string): string {
+  const text = plainText(description.replace(/<passive>.*?<\/passive>/s, ""));
+  const m = text.match(/(When fully grown.*|Quand votre compagnon a fini de grandir.*)$/s);
+  return (m ? m[1] : text).trim();
+}
+
+export interface StarterItem {
+  id: string;
+  /** Tous les identifiants de ce familier (Riot en publie plusieurs variantes de même nom) : pour lire l'inventaire. */
+  ids: string[];
+  name: string;
+  nameFr: string;
+  image: string;
+  cost: number;
+  effect: string;
+  effectFr: string;
+}
+
+export function buildStarters(en: DDFile<DDItem>, fr: DDFile<DDItem>): Record<string, StarterItem> {
+  const out: Record<string, StarterItem> = {};
+  for (const [key, [id, expected]] of Object.entries(STARTER_IDS)) {
+    const it = en.data[id];
+    if (!it) throw new Error(`Familier ${key} (${id}) absent de Data Dragon : vérifier STARTER_IDS.`);
+    if (it.name !== expected) throw new Error(`Item ${id} : attendu « ${expected} », trouvé « ${it.name} ». Mettre STARTER_IDS à jour.`);
+    const ids = Object.entries(en.data)
+      .filter(([, o]) => o.name === expected && o.maps["11"] && (o.tags ?? []).includes("Jungle"))
+      .map(([i]) => i)
+      .sort((a, b) => Number(a) - Number(b));
+    out[key] = {
+      id,
+      ids,
+      name: it.name,
+      nameFr: fr.data[id]?.name ?? it.name,
+      image: it.image.full,
+      cost: it.gold.total,
+      effect: starterEffect(it.description),
+      effectFr: starterEffect(fr.data[id]?.description ?? it.description),
+    };
+  }
+  return out;
+}
+
 // ---------- Champions ----------
 
 function buildChampions(en: DDFile<DDChampion>, fr: DDFile<DDChampion>) {
@@ -274,6 +370,8 @@ async function main() {
   const champions = buildChampions(champEn, champFr);
   const kayn = buildKayn(kaynFr, kaynEn);
   const itemIndex = buildItemIndex(itemEn, itemFr);
+  const shop = buildShop(itemEn, itemFr);
+  const starters = buildStarters(itemEn, itemFr);
   await checkOverrides(champions, warnings);
 
   await mkdir(OUT, { recursive: true });
@@ -282,6 +380,8 @@ async function main() {
   await write("champions.json", champions);
   await write("kayn.json", kayn);
   await write("item-index.json", itemIndex);
+  await write("shop.json", shop);
+  await write("starters.json", starters);
 
   console.log(`${Object.keys(items).length} items, ${champions.length} champions, ${Object.keys(itemIndex).length} items terminés écrits dans src/data/generated/`);
   if (warnings.length) console.log(`\n⚠️  ${warnings.length} avertissement(s) :\n- ` + warnings.join("\n- "));

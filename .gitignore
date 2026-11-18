@@ -1,7 +1,9 @@
 node_modules/
 dist/
+desktop/dist/
 .env
 .env.*
 .DS_Store
 !.env.example
 .cache/
+release/

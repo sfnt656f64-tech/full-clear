@@ -2,8 +2,9 @@
 // Si une image ne charge pas (hors ligne, CDN indisponible, fichier absent), elle est
 // retirée par installImageFallback() et le pictogramme en dessous reste visible.
 import { ITEMS } from "../data/items";
+import { STARTERS } from "../data/starters";
 import { PROFILE_LABEL } from "../data/champions";
-import type { Champion, ItemKey, Profile } from "../data/types";
+import type { Champion, ItemKey, Profile, StarterKey } from "../data/types";
 import { DDRAGON_VERSION } from "../data/version";
 import { esc } from "./html";
 
@@ -61,6 +62,19 @@ export function itemIcon(k: ItemKey): string {
   const [g, color] = ITEM_GLYPH[k];
   const it = ITEMS[k];
   return `<div class="it" style="background:${color}" title="${esc(it.n)}">${svg(g)}${it.image ? ddImg(`item/${it.image}`) : ""}<small>${it.s}</small></div>`;
+}
+
+const STARTER_GLYPH: Record<StarterKey, [Glyph, string, string]> = {
+  scorchclaw: ["drop", "#b5402f", "FEU"],
+  gustwalker: ["wings", "#2e7db5", "VENT"],
+  mosstomper: ["shield", "#2e7d3b", "TERRE"],
+};
+
+/** Icône d'un familier de jungle (même gabarit que les items). */
+export function starterIcon(k: StarterKey): string {
+  const [g, color, label] = STARTER_GLYPH[k];
+  const s = STARTERS[k];
+  return `<div class="it" style="background:${color}" title="${esc(s.name)}">${svg(g)}${ddImg(`item/${s.image}`)}<small>${label}</small></div>`;
 }
 
 export const PROFILE_GLYPH: Record<Profile, [Glyph, string]> = {
