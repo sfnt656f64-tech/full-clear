@@ -13,6 +13,7 @@
 //   shop.json       tous les items achetables de la Faille : prix, recette, stats principales
 //                   (sert à l'overlay en jeu de l'appli de bureau)
 //   starters.json   les 3 familiers de jungle (item de départ) : nom FR/EN, prix, effet une fois adulte
+//   runes.json      arbres et runes (runesReforged) : nom FR/EN, icône, arbre, ligne
 //
 // Les fichiers sont déterministes (pas d'horodatage) : un diff git vide = rien n'a changé.
 // Ce script n'importe rien de src/ pour pouvoir tourner avec `node` seul (type stripping).
@@ -286,6 +287,29 @@ export function buildStarters(en: DDFile<DDItem>, fr: DDFile<DDItem>): Record<st
   return out;
 }
 
+// ---------- Runes ----------
+
+interface DDRuneTree { id: number; key: string; icon: string; name: string; slots: { runes: { id: number; key: string; icon: string; name: string }[] }[] }
+
+export interface RuneInfo { name: string; nameEn: string; icon: string; tree: number; slot: number }
+
+export function buildRunes(en: DDRuneTree[], fr: DDRuneTree[]) {
+  const frName = new Map<number, string>();
+  for (const t of fr) {
+    frName.set(t.id, t.name);
+    for (const s of t.slots) for (const r of s.runes) frName.set(r.id, r.name);
+  }
+  const trees: Record<string, { name: string; nameEn: string; icon: string }> = {};
+  const runes: Record<string, RuneInfo> = {};
+  for (const t of [...en].sort((a, b) => a.id - b.id)) {
+    trees[t.id] = { name: frName.get(t.id) ?? t.name, nameEn: t.name, icon: t.icon };
+    t.slots.forEach((s, slot) => {
+      for (const r of s.runes) runes[r.id] = { name: frName.get(r.id) ?? r.name, nameEn: r.name, icon: r.icon, tree: t.id, slot };
+    });
+  }
+  return { trees, runes };
+}
+
 // ---------- Champions ----------
 
 function buildChampions(en: DDFile<DDChampion>, fr: DDFile<DDChampion>) {
@@ -356,6 +380,10 @@ async function main() {
   console.log(`Data Dragon ${version} (patch ${patchFromVersion(version)})`);
 
   const base = `/cdn/${version}/data`;
+  const [runesEn, runesFr] = await Promise.all([
+    get<DDRuneTree[]>(`${base}/en_US/runesReforged.json`),
+    get<DDRuneTree[]>(`${base}/fr_FR/runesReforged.json`),
+  ]);
   const [itemEn, itemFr, champEn, champFr, kaynFr, kaynEn] = await Promise.all([
     get<DDFile<DDItem>>(`${base}/en_US/item.json`),
     get<DDFile<DDItem>>(`${base}/fr_FR/item.json`),
@@ -382,6 +410,7 @@ async function main() {
   await write("item-index.json", itemIndex);
   await write("shop.json", shop);
   await write("starters.json", starters);
+  await write("runes.json", buildRunes(runesEn, runesFr));
 
   console.log(`${Object.keys(items).length} items, ${champions.length} champions, ${Object.keys(itemIndex).length} items terminés écrits dans src/data/generated/`);
   if (warnings.length) console.log(`\n⚠️  ${warnings.length} avertissement(s) :\n- ` + warnings.join("\n- "));

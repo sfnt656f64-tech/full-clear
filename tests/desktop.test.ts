@@ -1,7 +1,7 @@
 import { inflateSync } from "node:zlib";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { envCandidates, loadDesktopConfig } from "../desktop/config";
+import { envCandidates, loadDesktopConfig, riotIdText } from "../desktop/config";
 import { iconPng } from "../desktop/icon";
 import { commandLineArg, parseCommandLine, parseLockfile, phaseLabel, sameRiotId, toLocalAccount } from "../desktop/lcu";
 
@@ -14,13 +14,22 @@ describe("configuration de l'appli de bureau", () => {
     expect(envCandidates(null, appData)).toEqual([join(appData, ".env")]);
   });
 
-  it("prend le premier .env existant et n'en lit que le Riot ID", () => {
-    const files: Record<string, string> = { [join(appData, ".env")]: "RIOT_API_KEY=RGAPI-secret\r\nRIOT_ID=Mon Nom#EUW\r\n" };
+  it("prend le premier .env existant : comptes, clé pour la collecte", () => {
+    const files: Record<string, string> = { [join(appData, ".env")]: "RIOT_API_KEY=RGAPI-secret\r\nRIOT_ID=Mon Nom#EUW\r\nRIOT_ID_2=Smurf#EUW2\r\n" };
     const c = loadDesktopConfig(envCandidates(repo, appData), (f) => f in files, (f) => files[f]);
     expect(c.envFile).toBe(join(appData, ".env"));
     expect(c.riotId).toEqual({ gameName: "Mon Nom", tagLine: "EUW" });
+    expect(c.riotIds.map(riotIdText)).toEqual(["Mon Nom#EUW", "Smurf#EUW2"]);
+    expect(c.apiKey).toBe("RGAPI-secret");
     expect(c.problems).toEqual([]);
-    expect(JSON.stringify(c)).not.toContain("RGAPI");
+  });
+
+  it("ignore la clé d'exemple et signale un 2ᵉ Riot ID invalide", () => {
+    const c = loadDesktopConfig(["a/.env"], () => true, () => "RIOT_API_KEY=RGAPI-xxxxxxxx-xxxx\nRIOT_ID=A#B\nRIOT_ID_2=SansTag\n");
+    expect(c.apiKey).toBeNull();
+    expect(c.riotIds).toHaveLength(1);
+    expect(c.problems[0]).toMatch(/RIOT_ID_2/);
+    expect(loadDesktopConfig(["a/.env"], () => true, () => "RIOT_ID=A#B\nRIOT_ID_2=\n").problems).toEqual([]);
   });
 
   it("signale un .env absent ou un Riot ID invalide", () => {

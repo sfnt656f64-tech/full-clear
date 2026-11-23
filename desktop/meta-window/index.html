@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com">
+  <title>Kayn Sim · Méta</title>
+  <link rel="stylesheet" href="../renderer/style.css">
+  <link rel="stylesheet" href="../stats-window/stats.css">
+  <link rel="stylesheet" href="meta.css">
+</head>
+<body>
+  <header>
+    <h1>Méta Émeraude+ EUW</h1>
+    <span id="summary" class="muted small"></span>
+  </header>
+  <div class="filters">
+    <label>Rôle <select id="f-role"></select></label>
+    <label>Patchs <select id="f-scope"><option value="1">Dernier patch</option><option value="2">2 derniers patchs</option><option value="3">3 derniers patchs</option></select></label>
+    <label>Au moins <select id="f-min"><option>10</option><option>30</option><option selected>50</option><option>100</option><option>200</option></select> partie(s)</label>
+    <label>Champion <input id="f-search" type="search" placeholder="Rechercher…"></label>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+  <p id="empty" class="muted" hidden></p>
+  <p class="muted small">Parties Solo/Duo de joueurs Émeraude à Challenger (EUW), collectées par l'appli avec ta clé, via l'API Riot uniquement. ± : marge à 95 % sur le win rate. « Provisoire » : moins de 100 parties. Items : les plus présents en fin de partie ; ordre du core : seulement pour les champions de ton pool (chronologie).</p>
+  <script src="meta.js"></script>
+</body>
+</html>

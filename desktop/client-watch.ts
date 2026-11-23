@@ -20,13 +20,14 @@ export class ClientWatcher {
   private last = "";
   status: ClientStatus = { kind: "closed" };
 
-  private readonly expected: () => { gameName: string; tagLine: string } | null;
+  /** Tes comptes (.env) : le compte connecté doit être l'un d'eux. */
+  private readonly expected: () => { gameName: string; tagLine: string }[];
   private readonly onChange: (s: ClientStatus, creds: LcuCredentials | null) => void;
   private readonly onDraft: (d: DraftSnapshot) => void;
   private lastDraft = "";
 
   constructor(
-    expected: () => { gameName: string; tagLine: string } | null,
+    expected: () => { gameName: string; tagLine: string }[],
     onChange: (s: ClientStatus, creds: LcuCredentials | null) => void,
     /** Appelé à chaque changement de la draft (pendant la sélection des champions seulement). */
     onDraft: (d: DraftSnapshot) => void = () => {},
@@ -38,6 +39,13 @@ export class ClientWatcher {
 
   start(): void { this.stopped = false; void this.loop(); }
 
+  /** Le compte connecté est-il l'un de tes comptes ? null si l'un des deux côtés manque. */
+  private matchesEnv(): boolean | null {
+    const ids = this.expected();
+    if (!this.account || !ids.length) return null;
+    return ids.some((id) => sameRiotId(this.account, id) === true);
+  }
+
   /** Dossier d'installation du jeu le plus probable (pour lire Configgame.cfg). */
   get installDir(): string | null { return this.installDirs[0] ?? null; }
 
@@ -47,7 +55,7 @@ export class ClientWatcher {
   }
 
   /** Re-publie l'état (ex. après relecture du .env : la comparaison du Riot ID change). */
-  refresh(): void { if (this.status.kind === "connected") this.publish({ ...this.status, matchesEnv: sameRiotId(this.account, this.expected()) }); }
+  refresh(): void { if (this.status.kind === "connected") this.publish({ ...this.status, matchesEnv: this.matchesEnv() }); }
 
   private publish(s: ClientStatus): void {
     this.status = s;
@@ -78,7 +86,7 @@ export class ClientWatcher {
         this.publish({
           kind: "connected",
           account: this.account ? `${this.account.gameName}#${this.account.tagLine}` : null,
-          matchesEnv: sameRiotId(this.account, this.expected()),
+          matchesEnv: this.matchesEnv(),
           phase,
           phaseLabel: phaseLabel(phase),
         });

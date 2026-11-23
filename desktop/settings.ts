@@ -13,9 +13,18 @@ export interface Settings {
   /** Forme utilisée en jeu : « auto » = celle recommandée d'après la composition. */
   formChoice: Form | "auto";
   shortcuts: Shortcuts;
+  /** Collecte en pause (bouton de la fenêtre). */
+  collectorPaused: boolean;
+  /**
+   * Champions exclus de tes stats, de ton score et de tes recommandations (identifiants Data Dragon) :
+   * parties jouées par quelqu'un d'autre sur tes comptes. Ils restent comptés dans les données de méta.
+   */
+  excludedChampions: string[];
 }
 
-export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS } };
+export const DEFAULT_EXCLUDED = ["Jax", "Fiora", "Camille"];
+
+export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED] };
 
 export function parseSettings(text: string | null): Settings {
   try {
@@ -29,6 +38,11 @@ export function parseSettings(text: string | null): Settings {
         toggle: isValidAccelerator(raw.shortcuts?.toggle) ? raw.shortcuts.toggle : DEFAULT_SHORTCUTS.toggle,
         move: isValidAccelerator(raw.shortcuts?.move) ? raw.shortcuts.move : DEFAULT_SHORTCUTS.move,
       },
+      collectorPaused: raw.collectorPaused === true,
+      // Liste vide gardée telle quelle (tout réintégré) ; absente ou invalide → liste par défaut.
+      excludedChampions: Array.isArray(raw.excludedChampions)
+        ? [...new Set(raw.excludedChampions.filter((x): x is string => typeof x === "string" && /^[A-Za-z]{1,30}$/.test(x)))]
+        : [...DEFAULT_EXCLUDED],
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

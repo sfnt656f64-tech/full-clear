@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com">
+  <title>Kayn Sim · Champions recommandés</title>
+  <link rel="stylesheet" href="../renderer/style.css">
+  <link rel="stylesheet" href="../stats-window/stats.css">
+  <link rel="stylesheet" href="reco.css">
+</head>
+<body>
+  <header>
+    <h1>Champions recommandés</h1>
+    <span id="summary" class="muted small"></span>
+  </header>
+  <div class="filters">
+    <div id="tabs" class="tabs" role="tablist"></div>
+  </div>
+  <p id="warn" class="warn-box" hidden></p>
+  <section id="profile" class="profile"></section>
+  <div class="cols">
+    <section class="col">
+      <h2>Mon pool</h2>
+      <p class="muted small">Classé par score : ton win rate (les saisons précédentes comptent moins, et peu de parties sont ramenées vers la méta), ta maîtrise et la force du champion en Émeraude+.</p>
+      <ol id="pool" class="cards"></ol>
+    </section>
+    <section class="col">
+      <h2>À essayer</h2>
+      <p class="muted small">Champions que tu ne joues pas, choisis selon ton style, leur ressemblance avec tes meilleurs champions, leur force en Émeraude+ et leur facilité de prise en main.</p>
+      <ol id="try" class="cards"></ol>
+    </section>
+  </div>
+  <p class="muted small">Tes parties Solo/Duo (tes deux comptes, hors champions exclus) et la méta Émeraude+ EUW collectée par l'appli via l'API Riot. Difficulté de prise en main : win rate des joueurs selon leurs points de maîtrise (environ 1 000 points par partie). « Provisoire » : pas encore assez de parties de méta.</p>
+  <script src="reco.js"></script>
+</body>
+</html>

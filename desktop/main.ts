@@ -4,8 +4,15 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, 
 import { mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ClientWatcher } from "./client-watch.ts";
-import { envCandidates, loadDesktopConfig, type DesktopConfig } from "./config.ts";
+import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
+import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
+import { readMyGames } from "./stats/read.ts";
+import { readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
+import { recommend } from "./reco/recommend.ts";
+import { metaStats } from "./meta/meta-stats.ts";
+import type { MetaView, RecoView } from "./ipc.ts";
+import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildOverlayView, type OverlayView } from "./next-item.ts";
@@ -20,12 +27,12 @@ const here = __dirname; // desktop/dist une fois compilé
 /** Identifiant Windows de l'appli (barre des tâches, notifications) : identique à appId dans package.json. */
 const APP_ID = "io.github.kayn-sim";
 /**
- * Nom de l'entrée « démarrage » dans HKCUSoftwareMicrosoftWindowsCurrentVersionRun.
+ * Nom de l'entrée « démarrage » dans HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
  * Fixe, pour que le désinstalleur puisse la retirer (desktop/installer.nsh).
  */
 const LOGIN_ITEM_NAME = "KaynSim";
 
-// Dossier des réglages et du .env : %APPDATA%kayn-sim, en développement comme une fois installée
+// Dossier des réglages et du .env : %APPDATA%\kayn-sim, en développement comme une fois installée
 // (sans cela, Electron le nommerait d'après le nom affiché de l'appli).
 app.setPath("userData", join(app.getPath("appData"), "kayn-sim"));
 
@@ -45,8 +52,20 @@ let liveSnap: LiveSnapshot | null = null;
 let liveView: OverlayView | null = null;
 let windowMode: WindowMode = "unknown";
 let overlay: OverlayWindow;
+let collector: CollectorHost;
 
-/** Mode d'affichage du jeu, lu dans Configgame.cfg (simple lecture de fichier). */
+/** Champions exclus (réglage), en clés numériques Riot. */
+function excludedKeys(): number[] {
+  return settings.excludedChampions.map((id) => findChamp(id)?.key).filter((k): k is number => k != null);
+}
+
+/** (Re)configure la collecte : clé et comptes du .env, pause manuelle mémorisée. */
+function configureCollector(): void {
+  collector.setPaused("user", settings.collectorPaused);
+  collector.configure(config.apiKey, config.riotIds.map(riotIdText), excludedKeys());
+}
+
+/** Mode d'affichage du jeu, lu dans Config\game.cfg (simple lecture de fichier). */
 function readWindowMode(): WindowMode {
   const dir = watcher.installDir;
   if (!dir) return "unknown";
@@ -66,7 +85,7 @@ const live = new LiveWatcher((snap) => {
 });
 
 const watcher = new ClientWatcher(
-  () => config?.riotId ?? null,
+  () => config?.riotIds ?? [],
   (s) => {
     const phase = s.kind === "connected" ? s.phase : "";
     if (phase === "ChampSelect" && prevPhase !== "ChampSelect") {
@@ -77,6 +96,8 @@ const watcher = new ClientWatcher(
     if (s.kind === "closed" || CLEAR_DRAFT.has(phase)) draft = null;
     if (phase !== prevPhase) windowMode = readWindowMode();
     prevPhase = phase;
+    // Pause de la collecte du chargement à la fin de la partie : rien ne doit gêner le jeu.
+    collector?.setPaused("game", GAME_PHASES.has(phase));
     pushState();
     if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
   },
@@ -132,7 +153,12 @@ function state(): AppState {
     version: app.getVersion(),
     envFile: config.envFile,
     searched: config.searched,
-    riotId: config.riotId ? `${config.riotId.gameName}#${config.riotId.tagLine}` : null,
+    riotId: config.riotId ? riotIdText(config.riotId) : null,
+    riotIds: config.riotIds.map(riotIdText),
+    hasApiKey: !!config.apiKey,
+    collector: collector?.state ?? { kind: "off", reason: "no-key" },
+    collectorPaused: settings?.collectorPaused ?? false,
+    excludedChampions: settings?.excludedChampions ?? [],
     problems: config.problems,
     openAtLogin: openAtLogin(),
     dev,
@@ -140,7 +166,86 @@ function state(): AppState {
 }
 
 function pushState(): void {
-  win?.webContents.send(IPC.state, state());
+  if (!win && !statsWin) return;
+  const s = state();
+  win?.webContents.send(IPC.state, s);
+  statsWin?.webContents.send(IPC.state, s);
+}
+
+let statsWin: BrowserWindow | null = null;
+let metaWin: BrowserWindow | null = null;
+let recoWin: BrowserWindow | null = null;
+const dbFile = () => join(app.getPath("userData"), "riot.db");
+
+/** Fenêtre d'outil (« Mes stats », « Méta ») : une seule de chaque, ré-affichée si déjà ouverte. */
+function toolWindow(existing: BrowserWindow | null, title: string, page: string, width: number, onClosed: () => void): BrowserWindow {
+  if (existing) {
+    if (existing.isMinimized()) existing.restore();
+    existing.focus();
+    return existing;
+  }
+  const w = new BrowserWindow({
+    width,
+    height: 720,
+    minWidth: 640,
+    minHeight: 400,
+    title,
+    icon: join(here, "icon.png"),
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: "#14141c",
+    webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  w.removeMenu();
+  w.on("closed", onClosed);
+  w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  w.webContents.on("will-navigate", (e) => e.preventDefault());
+  void w.loadFile(join(here, page));
+  w.once("ready-to-show", () => w.show());
+  return w;
+}
+
+function showStatsWindow(): void {
+  statsWin = toolWindow(statsWin, "Kayn Sim · Mes stats", "stats-window/index.html", 1080, () => { statsWin = null; });
+}
+
+function showMetaWindow(): void {
+  metaWin = toolWindow(metaWin, "Kayn Sim · Méta", "meta-window/index.html", 1240, () => { metaWin = null; });
+}
+
+function showRecoWindow(): void {
+  recoWin = toolWindow(recoWin, "Kayn Sim · Champions recommandés", "reco-window/index.html", 1180, () => { recoWin = null; });
+}
+
+/** Patchs de méta pour les recommandations : les 2 derniers (équilibrage actuel, assez de parties). */
+const RECO_PATCHES = 2;
+let recoCache: { at: number; key: string; view: RecoView } | null = null;
+function getRecoView(): RecoView {
+  const excluded = excludedKeys();
+  const key = excluded.join(",");
+  if (recoCache && recoCache.key === key && Date.now() - recoCache.at < 60_000) return recoCache.view;
+  const patches = readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch);
+  const input = readMeta(dbFile(), patches);
+  const view: RecoView = {
+    ...recommend({ myGames: readMyGames(dbFile()), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(dbFile()), metaMatches: input.matches, excluded }),
+    patches,
+  };
+  recoCache = { at: Date.now(), key, view };
+  return view;
+}
+
+/** Méta calculée, gardée une minute (le calcul relit toute la base). */
+const metaCache = new Map<number, { at: number; view: MetaView }>();
+function getMetaView(scope: number): MetaView {
+  const n = Math.min(3, Math.max(1, Math.trunc(scope) || 1));
+  const hit = metaCache.get(n);
+  if (hit && Date.now() - hit.at < 60_000) return hit.view;
+  const patches = readMetaPatches(dbFile());
+  const selected = patches.slice(0, n).map((p) => p.patch);
+  const input = readMeta(dbFile(), selected);
+  const view: MetaView = { patches, selected, matches: input.matches, champions: metaStats(input) };
+  metaCache.set(n, { at: Date.now(), view });
+  return view;
 }
 
 function showWindow(focus = true): void {
@@ -178,6 +283,9 @@ function refreshTrayMenu(): void {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Ouvrir Kayn Sim", click: () => showWindow() },
+    { label: "Mes stats", click: () => showStatsWindow() },
+    { label: "Méta", click: () => showMetaWindow() },
+    { label: "Champions recommandés", click: () => showRecoWindow() },
     { type: "separator" },
     {
       label: `Masquer / afficher l'overlay (${displayAccelerator(settings.shortcuts.toggle)})`,
@@ -232,7 +340,27 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.getState, () => state());
   ipcMain.handle(IPC.setOpenAtLogin, (_e, on: unknown) => { setOpenAtLogin(on === true); return state(); });
-  ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); return state(); });
+  ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); configureCollector(); return state(); });
+  ipcMain.handle(IPC.getMyGames, () => readMyGames(dbFile()));
+  ipcMain.handle(IPC.openStatsWindow, () => showStatsWindow());
+  ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
+  ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
+  ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
+  ipcMain.handle(IPC.getRecommendations, () => getRecoView());
+  ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
+    // Seulement des champions qui existent (identifiants Data Dragon).
+    settings.excludedChampions = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string" && !!findChamp(x)?.id))] : settings.excludedChampions;
+    saveSettings(settingsFile, settings);
+    configureCollector(); // le pool suivi dans la méta change
+    pushState();
+    return state();
+  });
+  ipcMain.handle(IPC.setCollectorPaused, (_e, on: unknown) => {
+    settings.collectorPaused = on === true;
+    saveSettings(settingsFile, settings);
+    collector.setPaused("user", settings.collectorPaused);
+    return state();
+  });
   ipcMain.handle(IPC.openUserDataDir, async () => { await shell.openPath(app.getPath("userData")); });
   ipcMain.handle(IPC.openDraftInSimulator, async () => {
     if (draft) await shell.openExternal(`${config.siteUrl.replace(/#.*$/, "")}#${draft.link}`);
@@ -257,6 +385,8 @@ if (!app.requestSingleInstanceLock()) {
       onChange: () => { pushState(); refreshTrayMenu(); },
     });
     overlay.enabled = settings.overlay.enabled;
+    collector = new CollectorHost(here, dbFile(), pushState);
+    configureCollector();
     registerIpc();
     createTray();
     overlay.applyShortcuts(); // diagnostic immédiat : raccourcis libres ou déjà pris
@@ -266,6 +396,6 @@ if (!app.requestSingleInstanceLock()) {
   });
   // Toutes les fenêtres fermées : on reste dans la zone de notification.
   app.on("window-all-closed", () => { /* rien */ });
-  app.on("before-quit", () => { quitting = true; watcher.stop(); live.stop(); overlay?.destroy(); });
+  app.on("before-quit", () => { quitting = true; watcher.stop(); live.stop(); overlay?.destroy(); collector?.stop(); });
   app.on("will-quit", () => globalShortcut.unregisterAll());
 }

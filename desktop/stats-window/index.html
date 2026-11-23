@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com">
+  <title>Kayn Sim · Mes stats</title>
+  <link rel="stylesheet" href="../renderer/style.css">
+  <link rel="stylesheet" href="stats.css">
+</head>
+<body>
+  <header>
+    <h1>Mes stats</h1>
+    <span id="summary" class="muted small"></span>
+  </header>
+  <div class="filters">
+    <label>Compte <select id="f-account"><option value="all">Tous</option></select></label>
+    <label>Rôle <select id="f-role"></select></label>
+    <label>Saison <select id="f-season"><option value="current">En cours</option><option value="all">Toutes</option></select></label>
+    <label>Période
+      <select id="f-period">
+        <option value="all">Toute la saison</option>
+        <option value="30d">30 derniers jours</option>
+        <option value="patch">Dernier patch</option>
+      </select>
+    </label>
+    <label>Au moins <select id="f-min"><option>1</option><option>3</option><option>5</option><option>10</option><option>20</option></select> partie(s)</label>
+  </div>
+  <div class="excluded">
+    <span class="muted">Champions exclus (joués par quelqu'un d'autre) :</span>
+    <span id="ex-list"></span>
+    <select id="ex-add" aria-label="Exclure un champion"></select>
+  </div>
+  <div class="table-wrap">
+    <table id="table">
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"></tbody>
+      <tfoot id="foot"></tfoot>
+    </table>
+  </div>
+  <p id="empty" class="muted" hidden></p>
+  <p class="muted small">Solo/Duo, remakes exclus. Les champions exclus sont retirés de tes stats, de ton score et de tes recommandations (pas des données de méta). KDA = (kills + assists) / morts sur l'ensemble des parties. Or et CS à 15 min : parties d'au moins 15 min. Sur peu de parties, un win rate varie beaucoup : regarde la colonne Parties.</p>
+  <script src="stats.js"></script>
+</body>
+</html>

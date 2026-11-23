@@ -58,8 +58,19 @@ export class RateLimiter {
     return wait;
   }
 
+  /** Compte une requête maintenant (pour un appelant qui gère lui-même l'attente avec delay()). */
+  record(): void {
+    this.stamps.push(this.clock.now());
+  }
+
+  /** Requêtes comptées dans les `ms` dernières millisecondes. */
+  countSince(ms: number): number {
+    const now = this.clock.now();
+    return this.stamps.filter((t) => now - t < ms).length;
+  }
+
   private async waitTurn(): Promise<void> {
     for (let d = this.delay(); d > 0; d = this.delay()) await this.clock.sleep(d);
-    this.stamps.push(this.clock.now());
+    this.record();
   }
 }

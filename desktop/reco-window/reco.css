@@ -1,0 +1,27 @@
+.tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tabs button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px 16px; }
+.tabs button[aria-selected="true"] { background: #2a2a3a; color: var(--text); }
+.warn-box { border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.profile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+.profile h2 { margin: 0 0 6px; font-size: 14px; }
+.profile .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); }
+.profile .facts b { color: var(--text); font-weight: 600; }
+.style-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #2a2a3a; border: 1px solid var(--line); margin-left: 6px; font-size: 12px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.col h2 { margin: 0 0 2px; font-size: 15px; }
+.cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.card { display: grid; grid-template-columns: 22px 44px 1fr auto; gap: 4px 10px; align-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.card.top { border-color: #6b5bd6; }
+.card .rank { color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.card .portrait { width: 44px; height: 44px; border-radius: 6px; }
+.card .name { font-weight: 600; font-size: 14px; }
+.card .facts { color: var(--muted); font-size: 12px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.card .score { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.card .score small { display: block; font-size: 10px; font-weight: 400; color: var(--muted); }
+.card ul { grid-column: 3 / 5; margin: 2px 0 0; padding-left: 16px; font-size: 12.5px; }
+.card li { margin: 1px 0; }
+.similar img { width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; margin-left: 3px; }
+.empty { color: var(--muted); font-size: 13px; list-style: none; }
+.col { background: transparent; border: none; padding: 0; }
+.card { background: #22222f; }
+.tag-prov { font-size: 11px; font-weight: 400; color: var(--warn); margin-left: 6px; }

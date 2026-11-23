@@ -1,5 +1,21 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
 import type { DraftView } from "./draft-view.ts";
+import type { HostState } from "./collector-host.ts";
+import type { MyGameRow } from "./stats/my-stats.ts";
+import type { MetaChampion } from "./meta/meta-stats.ts";
+import type { MetaPatchInfo } from "./meta/read.ts";
+import type { Recommendations } from "./reco/recommend.ts";
+
+/** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
+export interface RecoView extends Recommendations { patches: string[] }
+
+/** Méta calculée pour la fenêtre « Méta ». */
+export interface MetaView {
+  patches: MetaPatchInfo[];
+  selected: string[];
+  matches: number;
+  champions: MetaChampion[];
+}
 
 export type { DraftView };
 
@@ -42,6 +58,15 @@ export interface AppState {
   searched: string[];
   /** « Nom#TAG », jamais d'autre identité. */
   riotId: string | null;
+  /** Tes comptes (RIOT_ID, RIOT_ID_2). */
+  riotIds: string[];
+  /** Une clé est présente dans le .env (la clé elle-même n'est jamais envoyée à la fenêtre). */
+  hasApiKey: boolean;
+  collector: HostState;
+  /** Pause manuelle de la collecte. */
+  collectorPaused: boolean;
+  /** Champions exclus de tes stats (identifiants Data Dragon). */
+  excludedChampions: string[];
   problems: string[];
   openAtLogin: boolean;
   /** Vrai en développement (npm run desktop) : le démarrage automatique pointe alors vers Electron + le dépôt. */
@@ -53,6 +78,16 @@ export interface KaynApi {
   setOpenAtLogin(on: boolean): Promise<AppState>;
   reloadConfig(): Promise<AppState>;
   openUserDataDir(): Promise<void>;
+  setCollectorPaused(on: boolean): Promise<AppState>;
+  /** Tes parties enregistrées (pour la fenêtre « Mes stats »). */
+  getMyGames(): Promise<MyGameRow[]>;
+  openStatsWindow(): Promise<void>;
+  openMetaWindow(): Promise<void>;
+  /** Méta des `scope` derniers patchs (1 à 3). */
+  getMeta(scope: number): Promise<MetaView>;
+  openRecoWindow(): Promise<void>;
+  getRecommendations(): Promise<RecoView>;
+  setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
   setFormChoice(f: "auto" | "blue" | "red"): Promise<AppState>;
@@ -69,6 +104,14 @@ export const IPC = {
   setOpenAtLogin: "kayn:set-open-at-login",
   reloadConfig: "kayn:reload-config",
   openUserDataDir: "kayn:open-user-data",
+  setCollectorPaused: "kayn:set-collector-paused",
+  getMyGames: "kayn:get-my-games",
+  openStatsWindow: "kayn:open-stats-window",
+  openMetaWindow: "kayn:open-meta-window",
+  getMeta: "kayn:get-meta",
+  openRecoWindow: "kayn:open-reco-window",
+  getRecommendations: "kayn:get-recommendations",
+  setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",
   setFormChoice: "kayn:set-form-choice",

@@ -1,0 +1,8 @@
+.icons { display: inline-flex; gap: 3px; vertical-align: middle; }
+.icons img { width: 24px; height: 24px; border-radius: 4px; }
+.rune { display: inline-flex; align-items: center; gap: 6px; }
+.rune img { width: 22px; height: 22px; }
+.tag-prov { font-size: 11px; color: var(--warn); margin-left: 6px; }
+.margin { color: var(--muted); font-size: 11px; margin-left: 3px; }
+input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+td.left { text-align: left; }

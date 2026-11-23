@@ -28,6 +28,13 @@ describe("raccourcis", () => {
     expect(displayAccelerator("Alt+num5")).toBe("Alt+Pavé num. 5");
   });
 
+  it("champions exclus : Jax, Fiora et Camille par défaut, liste vide respectée", () => {
+    expect(parseSettings(null).excludedChampions).toEqual(["Jax", "Fiora", "Camille"]);
+    expect(parseSettings('{"excludedChampions":[]}').excludedChampions).toEqual([]);
+    expect(parseSettings('{"excludedChampions":["Jax","Jax","Kai Sa",3,"Riven"]}').excludedChampions).toEqual(["Jax", "Riven"]);
+    expect(parseSettings('{"excludedChampions":"Jax"}').excludedChampions).toEqual(["Jax", "Fiora", "Camille"]);
+  });
+
   it("garde un raccourci valide des réglages et remplace un raccourci invalide", () => {
     const s = parseSettings('{"shortcuts":{"toggle":"Alt+F9","move":"rm -rf"}}');
     expect(s.shortcuts).toEqual({ toggle: "Alt+F9", move: "CommandOrControl+Shift+L" });
