@@ -51,6 +51,9 @@ export class CollectorHost {
 
   isPaused(reason: string): boolean { return this.pauses.has(reason); }
 
+  /** Fin de partie : la collecte cherche la nouvelle partie sans attendre son rafraîchissement. */
+  checkNewGames(): void { this.send({ type: "checkNewGames" }); }
+
   stop(): void {
     if (!this.child) return;
     const c = this.child;

@@ -168,6 +168,7 @@ describe("résumé de mes parties", () => {
       matchId: "EUW1_1", account: "Moi#EUW", startMs: 2, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
       win: true, remake: false, kills: 8, deaths: 2, assists: 6, cs: 190, vision: 31, gold15: 5015, cs15: 90,
       teamKills: 12, kills15: 1, assists15: 1, teamKills15: 3,
+      cs10: null, objTeam: 0, objMine: 0, events: [], // événements sans position dans ce jeu d'essai
       items: [6699, 6697, 3158],
       perks: { primary: 8100, sub: 8300, selections: [8128, 8143, 8347], shards: [5008, 5008, 5011] },
     });

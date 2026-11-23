@@ -7,6 +7,7 @@
 // Aucune donnée d'identité d'autres joueurs n'est stockée.
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { MetaGame } from "./meta-parse.ts";
+import type { EarlyKill, PartExtra, RosterEntry } from "./timeline-parse.ts";
 
 export type JobStatus = "pending" | "running" | "done" | "failed";
 
@@ -48,13 +49,18 @@ export interface MyGame {
   kills15: number | null;
   assists15: number | null;
   teamKills15: number | null;
+  /** Chronologie (v6) : CS à 10 min, objectifs de ton équipe et ta participation, tes kills / morts / assists. */
+  cs10?: number | null;
+  objTeam?: number | null;
+  objMine?: number | null;
+  events?: { t: number; kind: "kill" | "death" | "assist"; x: number; y: number; otherChamp: number }[] | null;
   items: number[];
   /** Page de runes : style principal, secondaire, runes choisies, fragments. */
   perks: { primary: number; sub: number; selections: number[]; shards: number[] } | null;
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -190,6 +196,47 @@ export class CollectorStore {
         primary key (account, champion_id)
       );
       pragma user_version = 5;`));
+    // v6 : analyse d'après-partie et plan d'avant-partie.
+    // - méta : CS à 10/15 min, morts avant 15 min, objectifs, côté de départ du jungler, kills avant 15 min
+    //   (positions, champions et rôles, anonymes) ;
+    // - tes parties : CS à 10 min, objectifs, tes kills / morts / assists avec leur position. Les parties déjà
+    //   enregistrées sont relues (les 200 dernières par compte).
+    if (v < 6) this.tx(() => this.db.exec(`
+      alter table meta_parts add column cs10 integer;
+      alter table meta_parts add column cs15 integer;
+      alter table meta_parts add column deaths15 integer;
+      alter table meta_parts add column obj_team integer;
+      alter table meta_parts add column obj_mine integer;
+      alter table meta_parts add column start_side text;
+      create table meta_early_kills (
+        match_id text not null,
+        t integer not null,
+        x integer not null,
+        y integer not null,
+        lane text not null,
+        killer_champ integer not null,
+        killer_role text not null,
+        killer_team integer not null,
+        victim_champ integer not null,
+        victim_role text not null,
+        assist_roles text not null
+      );
+      create index meta_early_kills_match on meta_early_kills (match_id);
+      alter table my_games add column cs10 integer;
+      alter table my_games add column obj_team integer;
+      alter table my_games add column obj_mine integer;
+      alter table my_games add column timeline_v6 integer not null default 0;
+      create table my_events (
+        match_id text not null,
+        account text not null,
+        t integer not null,
+        kind text not null,
+        x integer not null,
+        y integer not null,
+        other_champ integer not null
+      );
+      create index my_events_game on my_events (match_id, account);
+      pragma user_version = 6;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -206,6 +253,17 @@ export class CollectorStore {
       putBuild: this.db.prepare("insert or replace into meta_builds (match_id, participant_id, champion_id, role, win, items) values (?, ?, ?, ?, ?, ?)"),
       putEarly: this.db.prepare("update meta_parts set kills15 = ?, assists15 = ?, team_kills15 = ?, gold15 = ? where match_id = ? and participant_id = ?"),
       metaTeams: this.db.prepare("select participant_id, team from meta_parts where match_id = ?"),
+      metaRoster: this.db.prepare("select participant_id, team, role, champion_id from meta_parts where match_id = ?"),
+      putExtra: this.db.prepare("update meta_parts set cs10 = ?, cs15 = ?, deaths15 = ?, obj_team = ?, obj_mine = ?, start_side = ? where match_id = ? and participant_id = ?"),
+      delEarly: this.db.prepare("delete from meta_early_kills where match_id = ?"),
+      putEarlyKill: this.db.prepare(`insert into meta_early_kills (match_id, t, x, y, lane, killer_champ, killer_role, killer_team, victim_champ, victim_role, assist_roles)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      putMyTimeline: this.db.prepare("update my_games set cs10 = ?, obj_team = ?, obj_mine = ?, timeline_v6 = 1 where match_id = ? and account = ?"),
+      delMyEvents: this.db.prepare("delete from my_events where match_id = ? and account = ?"),
+      putMyEvent: this.db.prepare("insert into my_events (match_id, account, t, kind, x, y, other_champ) values (?, ?, ?, ?, ?, ?, ?)"),
+      // Parmi tes N dernières parties, celles sans chronologie v6 (jamais au-delà : la relecture s'arrête là).
+      toTimeline: this.db.prepare(`select match_id from (select match_id, timeline_v6, remake, start_ms from my_games where account = ? order by start_ms desc limit ?)
+        where timeline_v6 = 0 and remake = 0 order by start_ms desc`),
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
       metaCount: this.db.prepare("select count(*) n, max(patch) p from meta_games"),
       metaPatches: this.db.prepare("select patch, count(*) n from meta_games group by patch"),
@@ -296,6 +354,38 @@ export class CollectorStore {
   set(key: string, value: string): void { this.st.kvSet.run(key, value); }
 
   putGame(g: MyGame): void {
+    this.tx(() => {
+      this.putGameRow(g);
+      // Chronologie lue : CS à 10 min, objectifs, tes événements (remplacés).
+      if (g.events) {
+        this.st.putMyTimeline.run(g.cs10 ?? null, g.objTeam ?? null, g.objMine ?? null, g.matchId, g.account);
+        this.st.delMyEvents.run(g.matchId, g.account);
+        for (const e of g.events) this.st.putMyEvent.run(g.matchId, g.account, e.t, e.kind, Math.round(e.x), Math.round(e.y), e.otherChamp);
+      }
+    });
+  }
+
+  /** Tes parties à relire pour la v6 (les plus récentes d'abord). */
+  gamesWithoutTimeline(account: string, limit: number): string[] {
+    return (this.st.toTimeline.all(account, limit) as { match_id: string }[]).map((r) => r.match_id);
+  }
+
+  /** Rôle, équipe et champion des participants d'une partie de méta. */
+  metaRoster(matchId: string): Map<number, RosterEntry> {
+    return new Map((this.st.metaRoster.all(matchId) as { participant_id: number; team: number; role: string; champion_id: number }[])
+      .map((r) => [r.participant_id, { team: r.team, role: r.role, championId: r.champion_id }]));
+  }
+
+  /** Données de chronologie (méta) : par participant, et kills de début de partie (remplacés). */
+  putMetaTimeline(matchId: string, extras: Map<number, PartExtra>, kills: EarlyKill[]): void {
+    for (const [pid, e] of extras) this.st.putExtra.run(e.cs10, e.cs15, e.deaths15, e.objTeam, e.objMine, e.startSide, matchId, pid);
+    this.st.delEarly.run(matchId);
+    for (const k of kills) {
+      this.st.putEarlyKill.run(matchId, k.t, Math.round(k.x), Math.round(k.y), k.lane, k.killerChamp, k.killerRole, k.killerTeam, k.victimChamp, k.victimRole, JSON.stringify(k.assistRoles));
+    }
+  }
+
+  private putGameRow(g: MyGame): void {
     this.st.putGame.run(g.matchId, g.account, g.startMs, g.durationS, g.patch, g.season, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0,
       g.kills, g.deaths, g.assists, g.cs, g.vision, g.gold15, g.cs15,
       g.teamKills, g.kills15, g.assists15, g.teamKills15, JSON.stringify(g.items), g.perks ? JSON.stringify(g.perks) : null);
@@ -360,7 +450,7 @@ export class CollectorStore {
     const marks = keep.map(() => "?").join(",");
     return this.tx(() => {
       const old = `select match_id from meta_games where patch not in (${marks})`;
-      for (const t of ["meta_parts", "meta_builds", "meta_mastery"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
+      for (const t of ["meta_parts", "meta_builds", "meta_mastery", "meta_early_kills"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
       return Number(this.db.prepare(`delete from meta_games where patch not in (${marks})`).run(...keep).changes);
     });
   }

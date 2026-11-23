@@ -1,5 +1,6 @@
 // Tes parties : match-v5 + chronologie → enregistrement compact (MyGame). Fonctions pures.
 import type { MyGame } from "./store.ts";
+import { csAt, myEvents, objectives, type TimelineFull } from "./timeline-parse.ts";
 
 /** Sous-ensemble utile de match-v5. */
 export interface MatchV5 {
@@ -31,15 +32,7 @@ export interface MatchV5 {
 }
 
 /** Sous-ensemble utile de la chronologie : une image par minute. */
-export interface TimelineV5 {
-  info: {
-    frames: {
-      timestamp: number;
-      participantFrames: Record<string, { totalGold: number; minionsKilled: number; jungleMinionsKilled: number }>;
-      events?: { type: string; timestamp: number; killerId?: number; victimId?: number; assistingParticipantIds?: number[] }[];
-    }[];
-  };
-}
+export type TimelineV5 = TimelineFull;
 
 /** « 16.23.734.1234 » → « 16.23 ». */
 export const patchOf = (gameVersion: string): string => gameVersion.split(".").slice(0, 2).join(".");
@@ -53,7 +46,7 @@ const MIN15 = 15 * 60_000;
 export function at15(t: TimelineV5 | null, participantId: number): { gold15: number | null; cs15: number | null } {
   const f = t?.info.frames.find((fr) => Math.abs(fr.timestamp - MIN15) <= 30_000);
   const p = f?.participantFrames[String(participantId)];
-  return p ? { gold15: p.totalGold, cs15: p.minionsKilled + p.jungleMinionsKilled } : { gold15: null, cs15: null };
+  return p ? { gold15: p.totalGold ?? 0, cs15: (p.minionsKilled ?? 0) + (p.jungleMinionsKilled ?? 0) } : { gold15: null, cs15: null };
 }
 
 /**
@@ -72,6 +65,17 @@ export function early15(t: TimelineV5 | null, participantId: number, team: Set<n
     }
   }
   return { kills15, assists15, teamKills15 };
+}
+
+function timelineExtras(t: TimelineV5, pid: number, team: number, m: MatchV5): Pick<MyGame, "cs10" | "objTeam" | "objMine" | "events"> {
+  const champOf = new Map(m.info.participants.map((x) => [x.participantId, x.championId]));
+  const o = objectives(t, pid, team);
+  return {
+    cs10: csAt(t, pid, 10),
+    objTeam: o.team,
+    objMine: o.mine,
+    events: myEvents(t, pid).map((e) => ({ t: e.t, kind: e.kind, x: e.x, y: e.y, otherChamp: champOf.get(e.other) ?? 0 })),
+  };
 }
 
 /** Résumé de ta partie ; null si tu n'y apparais pas. */
@@ -100,6 +104,9 @@ export function summarizeMyGame(m: MatchV5, t: TimelineV5 | null, puuid: string,
     vision: p.visionScore,
     ...(m.info.gameDuration >= 15 * 60 ? at15(t, p.participantId) : { gold15: null, cs15: null }),
     teamKills: mates.reduce((n, x) => n + x.kills, 0),
+    // Chronologie (v6) : CS à 10 min, objectifs, tes kills / morts / assists (positions ; l'autre participant
+    // n'est gardé que par son champion).
+    ...(t ? timelineExtras(t, p.participantId, p.teamId ?? (p.participantId <= 5 ? 100 : 200), m) : {}),
     kills15: e15?.kills15 ?? null,
     assists15: e15?.assists15 ?? null,
     teamKills15: e15?.teamKills15 ?? null,

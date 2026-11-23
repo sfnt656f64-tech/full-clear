@@ -7,6 +7,7 @@
 //   myMatch       une partie de la saison en cours + sa chronologie (2 requêtes) → my_games
 //   myOldMatch    idem pour une partie d'une saison précédente
 //   myMastery     ta maîtrise de champion (points, tous champions), une fois par jour et par compte
+//   myReread      relecture (v6) d'une de tes 200 dernières parties : chronologie complète (carte, objectifs)
 //   myRefresh     relecture d'une partie enregistrée avant la v4 (participation aux kills), une seule fois
 import { SEASON_START } from "../../scripts/riot/season.ts";
 import { parseRiotId } from "../../scripts/riot/config.ts";
@@ -37,7 +38,11 @@ export const historyKey = (puuid: string, start: number) => `myHistoryIds:${puui
 export const matchKey = (matchId: string, puuid: string) => `myMatch:${matchId}:${puuid}`;
 
 /** Ajoute (ou relance si le dernier passage est ancien) la recherche de parties pour tes comptes. */
-export function scheduleAccounts(ctx: JobContext, riotIds: string[]): void {
+/** Tes dernières parties relues pour l'analyse (v6), par compte. */
+export const REREAD_LAST = 200;
+
+/** `force` : vérifie tout de suite les nouvelles parties (fin de partie), sans attendre REFRESH_MS. */
+export function scheduleAccounts(ctx: JobContext, riotIds: string[], force = false): void {
   for (const riotId of riotIds) {
     const key = accountKey(riotId);
     const puuid = ctx.store.get(key);
@@ -45,8 +50,9 @@ export function scheduleAccounts(ctx: JobContext, riotIds: string[]): void {
       if (!ctx.store.enqueue("account", key, PRIORITY.mine, { riotId })) ctx.store.requeue(key);
       continue;
     }
-    refreshIds(ctx, puuid, riotId);
+    refreshIds(ctx, puuid, riotId, force);
     scheduleMastery(ctx, puuid, riotId);
+    scheduleReread(ctx, puuid, riotId);
   }
   scheduleRefresh(ctx, riotIds);
 }
@@ -65,6 +71,15 @@ const myMastery: Handler = async (ctx, p: { puuid: string; riotId: string }) => 
   ctx.store.putMyMastery(p.riotId, rows.map((r) => ({ championId: r.championId, points: r.championPoints, level: r.championLevel, lastPlayMs: r.lastPlayTime })));
 };
 
+/** Relecture v6 de tes dernières parties (carte des kills et morts, objectifs) : une fois par partie. */
+function scheduleReread(ctx: JobContext, puuid: string, riotId: string): void {
+  const todo = ctx.store.gamesWithoutTimeline(riotId, REREAD_LAST);
+  if (!todo.length) return;
+  ctx.store.tx(() => {
+    for (const matchId of todo) ctx.store.enqueue("myReread", `myReread:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId, prio: PRIORITY.mineOld });
+  });
+}
+
 /** Parties enregistrées avant la v4 : relues une fois, en priorité basse (clé unique : jamais deux fois). */
 function scheduleRefresh(ctx: JobContext, riotIds: string[]): void {
   const todo = ctx.store.gamesToRefresh();
@@ -79,12 +94,12 @@ function scheduleRefresh(ctx: JobContext, riotIds: string[]): void {
 }
 
 /** Relance la 1ʳᵉ page de la saison si elle date de plus de REFRESH_MS ; lance l'historique une fois. */
-function refreshIds(ctx: JobContext, puuid: string, riotId: string): void {
+function refreshIds(ctx: JobContext, puuid: string, riotId: string, force = false): void {
   ctx.store.enqueue("myHistoryIds", historyKey(puuid, 0), PRIORITY.mineOld, { puuid, riotId, start: 0 });
   const key = idsKey(puuid, 0);
   const st = ctx.store.jobStatus(key);
   if (!st) ctx.store.enqueue("myMatchIds", key, PRIORITY.mine, { puuid, riotId, start: 0 });
-  else if (st.status !== "pending" && st.status !== "running" && ctx.now() - st.updatedAt >= REFRESH_MS) ctx.store.requeue(key);
+  else if (st.status !== "pending" && st.status !== "running" && (force || ctx.now() - st.updatedAt >= REFRESH_MS)) ctx.store.requeue(key);
 }
 
 const account: Handler = async (ctx, p: { riotId: string }) => {
@@ -139,7 +154,7 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
 };
 
 export const HANDLERS: Record<string, Handler> = {
-  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery,
+  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch,
   metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
 };
 
@@ -151,6 +166,7 @@ export const JOB_LABELS: Record<string, string> = {
   myHistoryIds: "Listes de parties (anciennes saisons)",
   myOldMatch: "Mes parties (anciennes saisons)",
   myMastery: "Ma maîtrise de champion",
+  myReread: "Mes parties : relecture pour l'analyse",
   myRefresh: "Mes parties : participation aux kills (mise à jour)",
   ...META_LABELS,
 };

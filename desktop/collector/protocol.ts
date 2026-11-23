@@ -6,6 +6,8 @@ export type ToCollector =
   | { type: "configure"; apiKey: string; accounts: string[]; excluded: number[] }
   | { type: "pause"; reason: string }
   | { type: "resume"; reason: string }
+  /** Fin de partie : chercher tout de suite la nouvelle partie (analyse d'après-partie). */
+  | { type: "checkNewGames" }
   | { type: "stop" };
 
 export type FromCollector =

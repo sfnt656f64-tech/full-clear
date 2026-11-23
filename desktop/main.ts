@@ -141,6 +141,10 @@ const watcher = new ClientWatcher(
     // Pause de la collecte du chargement à la fin de la partie : rien ne doit gêner le jeu.
     collector?.setPaused("game", GAME_PHASES.has(phase));
     pushState();
+    // Fin de partie : Riot publie la partie après quelques minutes ; on la cherche à 2 puis 6 minutes.
+    if (phase === "EndOfGame" && prevPhase !== "EndOfGame") {
+      for (const ms of [2 * 60_000, 6 * 60_000]) setTimeout(() => collector?.checkNewGames(), ms).unref?.();
+    }
     if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
   },
   (snap) => {

@@ -44,6 +44,9 @@ port.on("message", ({ data: m }) => {
     case "resume":
       collector.resume(m.reason);
       break;
+    case "checkNewGames":
+      collector.checkNewGames();
+      break;
     case "stop":
       clearInterval(timer);
       collector.stop();
