@@ -20,6 +20,11 @@ export interface MyGameRow {
   vision: number;
   gold15: number | null;
   cs15: number | null;
+  /** Kills de ton équipe ; avant 15 min : tes kills, tes assists, ceux de ton équipe (null : pas encore relu ou sans chronologie). */
+  teamKills: number | null;
+  kills15: number | null;
+  assists15: number | null;
+  teamKills15: number | null;
 }
 
 export const ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;

@@ -12,7 +12,8 @@ const NOW = Date.UTC(2026, 10, 18);
 let n = 0;
 const g = (over: Partial<MyGameRow> = {}): MyGameRow => ({
   matchId: `EUW1_${n++}`, account: "Moi#EUW", startMs: NOW - DAY, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
-  win: true, remake: false, kills: 6, deaths: 3, assists: 9, cs: 180, vision: 30, gold15: 6000, cs15: 100, ...over,
+  win: true, remake: false, kills: 6, deaths: 3, assists: 9, cs: 180, vision: 30, gold15: 6000, cs15: 100,
+  teamKills: 30, kills15: 2, assists15: 3, teamKills15: 8, ...over,
 });
 const F = (over: Partial<StatsFilter> = {}): StatsFilter => ({ ...DEFAULT_FILTER, ...over });
 
@@ -97,13 +98,14 @@ describe("lecture de la base", () => {
       const store = new CollectorStore(file);
       const game: MyGame = {
         matchId: "EUW1_1", account: "Moi#EUW", startMs: 5, durationS: 1500, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
-        win: true, remake: false, kills: 1, deaths: 2, assists: 3, cs: 150, vision: 20, gold15: 5500, cs15: 95, items: [6699], perks: null,
+        win: true, remake: false, kills: 1, deaths: 2, assists: 3, cs: 150, vision: 20, gold15: 5500, cs15: 95, teamKills: 20, kills15: 1, assists15: 1, teamKills15: 4, items: [6699], perks: null,
       };
       store.putGame(game);
       // Lecture pendant que la collecte a la base ouverte (WAL).
       expect(readMyGames(file)).toEqual([{
         matchId: "EUW1_1", account: "Moi#EUW", startMs: 5, durationS: 1500, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
         win: true, remake: false, kills: 1, deaths: 2, assists: 3, cs: 150, vision: 20, gold15: 5500, cs15: 95,
+        teamKills: 20, kills15: 1, assists15: 1, teamKills15: 4,
       }]);
       store.close();
     } finally {
@@ -124,7 +126,11 @@ describe("lecture de la base", () => {
       v1.close();
       const store = new CollectorStore(file);
       store.close();
-      expect(readMyGames(file).map((x) => [x.matchId, x.season])).toEqual([["EUW1_1", 2026], ["EUW1_2", 2025]]);
+      expect(readMyGames(file).map((x) => [x.matchId, x.season, x.teamKills])).toEqual([["EUW1_1", 2026, null], ["EUW1_2", 2025, null]]);
+      // v4 : ces parties sont à relire une fois (participation aux kills).
+      const again = new CollectorStore(file);
+      expect(again.gamesToRefresh().map((x) => x.matchId).sort()).toEqual(["EUW1_1", "EUW1_2"]);
+      again.close();
     } finally {
       try { rmSync(dir, { recursive: true, force: true }); } catch { /* fichier encore verrouillé */ }
     }

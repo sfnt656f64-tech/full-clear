@@ -8,9 +8,10 @@ import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
 import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { readMyGames } from "./stats/read.ts";
-import { readMeta, readMetaPatches } from "./meta/read.ts";
+import { readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
+import { recommend } from "./reco/recommend.ts";
 import { metaStats } from "./meta/meta-stats.ts";
-import type { MetaView } from "./ipc.ts";
+import type { MetaView, RecoView } from "./ipc.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -173,6 +174,7 @@ function pushState(): void {
 
 let statsWin: BrowserWindow | null = null;
 let metaWin: BrowserWindow | null = null;
+let recoWin: BrowserWindow | null = null;
 const dbFile = () => join(app.getPath("userData"), "riot.db");
 
 /** Fenêtre d'outil (« Mes stats », « Méta ») : une seule de chaque, ré-affichée si déjà ouverte. */
@@ -209,6 +211,27 @@ function showStatsWindow(): void {
 
 function showMetaWindow(): void {
   metaWin = toolWindow(metaWin, "Kayn Sim · Méta", "meta-window/index.html", 1240, () => { metaWin = null; });
+}
+
+function showRecoWindow(): void {
+  recoWin = toolWindow(recoWin, "Kayn Sim · Champions recommandés", "reco-window/index.html", 1180, () => { recoWin = null; });
+}
+
+/** Patchs de méta pour les recommandations : les 2 derniers (équilibrage actuel, assez de parties). */
+const RECO_PATCHES = 2;
+let recoCache: { at: number; key: string; view: RecoView } | null = null;
+function getRecoView(): RecoView {
+  const excluded = excludedKeys();
+  const key = excluded.join(",");
+  if (recoCache && recoCache.key === key && Date.now() - recoCache.at < 60_000) return recoCache.view;
+  const patches = readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch);
+  const input = readMeta(dbFile(), patches);
+  const view: RecoView = {
+    ...recommend({ myGames: readMyGames(dbFile()), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(dbFile()), metaMatches: input.matches, excluded }),
+    patches,
+  };
+  recoCache = { at: Date.now(), key, view };
+  return view;
 }
 
 /** Méta calculée, gardée une minute (le calcul relit toute la base). */
@@ -262,6 +285,7 @@ function refreshTrayMenu(): void {
     { label: "Ouvrir Kayn Sim", click: () => showWindow() },
     { label: "Mes stats", click: () => showStatsWindow() },
     { label: "Méta", click: () => showMetaWindow() },
+    { label: "Champions recommandés", click: () => showRecoWindow() },
     { type: "separator" },
     {
       label: `Masquer / afficher l'overlay (${displayAccelerator(settings.shortcuts.toggle)})`,
@@ -321,6 +345,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openStatsWindow, () => showStatsWindow());
   ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
   ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
+  ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
+  ipcMain.handle(IPC.getRecommendations, () => getRecoView());
   ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
     // Seulement des champions qui existent (identifiants Data Dragon).
     settings.excludedChampions = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string" && !!findChamp(x)?.id))] : settings.excludedChampions;

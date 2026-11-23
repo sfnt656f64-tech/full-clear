@@ -288,6 +288,7 @@ function renderCollector(s: AppState): void {
 
 $("col-stats").addEventListener("click", () => void window.kayn.openStatsWindow());
 $("col-meta").addEventListener("click", () => void window.kayn.openMetaWindow());
+$("col-reco").addEventListener("click", () => void window.kayn.openRecoWindow());
 $("col-pause").addEventListener("click", async () => {
   const s = await window.kayn.getState();
   render(await window.kayn.setCollectorPaused(!s.collectorPaused));

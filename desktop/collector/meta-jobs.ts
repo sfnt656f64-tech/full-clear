@@ -4,14 +4,16 @@
 //                 joueurs actifs tirés au hasard, relus chaque semaine
 //   metaPlayer    les 10 dernières parties Solo/Duo du joueur (14 jours)
 //   metaMatch     la partie → 10 lignes anonymes ; maîtrise du joueur source sur son champion
-//   metaTimeline  ordre d'achat des items, seulement pour les champions de ton pool
+//   metaTimeline  ordre d'achat des items (champions de ton pool), et début de partie des 10 participants
+//                 (kills, assists avant 15 min, or à 15 min), pour les parties où figure un champion de ton pool
 //
 // Confidentialité : le PUUID d'un joueur ne sert qu'à interroger l'API. La clé de dédoublonnage est un
 // hachage, et le contenu des travaux metaPlayer / metaMatch est effacé une fois terminés.
 import { createHash } from "node:crypto";
 import { PRIORITY } from "./scheduler.ts";
 import type { JobContext } from "./jobs.ts";
-import { buildOrders, summarizeMetaMatch, type MetaMatchV5, type TimelineEventsV5 } from "./meta-parse.ts";
+import { buildOrders, earlyStats, summarizeMetaMatch, type MetaMatchV5, type TimelineEventsV5 } from "./meta-parse.ts";
+import type { TimelineV5 } from "./my-games.ts";
 
 const QUEUE = "RANKED_SOLO_5x5";
 const QUEUE_ID = 420;
@@ -127,10 +129,12 @@ export async function metaMatch(ctx: JobContext, p: { matchId: string; puuid: st
 }
 
 export async function metaTimeline(ctx: JobContext, p: { matchId: string; parts: { pid: number; championId: number; role: string; win: boolean }[] }): Promise<void> {
-  const t = await ctx.api.get<TimelineEventsV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}/timeline`, PRIORITY.meta, { allow404: true });
+  const t = await ctx.api.get<TimelineEventsV5 & TimelineV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}/timeline`, PRIORITY.meta, { allow404: true });
   if (!t) return;
   const orders = buildOrders(t, p.parts.map((x) => x.pid));
+  const early = earlyStats(t, ctx.store.metaTeams(p.matchId));
   ctx.store.tx(() => {
+    ctx.store.putEarly(p.matchId, early);
     for (const x of p.parts) ctx.store.putBuild(p.matchId, x.pid, x.championId, x.role, x.win, orders.get(x.pid) ?? []);
   });
 }

@@ -1,7 +1,7 @@
 // Lecture de la méta collectée (lecture seule ; le processus de collecte écrit en parallèle).
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import type { MetaInput, RunePage } from "./meta-stats.ts";
+import type { MetaInput, MetaMasteryRow, RunePage } from "./meta-stats.ts";
 
 export interface MetaPatchInfo { patch: string; games: number }
 
@@ -19,6 +19,14 @@ export function readMetaPatches(dbFile: string): MetaPatchInfo[] {
       .sort((a, b) => cmpPatchDesc(a.patch, b.patch)));
 }
 
+/** Maîtrise des joueurs sources, tous patchs en base (difficulté de prise en main : il faut beaucoup de parties). */
+export function readMetaMastery(dbFile: string): MetaMasteryRow[] {
+  return withDb(dbFile, [], (db) =>
+    (db.prepare("select m.champion_id, m.role, m.win, m.points from meta_mastery m join meta_games g on g.match_id = m.match_id where g.remake = 0").all() as
+      { champion_id: number; role: string; win: number; points: number }[])
+      .map((r) => ({ championId: r.champion_id, role: r.role, win: !!r.win, points: r.points })));
+}
+
 /** Données de méta des patchs demandés (hors remakes). */
 export function readMeta(dbFile: string, patches: string[]): MetaInput {
   const empty: MetaInput = { matches: 0, parts: [], builds: [], mastery: [], patches };
@@ -27,9 +35,16 @@ export function readMeta(dbFile: string, patches: string[]): MetaInput {
     const marks = patches.map(() => "?").join(",");
     const sel = `select match_id from meta_games where remake = 0 and patch in (${marks})`;
     const matches = (db.prepare(`select count(*) n from meta_games where remake = 0 and patch in (${marks})`).get(...patches) as { n: number }).n;
-    const parts = (db.prepare(`select match_id, champion_id, role, win, items, perks from meta_parts where match_id in (${sel})`).all(...patches) as
-      { match_id: string; champion_id: number; role: string; win: number; items: string; perks: string | null }[])
-      .map((r) => ({ matchId: r.match_id, championId: r.champion_id, role: r.role, win: !!r.win, items: JSON.parse(r.items) as number[], perks: r.perks ? (JSON.parse(r.perks) as RunePage) : null }));
+    const parts = (db.prepare(`select p.match_id, p.team, p.champion_id, p.role, p.win, p.kills, p.deaths, p.assists, p.items, p.perks,
+        p.kills15, p.assists15, p.team_kills15, p.gold15, g.duration_s
+        from meta_parts p join meta_games g on g.match_id = p.match_id where g.remake = 0 and g.patch in (${marks})`).all(...patches) as
+      { match_id: string; team: number; champion_id: number; role: string; win: number; kills: number; deaths: number; assists: number; items: string; perks: string | null;
+        kills15: number | null; assists15: number | null; team_kills15: number | null; gold15: number | null; duration_s: number }[])
+      .map((r) => ({
+        matchId: r.match_id, championId: r.champion_id, role: r.role, win: !!r.win, items: JSON.parse(r.items) as number[], perks: r.perks ? (JSON.parse(r.perks) as RunePage) : null,
+        team: r.team, kills: r.kills, deaths: r.deaths, assists: r.assists, durationS: r.duration_s,
+        kills15: r.kills15, assists15: r.assists15, teamKills15: r.team_kills15, gold15: r.gold15,
+      }));
     const builds = (db.prepare(`select champion_id, role, win, items from meta_builds where match_id in (${sel})`).all(...patches) as
       { champion_id: number; role: string; win: number; items: string }[])
       .map((r) => ({ championId: r.champion_id, role: r.role, win: !!r.win, items: JSON.parse(r.items) as number[] }));

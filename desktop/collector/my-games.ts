@@ -13,6 +13,7 @@ export interface MatchV5 {
     participants: {
       puuid: string;
       participantId: number;
+      teamId?: number;
       championId: number;
       teamPosition?: string;
       win: boolean;
@@ -31,7 +32,13 @@ export interface MatchV5 {
 
 /** Sous-ensemble utile de la chronologie : une image par minute. */
 export interface TimelineV5 {
-  info: { frames: { timestamp: number; participantFrames: Record<string, { totalGold: number; minionsKilled: number; jungleMinionsKilled: number }> }[] };
+  info: {
+    frames: {
+      timestamp: number;
+      participantFrames: Record<string, { totalGold: number; minionsKilled: number; jungleMinionsKilled: number }>;
+      events?: { type: string; timestamp: number; killerId?: number; victimId?: number; assistingParticipantIds?: number[] }[];
+    }[];
+  };
 }
 
 /** « 16.23.734.1234 » → « 16.23 ». */
@@ -49,12 +56,32 @@ export function at15(t: TimelineV5 | null, participantId: number): { gold15: num
   return p ? { gold15: p.totalGold, cs15: p.minionsKilled + p.jungleMinionsKilled } : { gold15: null, cs15: null };
 }
 
+/**
+ * Participation aux éliminations avant 15 min : tes kills et assists, et les kills de ton équipe
+ * (événements CHAMPION_KILL de la chronologie). null sans chronologie.
+ */
+export function early15(t: TimelineV5 | null, participantId: number, team: Set<number>): { kills15: number; assists15: number; teamKills15: number } | null {
+  if (!t) return null;
+  let kills15 = 0, assists15 = 0, teamKills15 = 0;
+  for (const fr of t.info.frames) {
+    for (const e of fr.events ?? []) {
+      if (e.type !== "CHAMPION_KILL" || e.timestamp >= MIN15 || !e.killerId || !team.has(e.killerId)) continue;
+      teamKills15++;
+      if (e.killerId === participantId) kills15++;
+      else if (e.assistingParticipantIds?.includes(participantId)) assists15++;
+    }
+  }
+  return { kills15, assists15, teamKills15 };
+}
+
 /** Résumé de ta partie ; null si tu n'y apparais pas. */
 export function summarizeMyGame(m: MatchV5, t: TimelineV5 | null, puuid: string, account: string): MyGame | null {
   const p = m.info.participants.find((x) => x.puuid === puuid);
   if (!p) return null;
   const styles = p.perks?.styles ?? [];
   const sp = p.perks?.statPerks;
+  const mates = m.info.participants.filter((x) => p.teamId == null || x.teamId === p.teamId);
+  const e15 = early15(t, p.participantId, new Set(mates.map((x) => x.participantId)));
   return {
     matchId: m.metadata.matchId,
     account,
@@ -72,6 +99,10 @@ export function summarizeMyGame(m: MatchV5, t: TimelineV5 | null, puuid: string,
     cs: p.totalMinionsKilled + p.neutralMinionsKilled,
     vision: p.visionScore,
     ...(m.info.gameDuration >= 15 * 60 ? at15(t, p.participantId) : { gold15: null, cs15: null }),
+    teamKills: mates.reduce((n, x) => n + x.kills, 0),
+    kills15: e15?.kills15 ?? null,
+    assists15: e15?.assists15 ?? null,
+    teamKills15: e15?.teamKills15 ?? null,
     items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5].filter((i) => i > 0),
     perks: styles.length >= 2 && sp
       ? { primary: styles[0].style, sub: styles[1].style, selections: styles.flatMap((s) => s.selections.map((x) => x.perk)), shards: [sp.offense, sp.flex, sp.defense] }

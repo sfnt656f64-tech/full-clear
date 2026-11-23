@@ -122,7 +122,7 @@ describe("collecte de la méta", () => {
     const file = tmpDb();
     const store = new CollectorStore(file);
     // Ton pool : Kayn (au moins 3 parties).
-    for (let i = 0; i < 3; i++) store.putGame({ matchId: `M${i}`, account: "Moi#EUW", startMs: 1, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE", win: true, remake: false, kills: 1, deaths: 1, assists: 1, cs: 1, vision: 1, gold15: null, cs15: null, items: [], perks: null });
+    for (let i = 0; i < 3; i++) store.putGame({ matchId: `M${i}`, account: "Moi#EUW", startMs: 1, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE", win: true, remake: false, kills: 1, deaths: 1, assists: 1, cs: 1, vision: 1, gold15: null, cs15: null, teamKills: 10, kills15: null, assists15: null, teamKills15: null, items: [], perks: null });
     const calls: string[] = [];
     const f = (async (url: string) => {
       const u = new URL(url);

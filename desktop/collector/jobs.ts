@@ -6,6 +6,7 @@
 //                 jusqu'à ce que l'API ne renvoie plus rien), en priorité plus basse
 //   myMatch       une partie de la saison en cours + sa chronologie (2 requêtes) → my_games
 //   myOldMatch    idem pour une partie d'une saison précédente
+//   myRefresh     relecture d'une partie enregistrée avant la v4 (participation aux kills), une seule fois
 import { SEASON_START } from "../../scripts/riot/season.ts";
 import { parseRiotId } from "../../scripts/riot/config.ts";
 import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
@@ -45,6 +46,20 @@ export function scheduleAccounts(ctx: JobContext, riotIds: string[]): void {
     }
     refreshIds(ctx, puuid, riotId);
   }
+  scheduleRefresh(ctx, riotIds);
+}
+
+/** Parties enregistrées avant la v4 : relues une fois, en priorité basse (clé unique : jamais deux fois). */
+function scheduleRefresh(ctx: JobContext, riotIds: string[]): void {
+  const todo = ctx.store.gamesToRefresh();
+  if (!todo.length) return;
+  ctx.store.tx(() => {
+    for (const g of todo) {
+      const riotId = riotIds.find((r) => r === g.account);
+      const puuid = riotId && ctx.store.get(accountKey(riotId));
+      if (puuid) ctx.store.enqueue("myRefresh", `myRefresh:${g.matchId}:${puuid}`, PRIORITY.mineOld, { matchId: g.matchId, puuid, riotId, prio: PRIORITY.mineOld });
+    }
+  });
 }
 
 /** Relance la 1ʳᵉ page de la saison si elle date de plus de REFRESH_MS ; lance l'historique une fois. */
@@ -107,7 +122,7 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
 };
 
 export const HANDLERS: Record<string, Handler> = {
-  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch,
+  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch,
   metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
 };
 
@@ -118,5 +133,6 @@ export const JOB_LABELS: Record<string, string> = {
   myMatch: "Mes parties (saison)",
   myHistoryIds: "Listes de parties (anciennes saisons)",
   myOldMatch: "Mes parties (anciennes saisons)",
+  myRefresh: "Mes parties : participation aux kills (mise à jour)",
   ...META_LABELS,
 };

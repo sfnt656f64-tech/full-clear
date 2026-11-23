@@ -2,7 +2,7 @@
 // Aucune identité n'est gardée : ni PUUID, ni Riot ID, ni pseudo. Fonctions pures.
 import itemIndex from "../../src/data/generated/item-index.json";
 import { STARTER_ITEM_IDS } from "../../src/data/starters";
-import { patchOf } from "./my-games.ts";
+import { at15, early15, patchOf, type TimelineV5 } from "./my-games.ts";
 
 export interface MetaMatchV5 {
   metadata: { matchId: string };
@@ -88,6 +88,22 @@ export const isBuildItem = (id: number): boolean => BUILD_ITEMS.has(String(id));
 
 export interface TimelineEventsV5 {
   info: { frames: { events: { type: string; participantId?: number; itemId?: number; beforeId?: number; afterId?: number; timestamp: number }[] }[] };
+}
+
+export interface EarlyStats { kills15: number; assists15: number; teamKills15: number; gold15: number | null }
+
+/**
+ * Début de partie de chaque participant (anonyme) : kills et assists avant 15 min, kills de son équipe
+ * avant 15 min, or à 15 min. `teams` : équipe de chaque participant.
+ */
+export function earlyStats(t: TimelineV5, teams: Map<number, number>): Map<number, EarlyStats> {
+  const out = new Map<number, EarlyStats>();
+  for (const [pid, team] of teams) {
+    const mates = new Set([...teams].filter(([, tm]) => tm === team).map(([p]) => p));
+    const e = early15(t, pid, mates)!;
+    out.set(pid, { ...e, gold15: at15(t, pid).gold15 });
+  }
+  return out;
 }
 
 /**

@@ -137,11 +137,28 @@ function match(id: string, over: Partial<MatchV5["info"]["participants"][number]
     metadata: { matchId: id },
     info: {
       gameCreation: 1, gameStartTimestamp: 2, gameDuration: durationS, gameVersion: "16.23.734.1", queueId: 420,
-      participants: [{ ...base, puuid: ME, ...over }, { ...base, puuid: "autre", participantId: 2, championId: 1 }],
+      participants: [
+        { ...base, puuid: ME, teamId: 100, ...over },
+        { ...base, puuid: "autre", participantId: 2, teamId: 200, championId: 1 },
+        { ...base, puuid: "allie", participantId: 3, teamId: 100, championId: 2, kills: 4 },
+      ],
     },
   };
 }
-const timeline: TimelineV5 = { info: { frames: [0, 1, 15].map((m) => ({ timestamp: m * 60_000 + 25, participantFrames: { 1: { totalGold: 5000 + m, minionsKilled: 10, jungleMinionsKilled: 80 }, 2: { totalGold: 1, minionsKilled: 1, jungleMinionsKilled: 1 } } })) } };
+/** Avant 15 min : 1 kill à moi, 1 kill d'un allié avec mon assist, 1 kill allié sans moi, 1 kill ennemi ; après 15 min : 1 kill à moi. */
+const KILLS = [
+  { type: "CHAMPION_KILL", timestamp: 4 * 60_000, killerId: 1, victimId: 2 },
+  { type: "CHAMPION_KILL", timestamp: 6 * 60_000, killerId: 3, victimId: 2, assistingParticipantIds: [1] },
+  { type: "CHAMPION_KILL", timestamp: 8 * 60_000, killerId: 3, victimId: 2 },
+  { type: "CHAMPION_KILL", timestamp: 9 * 60_000, killerId: 2, victimId: 1 },
+  { type: "WARD_PLACED", timestamp: 9 * 60_000 },
+  { type: "CHAMPION_KILL", timestamp: 16 * 60_000, killerId: 1, victimId: 2 },
+];
+const timeline: TimelineV5 = { info: { frames: [0, 1, 15].map((m) => ({
+  timestamp: m * 60_000 + 25,
+  participantFrames: { 1: { totalGold: 5000 + m, minionsKilled: 10, jungleMinionsKilled: 80 }, 2: { totalGold: 1, minionsKilled: 1, jungleMinionsKilled: 1 } },
+  events: m === 1 ? KILLS : [],
+})) } };
 
 describe("résumé de mes parties", () => {
   it("garde mes stats, l'or et les CS à 15 min, les items et les runes", () => {
@@ -149,6 +166,7 @@ describe("résumé de mes parties", () => {
     expect(g).toEqual({
       matchId: "EUW1_1", account: "Moi#EUW", startMs: 2, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
       win: true, remake: false, kills: 8, deaths: 2, assists: 6, cs: 190, vision: 31, gold15: 5015, cs15: 90,
+      teamKills: 12, kills15: 1, assists15: 1, teamKills15: 3,
       items: [6699, 6697, 3158],
       perks: { primary: 8100, sub: 8300, selections: [8128, 8143, 8347], shards: [5008, 5008, 5011] },
     });

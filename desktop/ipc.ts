@@ -4,6 +4,10 @@ import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
 import type { MetaChampion } from "./meta/meta-stats.ts";
 import type { MetaPatchInfo } from "./meta/read.ts";
+import type { Recommendations } from "./reco/recommend.ts";
+
+/** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
+export interface RecoView extends Recommendations { patches: string[] }
 
 /** Méta calculée pour la fenêtre « Méta ». */
 export interface MetaView {
@@ -81,6 +85,8 @@ export interface KaynApi {
   openMetaWindow(): Promise<void>;
   /** Méta des `scope` derniers patchs (1 à 3). */
   getMeta(scope: number): Promise<MetaView>;
+  openRecoWindow(): Promise<void>;
+  getRecommendations(): Promise<RecoView>;
   setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
@@ -103,6 +109,8 @@ export const IPC = {
   openStatsWindow: "kayn:open-stats-window",
   openMetaWindow: "kayn:open-meta-window",
   getMeta: "kayn:get-meta",
+  openRecoWindow: "kayn:open-reco-window",
+  getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",

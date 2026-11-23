@@ -2,7 +2,12 @@
 import itemIndex from "../../src/data/generated/item-index.json";
 import { STARTERS } from "../../src/data/starters";
 
-export interface MetaPartRow { matchId: string; championId: number; role: string; win: boolean; items: number[]; perks: RunePage | null }
+export interface MetaPartRow {
+  matchId: string; championId: number; role: string; win: boolean; items: number[]; perks: RunePage | null;
+  /** Pour le style de jeu (« À essayer ») : équipe, KDA, durée ; début de partie si la chronologie a été lue. */
+  team?: number; kills?: number; deaths?: number; assists?: number; durationS?: number;
+  kills15?: number | null; assists15?: number | null; teamKills15?: number | null; gold15?: number | null;
+}
 export interface MetaBuildRow { championId: number; role: string; win: boolean; items: number[] }
 export interface MetaMasteryRow { championId: number; role: string; win: boolean; points: number }
 export interface RunePage { primary: number; sub: number; selections: number[]; shards: number[] }

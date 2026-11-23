@@ -42,13 +42,19 @@ export interface MyGame {
   /** Or et CS à 15 min (chronologie), null si la partie a duré moins de 15 min ou sans chronologie. */
   gold15: number | null;
   cs15: number | null;
+  /** Kills de ton équipe (toute la partie). */
+  teamKills: number;
+  /** Avant 15 min (chronologie) : tes kills, tes assists, les kills de ton équipe. null sans chronologie. */
+  kills15: number | null;
+  assists15: number | null;
+  teamKills15: number | null;
   items: number[];
   /** Page de runes : style principal, secondaire, runes choisies, fragments. */
   perks: { primary: number; sub: number; selections: number[]; shards: number[] } | null;
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -160,6 +166,19 @@ export class CollectorStore {
       update my_games set season = 2010 + cast(substr(patch, 1, instr(patch, '.') - 1) as integer);
       pragma user_version = 2;`));
     if (v < 3) this.tx(() => this.db.exec(SCHEMA_V3));
+    // v4 : participation aux kills (toute la partie et avant 15 min) et, pour la méta, début de partie
+    // (kills, assists, kills d'équipe avant 15 min, or à 15 min) quand la chronologie est lue. Les parties déjà enregistrées
+    // sont relues une fois (team_kills null) par la collecte.
+    if (v < 4) this.tx(() => this.db.exec(`
+      alter table my_games add column team_kills integer;
+      alter table my_games add column kills15 integer;
+      alter table my_games add column assists15 integer;
+      alter table my_games add column team_kills15 integer;
+      alter table meta_parts add column kills15 integer;
+      alter table meta_parts add column assists15 integer;
+      alter table meta_parts add column team_kills15 integer;
+      alter table meta_parts add column gold15 integer;
+      pragma user_version = 4;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -174,6 +193,8 @@ export class CollectorStore {
       putMetaPart: this.db.prepare(`insert or ignore into meta_parts (match_id, participant_id, team, champion_id, role, win, kills, deaths, assists, items, perks)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
       putBuild: this.db.prepare("insert or replace into meta_builds (match_id, participant_id, champion_id, role, win, items) values (?, ?, ?, ?, ?, ?)"),
+      putEarly: this.db.prepare("update meta_parts set kills15 = ?, assists15 = ?, team_kills15 = ?, gold15 = ? where match_id = ? and participant_id = ?"),
+      metaTeams: this.db.prepare("select participant_id, team from meta_parts where match_id = ?"),
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
       metaCount: this.db.prepare("select count(*) n, max(patch) p from meta_games"),
       metaPatches: this.db.prepare("select patch, count(*) n from meta_games group by patch"),
@@ -185,8 +206,10 @@ export class CollectorStore {
       kvGet: this.db.prepare("select value from kv where key = ?"),
       kvSet: this.db.prepare("insert into kv (key, value) values (?, ?) on conflict(key) do update set value = excluded.value"),
       putGame: this.db.prepare(`insert or replace into my_games
-        (match_id, account, start_ms, duration_s, patch, season, champion_id, role, win, remake, kills, deaths, assists, cs, vision, gold15, cs15, items, perks)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+        (match_id, account, start_ms, duration_s, patch, season, champion_id, role, win, remake, kills, deaths, assists, cs, vision, gold15, cs15,
+         team_kills, kills15, assists15, team_kills15, items, perks)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      toRefresh: this.db.prepare("select match_id, account from my_games where team_kills is null and remake = 0"),
       countGames: this.db.prepare("select account, count(*) n from my_games group by account"),
     };
   }
@@ -263,7 +286,13 @@ export class CollectorStore {
 
   putGame(g: MyGame): void {
     this.st.putGame.run(g.matchId, g.account, g.startMs, g.durationS, g.patch, g.season, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0,
-      g.kills, g.deaths, g.assists, g.cs, g.vision, g.gold15, g.cs15, JSON.stringify(g.items), g.perks ? JSON.stringify(g.perks) : null);
+      g.kills, g.deaths, g.assists, g.cs, g.vision, g.gold15, g.cs15,
+      g.teamKills, g.kills15, g.assists15, g.teamKills15, JSON.stringify(g.items), g.perks ? JSON.stringify(g.perks) : null);
+  }
+
+  /** Parties enregistrées avant la v4, à relire une fois (participation aux kills). */
+  gamesToRefresh(): { matchId: string; account: string }[] {
+    return (this.st.toRefresh.all() as { match_id: string; account: string }[]).map((r) => ({ matchId: r.match_id, account: r.account }));
   }
 
   // ---------- Méta ----------
@@ -283,6 +312,16 @@ export class CollectorStore {
 
   putBuild(matchId: string, participantId: number, championId: number, role: string, win: boolean, items: number[]): void {
     this.st.putBuild.run(matchId, participantId, championId, role, win ? 1 : 0, JSON.stringify(items));
+  }
+
+/** Début de partie (anonyme) des participants d'une partie de méta. */
+  putEarly(matchId: string, rows: Map<number, { kills15: number; assists15: number; teamKills15: number; gold15: number | null }>): void {
+    for (const [pid, e] of rows) this.st.putEarly.run(e.kills15, e.assists15, e.teamKills15, e.gold15, matchId, pid);
+  }
+
+  /** Équipe de chaque participant d'une partie de méta. */
+  metaTeams(matchId: string): Map<number, number> {
+    return new Map((this.st.metaTeams.all(matchId) as { participant_id: number; team: number }[]).map((r) => [r.participant_id, r.team]));
   }
 
   putMastery(matchId: string, championId: number, role: string, win: boolean, points: number): void {
