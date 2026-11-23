@@ -13,6 +13,7 @@ const api: KaynApi = {
   openMetaWindow: () => ipcRenderer.invoke(IPC.openMetaWindow),
   getMeta: (scope) => ipcRenderer.invoke(IPC.getMeta, scope),
   openRecoWindow: () => ipcRenderer.invoke(IPC.openRecoWindow),
+  importRunes: () => ipcRenderer.invoke(IPC.importRunes),
   getRecommendations: () => ipcRenderer.invoke(IPC.getRecommendations),
   setExcludedChampions: (ids) => ipcRenderer.invoke(IPC.setExcludedChampions, ids),
   openDraftInSimulator: () => ipcRenderer.invoke(IPC.openDraftInSimulator),

@@ -86,6 +86,8 @@ export interface KaynApi {
   /** Méta des `scope` derniers patchs (1 à 3). */
   getMeta(scope: number): Promise<MetaView>;
   openRecoWindow(): Promise<void>;
+  /** Importe la page de runes recommandée de la draft en cours dans le client. */
+  importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;
   setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
@@ -110,6 +112,7 @@ export const IPC = {
   openMetaWindow: "kayn:open-meta-window",
   getMeta: "kayn:get-meta",
   openRecoWindow: "kayn:open-reco-window",
+  importRunes: "kayn:import-runes",
   getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",

@@ -12,6 +12,10 @@ import { readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
 import { recommend } from "./reco/recommend.ts";
 import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "./reco/draft-pick.ts";
 import type { DraftSnapshot } from "./champ-select.ts";
+import { guidePage, metaPage, type RecommendedPage } from "./runes/rune-page.ts";
+import { importRunePage, lcuPerks } from "./runes/import.ts";
+import type { LcuCredentials } from "./lcu.ts";
+import { champByKey } from "../src/data/champions";
 import { metaStats } from "./meta/meta-stats.ts";
 import type { MetaView, RecoView } from "./ipc.ts";
 import { findChamp } from "../src/data/champions";
@@ -88,7 +92,8 @@ const live = new LiveWatcher((snap) => {
 
 const watcher = new ClientWatcher(
   () => config?.riotIds ?? [],
-  (s) => {
+  (s, creds) => {
+    lcuCreds = creds;
     const phase = s.kind === "connected" ? s.phase : "";
     if (phase === "ChampSelect" && prevPhase !== "ChampSelect") {
       draft = null;
@@ -106,6 +111,7 @@ const watcher = new ClientWatcher(
   (snap) => {
     draft = buildDraftView(snap);
     draft.picks = safePicks(snap);
+    draft.runePage = safeRunePage(snap, draft);
     draftAt = Date.now();
     pushState();
   },
@@ -247,6 +253,45 @@ function getPairIndex(): PairIndex {
 }
 
 const DRAFT_ROLES: Record<string, string> = { jungle: "JUNGLE", middle: "MIDDLE" };
+const ALL_ROLES: Record<string, string> = { top: "TOP", jungle: "JUNGLE", middle: "MIDDLE", bottom: "BOTTOM", utility: "UTILITY" };
+
+let lcuCreds: LcuCredentials | null = null;
+
+/** Lignes de méta des patchs récents (runes), gardées 5 minutes. */
+let partsCache: { at: number; parts: ReturnType<typeof readMeta>["parts"] } | null = null;
+function recentParts(): ReturnType<typeof readMeta>["parts"] {
+  if (partsCache && Date.now() - partsCache.at < 5 * 60_000) return partsCache.parts;
+  partsCache = { at: Date.now(), parts: readMeta(dbFile(), readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch)).parts };
+  return partsCache.parts;
+}
+
+/**
+ * Page de runes du champion survolé ou verrouillé : guide pour Kayn (forme recommandée connue),
+ * sinon la méta Émeraude+ récente dans ton rôle (ou son rôle le plus joué).
+ */
+function safeRunePage(snap: DraftSnapshot, view: DraftView): (RecommendedPage & { championName: string }) | null {
+  const id = snap.me.championId || snap.me.intentId;
+  const ch = id ? champByKey(id) : undefined;
+  if (!ch) return null;
+  try {
+    if (view.isKayn && view.form) {
+      const g = guidePage(view.form.value);
+      if (g) return { ...g, championName: ch.name };
+    }
+    const rows = recentParts().filter((p) => p.championId === id);
+    let role = ALL_ROLES[snap.me.position];
+    if (!role || rows.filter((r) => r.role === role).length < 20) {
+      const counts = new Map<string, number>();
+      for (const r of rows) if (r.role) counts.set(r.role, (counts.get(r.role) ?? 0) + 1);
+      role = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? role;
+    }
+    const page = metaPage(rows.filter((r) => r.role === role), ch.nameEn ?? ch.name);
+    return page ? { ...page, championName: ch.name } : null;
+  } catch (e) {
+    console.error("Page de runes :", e);
+    return null;
+  }
+}
 
 /** Tes meilleurs choix pour cette draft (jungle ou milieu seulement) ; jamais d'erreur bloquante pour la draft. */
 let picksMemo: { key: string; at: number; value: DraftPicks | null } | null = null;
@@ -396,6 +441,16 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
   ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
   ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
+  ipcMain.handle(IPC.importRunes, async () => {
+    const page = draft?.runePage;
+    if (!page) return { ok: false, message: "Pas de page de runes à importer pour l'instant." };
+    if (!lcuCreds) return { ok: false, message: "Client LoL non détecté." };
+    try {
+      return await importRunePage(lcuPerks(lcuCreds), page);
+    } catch (e) {
+      return { ok: false, message: `Le client a refusé l'import (${e instanceof Error ? e.message : String(e)}).` };
+    }
+  });
   ipcMain.handle(IPC.getRecommendations, () => getRecoView());
   ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
     // Seulement des champions qui existent (identifiants Data Dragon).

@@ -10,6 +10,7 @@ import { draftReport, MIN_ENEMIES } from "../src/engine/draft";
 import { encodeDraft } from "../src/engine/draft-link";
 import type { DraftSnapshot } from "./champ-select.ts";
 import type { DraftPicks } from "./reco/draft-pick.ts";
+import type { RecommendedPage } from "./runes/rune-page.ts";
 
 export const KAYN_KEY = 141;
 export const DDRAGON_IMG = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img`;
@@ -55,6 +56,8 @@ export interface DraftView {
   link: string;
   /** Choix du champion (jungle, milieu) selon la draft ; ajouté par le processus principal. */
   picks?: DraftPicks | null;
+  /** Page de runes recommandée pour le champion survolé ou verrouillé (importable) ; ajoutée par le processus principal. */
+  runePage?: (RecommendedPage & { championName: string }) | null;
 }
 
 const lite = (c: Champion): ChampLite => ({ id: c.id ?? c.name, name: c.name, icon: `${DDRAGON_IMG}/champion/${c.image ?? `${c.id}.png`}` });

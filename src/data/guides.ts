@@ -51,14 +51,14 @@ export const RUNES: Record<Form, RunePage> = {
     title: "Runes (Assassin)",
     primary: ["Domination", "Dark Harvest · Sudden Impact · Grisly Mementos · Treasure Hunter"],
     secondary: ["Inspiration", "Cosmic Insight · Magical Footwear"],
-    shards: "Adaptive ×2, PV évolutifs",
+    shards: "Adaptive Force ×2, Health Scaling",
     note: "Alternative à fort WR : Hail of Blades (53,5 % sur 2 446 parties, Mobalytics).",
   },
   red: {
     title: "Runes (Rhaast)",
-    primary: ["Précision", "Conqueror · Triumph · Legend: Haste · Last Stand"],
-    secondary: ["Sorcellerie", "Axiom Arcanist · Transcendence"],
-    shards: "Adaptive ×2, PV évolutifs",
+    primary: ["Precision", "Conqueror · Triumph · Legend: Haste · Last Stand"],
+    secondary: ["Sorcery", "Axiom Arcanist · Transcendence"],
+    shards: "Adaptive Force ×2, Health Scaling",
     note: "Last Stand est clé : le soin de Rhaast dépend des dégâts infligés. En rouge, reste sur les bottes de base et rushe 2 items avant de les finir.",
   },
 };

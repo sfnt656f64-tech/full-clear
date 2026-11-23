@@ -3,6 +3,7 @@ import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { champByKey } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
+import { runeIconUrl, runeName, RUNE_TREES, RUNES_BY_ID } from "../../src/data/runes";
 
 declare global {
   interface Window { kayn: KaynApi }
@@ -67,6 +68,39 @@ function slots(list: (DraftView["enemies"][number])[], side: "en" | "al"): HTMLE
 const CDN_CHAMP = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/`;
 const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
 
+/** Page de runes recommandée, avec le bouton d'import dans le client. */
+function renderRunePage(p: NonNullable<DraftView["runePage"]>, note: string | null): HTMLElement {
+  const runeIcon = (id: number, cls: string) => {
+    const r = RUNES_BY_ID[id];
+    return r ? icon(runeIconUrl(r.icon), runeName(id), cls) : h("span", { class: cls });
+  };
+  const tree = (id: number) => RUNE_TREES[id]?.nameEn ?? String(id);
+  const source = p.source === "guide"
+    ? "Guide Kayn pour la forme recommandée."
+    : `Page la plus jouée en Émeraude+ avec ${runeName(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % de victoires.`;
+  const status = h("p", { class: "small muted", role: "status" });
+  const btn = h("button", { type: "button" }, "Importer dans le client") as HTMLButtonElement;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    status.textContent = "Import…";
+    const r = await window.kayn.importRunes();
+    status.textContent = r.message;
+    status.className = `small ${r.ok ? "ok-text" : "warn-text"}`;
+    btn.disabled = false;
+  });
+  return h("div", { class: "rune-page" },
+    h("h3", {}, `Runes · ${p.championName}`),
+    h("div", { class: "rune-row" }, runeIcon(p.selections[0], "keystone"), ...p.selections.slice(1, 4).map((id) => runeIcon(id, "rune")),
+      h("span", { class: "rune-sep" }), ...p.selections.slice(4).map((id) => runeIcon(id, "rune"))),
+    h("p", { class: "small" }, h("b", {}, `${tree(p.primary)} : `), p.selections.slice(0, 4).map(runeName).join(" · ")),
+    h("p", { class: "small" }, h("b", {}, `${tree(p.sub)} : `), p.selections.slice(4).map(runeName).join(" · ")),
+    h("p", { class: "small muted" }, `Shards : ${p.shards.map(runeName).join(", ")}`),
+    note ? boldText(note) : null,
+    h("p", { class: "small muted" }, source),
+    h("div", { class: "row" }, btn),
+    status);
+}
+
 /** Tes meilleurs choix pour cette draft : mis en avant, c'est toi qui choisis. */
 function renderPicks(p: NonNullable<DraftView["picks"]>): HTMLElement {
   const card = (x: NonNullable<DraftView["picks"]>["list"][number], i: number | null) => {
@@ -112,6 +146,7 @@ function renderDraft(s: AppState): void {
   body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
   body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
   if (d.picks) body.push(renderPicks(d.picks));
+  if (d.runePage) body.push(renderRunePage(d.runePage, d.isKayn && d.runes ? d.runes.note : null));
   // Section Kayn (forme, runes, build) : seulement si tu survoles ou as verrouillé Kayn.
   if (!d.isKayn) {
     $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
@@ -130,7 +165,7 @@ function renderDraft(s: AppState): void {
     body.push(h("ul", { class: "why small" }, ...f.why.map((w) => h("li", {}, w))));
   }
 
-  if (d.runes) {
+  if (d.runes && !d.runePage) {
     const r = d.runes;
     body.push(h("div", { class: "runes" },
       h("h3", {}, r.title),

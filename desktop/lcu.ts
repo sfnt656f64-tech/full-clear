@@ -82,16 +82,29 @@ export function lcuGet<T>(creds: LcuCredentials, path: string, timeoutMs = 4000)
   return localGet<T>(creds.port, path, { Authorization: `Basic ${Buffer.from(`riot:${creds.token}`).toString("base64")}` }, timeoutMs);
 }
 
+/**
+ * Écriture sur l'API locale du client (pages de runes uniquement, à ta demande : bouton « Importer »).
+ * null pour un 404 ou une réponse vide.
+ */
+export function lcuRequest<T>(creds: LcuCredentials, method: "POST" | "PUT" | "DELETE", path: string, body?: unknown, timeoutMs = 4000): Promise<T | null> {
+  return localRequest<T>(creds.port, method, path, { Authorization: `Basic ${Buffer.from(`riot:${creds.token}`).toString("base64")}` }, body, timeoutMs);
+}
+
 /** GET JSON sur 127.0.0.1 (LCU ou API en jeu du port 2999). null pour un 404. */
 export function localGet<T>(port: number, path: string, headers: Record<string, string> = {}, timeoutMs = 4000): Promise<T | null> {
+  return localRequest<T>(port, "GET", path, headers, undefined, timeoutMs);
+}
+
+function localRequest<T>(port: number, method: string, path: string, headers: Record<string, string>, body: unknown, timeoutMs: number): Promise<T | null> {
   return new Promise((ok, fail) => {
+    const payload = body === undefined ? null : Buffer.from(JSON.stringify(body), "utf8");
     const req = request({
       host: "127.0.0.1",
       port,
       path,
-      method: "GET",
+      method,
       agent: localAgent,
-      headers: { ...headers, Accept: "application/json" },
+      headers: { ...headers, Accept: "application/json", ...(payload ? { "Content-Type": "application/json", "Content-Length": String(payload.length) } : {}) },
       timeout: timeoutMs,
     }, (res) => {
       const chunks: Buffer[] = [];
@@ -106,7 +119,7 @@ export function localGet<T>(port: number, path: string, headers: Record<string, 
     });
     req.on("timeout", () => req.destroy(new LcuError(`${path} : délai dépassé`, null)));
     req.on("error", (e) => fail(e instanceof LcuError ? e : new LcuError(`${path} : ${e.message}`, null)));
-    req.end();
+    req.end(payload ?? undefined);
   });
 }
 
