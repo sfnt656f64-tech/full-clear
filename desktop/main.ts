@@ -8,7 +8,7 @@ import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
 import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { readMyGames, readMyMastery } from "./stats/read.ts";
-import { readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
+import { readGankData, readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
 import { recommend } from "./reco/recommend.ts";
 import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "./reco/draft-pick.ts";
 import type { DraftSnapshot } from "./champ-select.ts";
@@ -27,6 +27,7 @@ import { buildOverlayView, type OverlayView } from "./next-item.ts";
 import { pregameTips, tipsAt } from "./coach/pregame.ts";
 import { statBuild, type StatBuild } from "./coach/stat-build.ts";
 import { readEnemyItems, SHOP } from "./next-item.ts";
+import { gamePlan, planTips, type GamePlan } from "./coach/game-plan.ts";
 import { OverlayWindow } from "./overlay-window.ts";
 import { DEFAULT_SHORTCUTS, displayAccelerator, isValidAccelerator, type ShortcutName } from "./shortcuts.ts";
 import { loadSettings, parseWindowMode, saveSettings, type Settings, type WindowMode } from "./settings.ts";
@@ -93,7 +94,8 @@ function startCoach(): void {
   coach = null;
   if (!settings.overlay.tips || !draft?.lanes || Date.now() - draftAt > DRAFT_MAX_AGE) return;
   const form = draft.isKayn ? (settings.formChoice !== "auto" ? settings.formChoice : draft.form?.value ?? null) : null;
-  const tips = pregameTips({ lanes: draft.lanes, form });
+  // Plan d'avant-partie d'abord (jungle), puis les autres conseils : 6 au plus, deux à la fois.
+  const tips = [...(draft.plan ? planTips(draft.plan) : []), ...pregameTips({ lanes: draft.lanes, form })].slice(0, 6);
   if (!tips.length) return;
   coach = { tips, start: Date.now() };
   // Défilement : on ne renvoie la vue que quand la paire affichée change.
@@ -153,6 +155,7 @@ const watcher = new ClientWatcher(
     draft.picks = safePicks(snap, draft.lanes);
     draft.runePage = safeRunePage(snap, draft);
     draftAt = Date.now();
+    draft.plan = safePlan(snap, draft);
     pushState();
   },
 );
@@ -373,6 +376,35 @@ function safeRunePage(snap: DraftSnapshot, view: DraftView): (RecommendedPage & 
 /** Tes meilleurs choix pour cette draft (jungle ou milieu seulement) ; jamais d'erreur bloquante pour la draft. */
 /** Parties par rôle de chaque champion (méta récente), gardées avec les lignes de méta. */
 let sharesCache: { parts: unknown; shares: RoleShares } | null = null;
+/** Kills de début de partie (3 derniers patchs), gardés 10 minutes. */
+let gankCache: { at: number; data: ReturnType<typeof readGankData> } | null = null;
+function getGankData(): ReturnType<typeof readGankData> {
+  if (gankCache && Date.now() - gankCache.at < 10 * 60_000) return gankCache.data;
+  gankCache = { at: Date.now(), data: readGankData(dbFile(), readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch)) };
+  return gankCache.data;
+}
+
+/**
+ * Plan d'avant-partie : seulement en jungle, une fois tes 4 alliés et les 5 adversaires connus et ton champion
+ * verrouillé. Calculé une fois par draft (il ne change plus ensuite).
+ */
+let planMemo: { key: string; value: GamePlan | null } | null = null;
+function safePlan(snap: DraftSnapshot, view: DraftView): GamePlan | null {
+  if (!view.lanes || !snap.me.championId || snap.me.position !== "jungle") return null;
+  if (snap.enemies.filter((e) => e.championId).length < 5 || snap.allies.filter((a) => a.championId).length < 4) return null;
+  const key = JSON.stringify([snap.me.championId, snap.side, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId)]);
+  if (planMemo?.key === key) return planMemo.value;
+  let value: GamePlan | null = null;
+  try {
+    const data = getGankData();
+    value = gamePlan({ meChampion: snap.me.championId, side: snap.side, lanes: view.lanes, kills: data.kills, parts: data.parts, index: getPairIndex() });
+  } catch (e) {
+    console.error("Plan d'avant-partie :", e);
+  }
+  planMemo = { key, value };
+  return value;
+}
+
 function getRoleShares(): RoleShares {
   const parts = recentParts();
   if (sharesCache?.parts !== parts) sharesCache = { parts, shares: roleShares(parts) };

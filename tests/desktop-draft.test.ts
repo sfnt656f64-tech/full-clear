@@ -54,6 +54,7 @@ describe("session de draft (LCU)", () => {
       ],
       enemies: [{ championId: key("Ahri") }, { championId: key("Jinx") }, { championId: key("Lulu") }, { championId: 0 }, { championId: 0 }],
       myTurn: true,
+      side: null,
       unavailable: [key("Zed"), key("Ahri"), key("Jinx"), key("Lulu"), key("Ornn"), key("Syndra")].sort((a, b) => a - b),
     });
   });

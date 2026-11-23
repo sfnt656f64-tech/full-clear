@@ -23,6 +23,8 @@ export interface DraftSnapshot {
   enemies: { championId: number }[];
   /** C'est à toi de choisir (ton pick est en cours). */
   myTurn: boolean;
+  /** Côté de ton équipe (bleu : base en bas à gauche), si le client l'indique. */
+  side: "blue" | "red" | null;
   /** Champions bannis ou déjà pris (des deux côtés) : impossibles à choisir. */
   unavailable: number[];
 }
@@ -90,6 +92,7 @@ export function toDraftSnapshot(raw: unknown): DraftSnapshot | null {
     // Côté adverse, championId n'est rempli par le client qu'une fois le champion révélé.
     enemies: theirTeam.map((p) => ({ championId: hasActions ? locked.get(Number(p.cellId)) ?? num(p.championId) : num(p.championId) })),
     myTurn: isMyTurn(s.actions, myCell),
+    side: meRaw?.team === 1 ? "blue" : meRaw?.team === 2 ? "red" : null,
     unavailable: unavailableIds(s.actions, s.bans),
   };
 }

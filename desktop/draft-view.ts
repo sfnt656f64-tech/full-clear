@@ -12,6 +12,7 @@ import type { DraftSnapshot } from "./champ-select.ts";
 import type { DraftPicks } from "./reco/draft-pick.ts";
 import type { RecommendedPage } from "./runes/rune-page.ts";
 import type { LaneRow } from "./reco/lanes.ts";
+import type { GamePlan } from "./coach/game-plan.ts";
 
 export const KAYN_KEY = 141;
 export const DDRAGON_IMG = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img`;
@@ -59,6 +60,8 @@ export interface DraftView {
   picks?: DraftPicks | null;
   /** Les deux équipes rangées Top → Support (rôles adverses probables) ; ajouté par le processus principal. */
   lanes?: LaneRow<ChampLite>[] | null;
+  /** Plan d'avant-partie (jungle), une fois tous les champions connus ; ajouté par le processus principal. */
+  plan?: GamePlan | null;
   /** Page de runes recommandée pour le champion survolé ou verrouillé (importable) ; ajoutée par le processus principal. */
   runePage?: (RecommendedPage & { championName: string }) | null;
 }

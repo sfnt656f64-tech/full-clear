@@ -68,6 +68,23 @@ function slots(list: (DraftView["enemies"][number])[], side: "en" | "al"): HTMLE
 const CDN_CHAMP = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/`;
 const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
 
+/** Plan d'avant-partie (jungle) : chance de gank par lane, premier gank, départ, objectifs. */
+function renderPlan(p: NonNullable<DraftView["plan"]>): HTMLElement {
+  const label: Record<string, string> = { TOP: "Top", MIDDLE: "Mid", BOTTOM: "Bot" };
+  return h("div", { class: "plan" },
+    h("h3", {}, "Plan d'avant-partie", p.provisional ? h("span", { class: "small muted" }, " · provisoire") : null),
+    ...p.lanes.map((l) => h("div", { class: `plan-lane${l.lane === p.firstGank ? " best" : ""}` },
+      h("span", { class: "plan-name" }, label[l.lane]),
+      h("span", { class: "plan-bar" }, h("span", { class: "plan-fill", "data-pct": String(Math.round(l.chance)) })),
+      h("span", { class: "plan-pct" }, `${Math.round(l.chance)} %`),
+      h("span", { class: "small muted plan-why" }, l.reasons.join(" · ")))),
+    h("p", { class: "small" }, h("b", {}, "1er gank suggéré : "), label[p.firstGank],
+      ` · départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}`,
+      p.start.topShare != null ? h("span", { class: "muted" }, ` · en Émeraude+ : ${Math.round(p.start.topShare)} % des départs côté top`) : null),
+    ...p.objectives.map((o) => h("p", { class: "small" }, "› ", o)),
+    h("p", { class: "small muted" }, `Chances estimées depuis les ganks des junglers Émeraude+ avant 10 min (${p.games} parties avec ton champion), le contrôle de tes alliés, les duels et les laners adverses. Calculé une fois, avec la draft.`));
+}
+
 /** Page de runes recommandée, avec le bouton d'import dans le client. */
 function renderRunePage(p: NonNullable<DraftView["runePage"]>, note: string | null): HTMLElement {
   const runeIcon = (id: number, cls: string) => {
@@ -186,7 +203,9 @@ function renderDraft(s: AppState): void {
     body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
     body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
   }
-  if (d.picks) body.push(renderPicks(d.picks));
+  if (d.plan) body.push(renderPlan(d.plan));
+  // Choix du champion : inutile une fois le tien verrouillé.
+  if (d.picks && !d.me.locked) body.push(renderPicks(d.picks));
   if (d.runePage) body.push(renderRunePage(d.runePage, d.isKayn && d.runes ? d.runes.note : null));
   // Section Kayn (forme, runes, build) : seulement si tu survoles ou as verrouillé Kayn.
   if (!d.isKayn) {
@@ -238,6 +257,8 @@ function renderDraft(s: AppState): void {
   open.addEventListener("click", () => void window.kayn.openDraftInSimulator());
   body.push(h("div", { class: "row" }, open));
   $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
+  // Largeur des barres du plan (pas de style en ligne : politique de sécurité de la page).
+  for (const f of document.querySelectorAll<HTMLElement>(".plan-fill")) f.style.width = `${f.dataset.pct}%`;
 }
 
 // ---------- En jeu ----------
