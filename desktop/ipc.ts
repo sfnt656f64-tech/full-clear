@@ -5,6 +5,14 @@ import type { MyGameRow } from "./stats/my-stats.ts";
 import type { MetaChampion } from "./meta/meta-stats.ts";
 import type { MetaPatchInfo } from "./meta/read.ts";
 import type { Recommendations } from "./reco/recommend.ts";
+import type { GameAnalysis } from "./analysis/analysis.ts";
+
+/** Onglet « Analyse » : tes dernières parties relues, et l'analyse de celle choisie. */
+export interface AnalysisView {
+  games: { key: string; championId: number; win: boolean; kda: string; startMs: number; role: string }[];
+  selected: string | null;
+  analysis: GameAnalysis | null;
+}
 
 /** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
 export interface RecoView extends Recommendations { patches: string[] }
@@ -88,6 +96,8 @@ export interface KaynApi {
   /** Méta des `scope` derniers patchs (1 à 3). */
   getMeta(scope: number): Promise<MetaView>;
   openRecoWindow(): Promise<void>;
+  /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
+  getAnalysis(key: string | null): Promise<AnalysisView>;
   /** Importe la page de runes recommandée de la draft en cours dans le client. */
   importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;
@@ -115,6 +125,7 @@ export const IPC = {
   openMetaWindow: "kayn:open-meta-window",
   getMeta: "kayn:get-meta",
   openRecoWindow: "kayn:open-reco-window",
+  getAnalysis: "kayn:get-analysis",
   importRunes: "kayn:import-runes",
   getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",

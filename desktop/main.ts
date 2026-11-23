@@ -19,15 +19,17 @@ import { importRunePage, lcuPerks } from "./runes/import.ts";
 import type { LcuCredentials } from "./lcu.ts";
 import { champByKey } from "../src/data/champions";
 import { metaStats } from "./meta/meta-stats.ts";
-import type { MetaView, RecoView } from "./ipc.ts";
+import type { AnalysisView, MetaView, RecoView } from "./ipc.ts";
+import { readAnalysisGames, readMetaMetrics, readMyEvents } from "./analysis/read.ts";
+import { analyseGame } from "./analysis/analysis.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildOverlayView, type OverlayView } from "./next-item.ts";
 import { pregameTips, tipsAt } from "./coach/pregame.ts";
+import { gamePlan, planTips, type GamePlan } from "./coach/game-plan.ts";
 import { statBuild, type StatBuild } from "./coach/stat-build.ts";
 import { readEnemyItems, SHOP } from "./next-item.ts";
-import { gamePlan, planTips, type GamePlan } from "./coach/game-plan.ts";
 import { OverlayWindow } from "./overlay-window.ts";
 import { DEFAULT_SHORTCUTS, displayAccelerator, isValidAccelerator, type ShortcutName } from "./shortcuts.ts";
 import { loadSettings, parseWindowMode, saveSettings, type Settings, type WindowMode } from "./settings.ts";
@@ -139,23 +141,23 @@ const watcher = new ClientWatcher(
     }
     if (s.kind === "closed" || CLEAR_DRAFT.has(phase)) draft = null;
     if (phase !== prevPhase) windowMode = readWindowMode();
-    prevPhase = phase;
-    // Pause de la collecte du chargement à la fin de la partie : rien ne doit gêner le jeu.
-    collector?.setPaused("game", GAME_PHASES.has(phase));
-    pushState();
     // Fin de partie : Riot publie la partie après quelques minutes ; on la cherche à 2 puis 6 minutes.
     if (phase === "EndOfGame" && prevPhase !== "EndOfGame") {
       for (const ms of [2 * 60_000, 6 * 60_000]) setTimeout(() => collector?.checkNewGames(), ms).unref?.();
     }
+    prevPhase = phase;
+    // Pause de la collecte du chargement à la fin de la partie : rien ne doit gêner le jeu.
+    collector?.setPaused("game", GAME_PHASES.has(phase));
+    pushState();
     if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
   },
   (snap) => {
     draft = buildDraftView(snap);
     draft.lanes = safeLanes(snap, draft);
     draft.picks = safePicks(snap, draft.lanes);
+    draft.plan = safePlan(snap, draft);
     draft.runePage = safeRunePage(snap, draft);
     draftAt = Date.now();
-    draft.plan = safePlan(snap, draft);
     pushState();
   },
 );
@@ -374,8 +376,6 @@ function safeRunePage(snap: DraftSnapshot, view: DraftView): (RecommendedPage & 
 }
 
 /** Tes meilleurs choix pour cette draft (jungle ou milieu seulement) ; jamais d'erreur bloquante pour la draft. */
-/** Parties par rôle de chaque champion (méta récente), gardées avec les lignes de méta. */
-let sharesCache: { parts: unknown; shares: RoleShares } | null = null;
 /** Kills de début de partie (3 derniers patchs), gardés 10 minutes. */
 let gankCache: { at: number; data: ReturnType<typeof readGankData> } | null = null;
 function getGankData(): ReturnType<typeof readGankData> {
@@ -405,6 +405,8 @@ function safePlan(snap: DraftSnapshot, view: DraftView): GamePlan | null {
   return value;
 }
 
+/** Parties par rôle de chaque champion (méta récente), gardées avec les lignes de méta. */
+let sharesCache: { parts: unknown; shares: RoleShares } | null = null;
 function getRoleShares(): RoleShares {
   const parts = recentParts();
   if (sharesCache?.parts !== parts) sharesCache = { parts, shares: roleShares(parts) };
@@ -468,6 +470,17 @@ function computePicks(snap: DraftSnapshot, role: string, enemyLanes: Map<number,
     console.error("Choix de draft :", e);
     return null;
   }
+}
+
+/** Onglet « Analyse » : 30 dernières parties relues, analyse de celle demandée (ou de la dernière). */
+function getAnalysisView(key: string | null): AnalysisView {
+  const games = readAnalysisGames(dbFile(), 30, excludedKeys());
+  const list = games.map((g) => ({ key: `${g.matchId}|${g.account}`, championId: g.championId, win: g.win, kda: `${g.kills}/${g.deaths}/${g.assists}`, startMs: g.startMs, role: g.role }));
+  const game = games.find((g) => `${g.matchId}|${g.account}` === key) ?? games[0];
+  if (!game) return { games: list, selected: null, analysis: null };
+  const patches = readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch);
+  const analysis = analyseGame(game, readMyEvents(dbFile(), game.matchId, game.account), games, readMetaMetrics(dbFile(), patches, game.role));
+  return { games: list, selected: `${game.matchId}|${game.account}`, analysis };
 }
 
 /** Méta calculée, gardée une minute (le calcul relit toute la base). */
@@ -589,6 +602,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
   ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
   ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
+  ipcMain.handle(IPC.getAnalysis, (_e, key: unknown) => getAnalysisView(typeof key === "string" ? key : null));
   ipcMain.handle(IPC.importRunes, async () => {
     const page = draft?.runePage;
     if (!page) return { ok: false, message: "Pas de page de runes à importer pour l'instant." };

@@ -463,8 +463,8 @@ $("open-dir").addEventListener("click", () => void window.kayn.openUserDataDir()
 $<HTMLInputElement>("login").addEventListener("change", async (e) => render(await window.kayn.setOpenAtLogin((e.target as HTMLInputElement).checked)));
 // ---------- Onglets ----------
 
-type Tab = "home" | "draft" | "collect" | "settings";
-const TABS: Tab[] = ["home", "draft", "collect", "settings"];
+type Tab = "home" | "draft" | "analysis" | "collect" | "settings";
+const TABS: Tab[] = ["home", "draft", "analysis", "collect", "settings"];
 
 function selectTab(tab: Tab): void {
   for (const t of TABS) {
@@ -472,6 +472,8 @@ function selectTab(tab: Tab): void {
     document.querySelector(`[data-tab="${t}"]`)!.setAttribute("aria-selected", String(t === tab));
   }
   try { localStorage.setItem("tab", tab); } catch { /* stockage indisponible */ }
+  // Après l'initialisation du script (l'onglet peut être restauré au démarrage).
+  if (tab === "analysis") queueMicrotask(() => void loadAnalysis(anKey));
 }
 for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
 $("home-col").addEventListener("click", () => selectTab("collect"));
@@ -483,6 +485,99 @@ function autoTab(live: boolean): void {
   if (wasLive !== null && live !== wasLive) selectTab(live ? "draft" : "home");
   else if (wasLive === null && live) selectTab("draft");
   wasLive = live;
+}
+
+// ---------- Analyse ----------
+
+const MAP_SIZE = 14_900; // coordonnées de la Faille (0 à ~14 900)
+const ROLE_SHORT: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "ADC", UTILITY: "Support" };
+let anKey: string | null = null;
+let anFilter: "all" | "early" | "late" = "all";
+let anView: Awaited<ReturnType<typeof window.kayn.getAnalysis>> | null = null;
+const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
+const fmtNum = (n: number | null, unit: string) => (n == null ? "–" : `${n.toLocaleString("fr-FR", { maximumFractionDigits: unit === " %" || Math.abs(n) >= 100 ? 0 : 1 })}${unit}`);
+
+$<HTMLImageElement>("an-map-img").src = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/map/map11.png`;
+
+async function loadAnalysis(key: string | null): Promise<void> {
+  anView = await window.kayn.getAnalysis(key);
+  anKey = anView.selected;
+  renderAnalysis();
+}
+
+function renderAnalysis(): void {
+  const v = anView;
+  const has = !!v?.analysis;
+  $("an-empty").hidden = has;
+  for (const id of ["an-map-sec", "an-metrics-sec", "an-focus-sec"]) $(id).hidden = !has;
+  const sel = $<HTMLSelectElement>("an-game");
+  sel.replaceChildren(...(v?.games ?? []).map((g) => h("option", { value: g.key },
+    `${new Date(g.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} · ${champByKey(g.championId)?.name ?? g.championId} (${ROLE_SHORT[g.role] ?? g.role}) · ${g.win ? "Victoire" : "Défaite"} · ${g.kda}`)));
+  sel.hidden = !v?.games.length;
+  if (!v?.analysis) return;
+  sel.value = v.selected ?? "";
+  const a = v.analysis, g = a.game;
+  $("an-summary").textContent = `${champByKey(g.championId)?.name ?? ""} · ${g.win ? "victoire" : "défaite"} en ${mmss(g.durationS * 1000)} · ${g.kills}/${g.deaths}/${g.assists} · ${g.cs} CS · patch ${g.patch}`;
+
+  // Carte : base bleue en bas à gauche ; y inversé pour l'écran.
+  const evs = a.events.filter((e) => anFilter === "all" || (anFilter === "early" ? e.t < 900_000 : e.t >= 900_000));
+  const map = $("an-map");
+  map.querySelectorAll(".an-dot").forEach((d) => d.remove());
+  for (const e of evs) {
+    const other = champByKey(e.otherChamp)?.name ?? "?";
+    const dot = h("span", { class: `an-dot ${e.kind}`, title: `${mmss(e.t)} · ${e.kind === "kill" ? `kill sur ${other}` : e.kind === "death" ? `mort (tué par ${other})` : `assist sur ${other}`}` });
+    dot.style.left = `${(e.x / MAP_SIZE) * 100}%`;
+    dot.style.top = `${100 - (e.y / MAP_SIZE) * 100}%`;
+    map.append(dot);
+  }
+
+  // Comparaison : ta valeur, la médiane, ta position (barre).
+  $("an-metrics").replaceChildren(...a.metrics.map((m) => {
+    const fill = h("span", { class: "an-fill", "data-pct": String(Math.round(m.rank ?? 0)) });
+    const cls = m.rank == null ? "" : m.rank >= 60 ? " good" : m.rank < 40 ? " bad" : "";
+    return h("div", { class: `an-metric${cls}` },
+      h("span", { class: "an-label" }, m.label),
+      h("span", { class: "an-val" }, fmtNum(m.mine, m.unit)),
+      h("span", { class: "an-bar", title: m.rank == null ? "" : `Mieux que ${Math.round(m.rank)} % des joueurs Émeraude+` }, fill),
+      h("span", { class: "an-med small muted" }, `méd. ${fmtNum(m.median, m.unit)}`));
+  }));
+  for (const f of document.querySelectorAll<HTMLElement>(".an-fill")) f.style.width = `${f.dataset.pct}%`;
+  $("an-ref").textContent = a.comparedTo === "champion"
+    ? `Comparé à ${a.metaGames.toLocaleString("fr-FR")} parties Émeraude+ sur ${champByKey(g.championId)?.name} (${ROLE_SHORT[g.role] ?? g.role}). La barre : ta position (à droite = meilleur).`
+    : `Pas encore assez de parties Émeraude+ sur ce champion : comparé à tous les joueurs du rôle (${a.metaGames.toLocaleString("fr-FR")} parties).`;
+
+  // Points à travailler, avec l'évolution sur tes dernières parties.
+  $("an-focus").replaceChildren(...(a.focus.length ? a.focus.map((f) => h("div", { class: "an-focus" }, h("p", { class: "small" }, f.text), sparkline(f.trend, f.median)))
+    : [h("p", { class: "small muted" }, a.focusGames < 3 ? "Pas encore assez de parties récentes pour dégager des tendances." : "Rien de marqué : tu es au niveau ou au-dessus de la médiane Émeraude+ sur tous les points suivis.")]));
+}
+
+/** Petite courbe de tes valeurs (de la plus ancienne à la plus récente), avec la médiane Émeraude+ en pointillés. */
+function sparkline(values: number[], med: number): Element {
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 220, H = 36, P = 3;
+  const lo = Math.min(med, ...values), hi = Math.max(med, ...values);
+  const sx = (i: number) => P + (i * (W - 2 * P)) / Math.max(1, values.length - 1);
+  const sy = (v: number) => H - P - ((v - lo) / (hi - lo || 1)) * (H - 2 * P);
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "spark");
+  const line = document.createElementNS(NS, "polyline");
+  line.setAttribute("points", values.map((v, i) => `${sx(i)},${sy(v)}`).join(" "));
+  line.setAttribute("class", "spark-line");
+  const m = document.createElementNS(NS, "line");
+  m.setAttribute("x1", "0"); m.setAttribute("x2", String(W)); m.setAttribute("y1", String(sy(med))); m.setAttribute("y2", String(sy(med)));
+  m.setAttribute("class", "spark-med");
+  svg.append(m, line);
+  return svg;
+}
+
+$<HTMLSelectElement>("an-game").addEventListener("change", (e) => void loadAnalysis((e.target as HTMLSelectElement).value));
+for (const b of document.querySelectorAll<HTMLButtonElement>(".an-filter button")) {
+  b.addEventListener("click", () => {
+    anFilter = b.dataset.f as typeof anFilter;
+    for (const x of document.querySelectorAll(".an-filter button")) x.setAttribute("aria-pressed", String(x === b));
+    renderAnalysis();
+  });
 }
 
 // ---------- Champions exclus ----------

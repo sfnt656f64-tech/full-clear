@@ -16,6 +16,7 @@
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" data-tab="home" aria-selected="true">Accueil</button>
     <button type="button" role="tab" data-tab="draft">Draft<span id="draft-dot" class="dot" hidden></span></button>
+    <button type="button" role="tab" data-tab="analysis">Analyse</button>
     <button type="button" role="tab" data-tab="collect">Collecte</button>
     <button type="button" role="tab" data-tab="settings">Réglages</button>
   </nav>
@@ -54,6 +55,36 @@
       <h2 id="draft-title">Draft</h2>
       <p id="draft-empty" class="muted">Pas de draft en cours. Cet onglet s'ouvre tout seul pendant la sélection des champions.</p>
       <div id="draft-body"></div>
+    </section>
+  </main>
+
+  <!-- ===================== Analyse ===================== -->
+  <main id="tab-analysis" class="tab" role="tabpanel" hidden>
+    <section>
+      <div class="row an-head">
+        <select id="an-game" aria-label="Partie analysée"></select>
+      </div>
+      <p id="an-summary" class="small muted"></p>
+      <p id="an-empty" class="muted" hidden>Pas encore de partie analysée : la collecte relit tes dernières parties (onglet Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
+    </section>
+    <section id="an-map-sec">
+      <h2>Carte de tes kills et de tes morts</h2>
+      <div class="row an-filter" role="group" aria-label="Période">
+        <button type="button" data-f="all" aria-pressed="true">Toute la partie</button>
+        <button type="button" data-f="early" aria-pressed="false">Avant 15 min</button>
+        <button type="button" data-f="late" aria-pressed="false">Après 15 min</button>
+      </div>
+      <div id="an-map" class="an-map"><img id="an-map-img" alt="Carte de la Faille de l'invocateur"></div>
+      <p class="small muted"><span class="dot-k"></span> kill <span class="dot-a"></span> assist <span class="dot-d"></span> mort · survole un point pour la minute et le champion</p>
+    </section>
+    <section id="an-metrics-sec">
+      <h2>Ta partie comparée à l'Émeraude+</h2>
+      <div id="an-metrics"></div>
+      <p id="an-ref" class="small muted"></p>
+    </section>
+    <section id="an-focus-sec">
+      <h2>Points à travailler</h2>
+      <div id="an-focus"></div>
     </section>
   </main>
 
