@@ -12,16 +12,17 @@ export const RUNES_BY_ID = generated.runes as Record<string, Rune>;
  * et pages de runes du client).
  */
 export const SHARDS: Record<number, string> = {
-  5008: "Force adaptative",
-  5005: "Vitesse d'attaque",
-  5007: "Accélération de compétence",
-  5010: "Vitesse de déplacement",
-  5001: "PV évolutifs",
-  5011: "PV",
-  5013: "Ténacité et résistance aux ralentissements",
+  5008: "Adaptive Force",
+  5005: "Attack Speed",
+  5007: "Ability Haste",
+  5010: "Move Speed",
+  5001: "Health Scaling",
+  5011: "Health",
+  5013: "Tenacity and Slow Resist",
 };
 
 /** Icône d'une rune ou d'un arbre (CDN Data Dragon, sans numéro de version). */
 export const runeIconUrl = (icon: string): string => `https://ddragon.leagueoflegends.com/cdn/img/${icon}`;
 
-export const runeName = (id: number): string => RUNES_BY_ID[id]?.name ?? RUNE_TREES[id]?.name ?? SHARDS[id] ?? `#${id}`;
+/** Nom anglais (comme les noms d'items et le guide de runes). */
+export const runeName = (id: number): string => RUNES_BY_ID[id]?.nameEn ?? RUNE_TREES[id]?.nameEn ?? SHARDS[id] ?? `#${id}`;

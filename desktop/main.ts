@@ -10,6 +10,8 @@ import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { readMyGames, readMyMastery } from "./stats/read.ts";
 import { readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
 import { recommend } from "./reco/recommend.ts";
+import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "./reco/draft-pick.ts";
+import type { DraftSnapshot } from "./champ-select.ts";
 import { metaStats } from "./meta/meta-stats.ts";
 import type { MetaView, RecoView } from "./ipc.ts";
 import { findChamp } from "../src/data/champions";
@@ -103,6 +105,7 @@ const watcher = new ClientWatcher(
   },
   (snap) => {
     draft = buildDraftView(snap);
+    draft.picks = safePicks(snap);
     draftAt = Date.now();
     pushState();
   },
@@ -232,6 +235,53 @@ function getRecoView(): RecoView {
   };
   recoCache = { at: Date.now(), key, view };
   return view;
+}
+
+/** Duels et associations (3 derniers patchs : plus de parties), gardés 10 minutes. */
+let pairCache: { at: number; index: PairIndex } | null = null;
+function getPairIndex(): PairIndex {
+  if (pairCache && Date.now() - pairCache.at < 10 * 60_000) return pairCache.index;
+  const patches = readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch);
+  pairCache = { at: Date.now(), index: pairIndex(readMeta(dbFile(), patches).parts) };
+  return pairCache.index;
+}
+
+const DRAFT_ROLES: Record<string, string> = { jungle: "JUNGLE", middle: "MIDDLE" };
+
+/** Tes meilleurs choix pour cette draft (jungle ou milieu seulement) ; jamais d'erreur bloquante pour la draft. */
+let picksMemo: { key: string; at: number; value: DraftPicks | null } | null = null;
+function safePicks(snap: DraftSnapshot): DraftPicks | null {
+  const role = DRAFT_ROLES[snap.me.position];
+  if (!role) return null;
+  // Le client envoie la session très souvent : on ne recalcule que si la draft a changé (ou après 1 min).
+  const key = JSON.stringify([role, snap.myTurn, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId), snap.unavailable]);
+  if (picksMemo && picksMemo.key === key && Date.now() - picksMemo.at < 60_000) return picksMemo.value;
+  const value = computePicks(snap, role);
+  picksMemo = { key, at: Date.now(), value };
+  return value;
+}
+
+function computePicks(snap: DraftSnapshot, role: string): DraftPicks | null {
+  try {
+    const reco = getRecoView();
+    const r = reco.roles.find((x) => x.role === role);
+    if (!r) return null;
+    return draftPicks({
+      role,
+      myTurn: snap.myTurn,
+      allies: snap.allies.map((a) => a.championId).filter(Boolean),
+      enemies: snap.enemies.map((e) => e.championId).filter(Boolean),
+      unavailable: snap.unavailable,
+      excluded: excludedKeys(),
+      pool: r.pool,
+      meta: getMetaView(RECO_PATCHES).champions,
+      index: getPairIndex(),
+      provisional: reco.provisional,
+    });
+  } catch (e) {
+    console.error("Choix de draft :", e);
+    return null;
+  }
 }
 
 /** Méta calculée, gardée une minute (le calcul relit toute la base). */

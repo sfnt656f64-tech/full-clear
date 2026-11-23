@@ -91,3 +91,14 @@ button.link:hover { color: var(--text); background: none; }
 .top3-role { width: 52px; color: var(--muted); font-size: 12px; }
 .top3-pick { display: inline-flex; align-items: center; gap: 5px; }
 .top3-pick .ic { width: 24px; height: 24px; border-radius: 5px; }
+
+/* Choix du champion en draft */
+.picks { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.picks.my-turn { border-color: var(--warn); }
+.picks h3 { margin: 0 0 6px; }
+.pick { display: grid; grid-template-columns: 36px 1fr; gap: 8px; align-items: start; margin-bottom: 6px; }
+.pick .champ { width: 36px; height: 36px; }
+.pick.best .pick-name { color: var(--ok); }
+.pick.off .champ { opacity: .85; border-style: dashed; }
+.pick-name { font-weight: 600; }
+.pick .why { margin: 2px 0 0; }

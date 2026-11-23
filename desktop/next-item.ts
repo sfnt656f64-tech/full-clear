@@ -157,7 +157,7 @@ export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", sho
     const [key, why] = chooseStarter(base)[0];
     const pet = STARTERS[key];
     next = {
-      item: { id: pet.id, name: pet.nameFr, icon: icon(pet.id), cost: pet.cost },
+      item: { id: pet.id, name: pet.name, icon: icon(pet.id), cost: pet.cost },
       rank: 0,
       why,
       missingGold: Math.max(0, pet.cost - s.gold),

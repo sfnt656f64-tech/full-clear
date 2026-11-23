@@ -9,6 +9,7 @@ import { analyse, resolveForm } from "../src/engine/analyse";
 import { draftReport, MIN_ENEMIES } from "../src/engine/draft";
 import { encodeDraft } from "../src/engine/draft-link";
 import type { DraftSnapshot } from "./champ-select.ts";
+import type { DraftPicks } from "./reco/draft-pick.ts";
 
 export const KAYN_KEY = 141;
 export const DDRAGON_IMG = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img`;
@@ -23,6 +24,8 @@ export interface DraftView {
   me: { champion: ChampLite | null; locked: boolean; position: string };
   /** Tu as (ou survoles) un autre champion que Kayn. */
   notKayn: boolean;
+  /** Tu survoles ou as verrouillé Kayn : la section Kayn (forme, runes, build) s'affiche. */
+  isKayn: boolean;
   allies: (ChampLite | null)[];
   enemies: (ChampLite | null)[];
   enemyCount: number;
@@ -50,12 +53,14 @@ export interface DraftView {
   };
   /** Fragment #draft=… pour ouvrir la draft dans le simulateur complet. */
   link: string;
+  /** Choix du champion (jungle, milieu) selon la draft ; ajouté par le processus principal. */
+  picks?: DraftPicks | null;
 }
 
 const lite = (c: Champion): ChampLite => ({ id: c.id ?? c.name, name: c.name, icon: `${DDRAGON_IMG}/champion/${c.image ?? `${c.id}.png`}` });
 const itemLite = (k: ItemKey): ItemLite => {
   const it = ITEMS[k];
-  return { key: k, name: it.nFr ?? it.n, icon: it.image ? `${DDRAGON_IMG}/item/${it.image}` : "", cost: it.cost };
+  return { key: k, name: it.n, icon: it.image ? `${DDRAGON_IMG}/item/${it.image}` : "", cost: it.cost };
 };
 
 export function buildDraftView(s: DraftSnapshot): DraftView {
@@ -87,6 +92,7 @@ export function buildDraftView(s: DraftSnapshot): DraftView {
     timeLeftS: Math.ceil(s.timeLeftMs / 1000),
     me: { champion: me ? lite(me) : null, locked: !!s.me.championId, position: s.me.position },
     notKayn: !!meId && meId !== KAYN_KEY,
+    isKayn: meId === KAYN_KEY,
     allies: allies.map((c) => (c ? lite(c) : null)),
     enemies: enemies.map((c) => (c ? lite(c) : null)),
     enemyCount,
@@ -98,7 +104,7 @@ export function buildDraftView(s: DraftSnapshot): DraftView {
         const s = STARTERS[k];
         return { key: k, name: s.name, nameFr: s.nameFr, icon: `${DDRAGON_IMG}/item/${s.image}`, cost: s.cost, why, effect: s.effectFr };
       }),
-      boots: rep.boots.map(([k, why]) => ({ name: ITEMS[k].nFr ?? ITEMS[k].n, t3: BOOTS_T3[k], why })),
+      boots: rep.boots.map(([k, why]) => ({ name: ITEMS[k].n, t3: BOOTS_T3[k], why })),
       items: rep.build.map(itemLite),
       notes: rep.notes,
     },

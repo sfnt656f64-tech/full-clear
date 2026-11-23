@@ -64,6 +64,29 @@ function slots(list: (DraftView["enemies"][number])[], side: "en" | "al"): HTMLE
   return h("div", { class: `slots ${side}` }, ...list.map((c) => (c ? icon(c.icon, c.name, "champ") : h("span", { class: "champ empty", title: "En attente" }))));
 }
 
+const CDN_CHAMP = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/`;
+const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
+
+/** Tes meilleurs choix pour cette draft : mis en avant, c'est toi qui choisis. */
+function renderPicks(p: NonNullable<DraftView["picks"]>): HTMLElement {
+  const card = (x: NonNullable<DraftView["picks"]>["list"][number], i: number | null) => {
+    const ch = champByKey(x.championId);
+    const delta = x.score - x.base;
+    return h("div", { class: `pick${i === 0 ? " best" : ""}${x.inPool ? "" : " off"}` },
+      icon(ch?.image ? CDN_CHAMP + ch.image : "", ch?.name ?? "", "champ"),
+      h("div", {},
+        h("div", { class: "pick-name" }, `${i != null ? `${i + 1}. ` : ""}${ch?.name ?? `#${x.championId}`}`,
+          h("span", { class: "small muted", title: "Effet de cette draft sur le score (contres, synergies, dégâts)" }, ` ${sgn(delta)} avec cette draft`),
+          x.provisional ? h("span", { class: "small muted" }, " · provisoire") : null),
+        h("ul", { class: "why small" }, ...x.reasons.map((r) => h("li", {}, r)))));
+  };
+  return h("div", { class: `picks${p.myTurn ? " my-turn" : ""}` },
+    h("h3", {}, p.myTurn ? "À toi de choisir" : `Tes meilleurs choix (${p.role === "JUNGLE" ? "jungle" : "milieu"})`),
+    ...(p.list.length ? p.list.map((x, i) => card(x, i)) : [h("p", { class: "muted small" }, "Aucun champion de ton pool disponible.")]),
+    ...(p.offPool ? [h("p", { class: "small muted" }, "À envisager :"), card(p.offPool, null)] : []),
+    h("p", { class: "muted small" }, "Classés selon ton pool, les duels et associations en Émeraude+ et l'équilibre des dégâts. Mis à jour à chaque pick."));
+}
+
 let timerHandle: number | undefined;
 
 function renderDraft(s: AppState): void {
@@ -86,9 +109,14 @@ function renderDraft(s: AppState): void {
   const me = d.me.champion;
   body.push(h("p", { class: "muted small" },
     `Toi : ${me ? `${me.name}${d.me.locked ? "" : " (survolé)"}` : "pas encore choisi"}${d.me.position ? ` · ${POSITIONS[d.me.position] ?? d.me.position}` : ""}`));
-  if (d.notKayn) body.push(h("p", { class: "warn-text small" }, "Tu n'es pas sur Kayn : la recommandation suppose quand même que tu le joues."));
   body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
   body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
+  if (d.picks) body.push(renderPicks(d.picks));
+  // Section Kayn (forme, runes, build) : seulement si tu survoles ou as verrouillé Kayn.
+  if (!d.isKayn) {
+    $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
+    return;
+  }
   if (d.unknown) body.push(h("p", { class: "warn-text small" }, `${d.unknown} champion(s) inconnu(s) : relance npm run sync pour mettre les données à jour.`));
 
   if (!d.form) {
@@ -117,12 +145,12 @@ function renderDraft(s: AppState): void {
     body.push(h("h3", {}, "Build (ordre d'achat)"));
     const [pet, ...petAlts] = b.starter;
     body.push(h("div", { class: "items" },
-      h("div", { class: "item", title: `${pet.nameFr} (${pet.name}) · ${pet.cost} po` }, icon(pet.icon, pet.nameFr), h("span", { class: "small" }, `Départ. ${pet.nameFr}`)),
+      h("div", { class: "item", title: `${pet.name} · ${pet.cost} po` }, icon(pet.icon, pet.name), h("span", { class: "small" }, `Départ. ${pet.name}`)),
       ...b.items.map((it, i) =>
       h("div", { class: "item", title: `${it.name} · ${it.cost} po` }, it.icon ? icon(it.icon, it.name) : null, h("span", { class: "small" }, `${i + 1}. ${it.name}`)))));
-    body.push(h("p", { class: "small" }, h("b", {}, `Familier : ${pet.nameFr}`), ` (${pet.name}, ${pet.cost} po) : ${pet.why}`));
+    body.push(h("p", { class: "small" }, h("b", {}, `Familier : ${pet.name}`), ` (${pet.cost} po) : ${pet.why}`));
     body.push(h("p", { class: "small muted" }, `Adulte : ${pet.effect}`));
-    for (const a of petAlts) body.push(h("p", { class: "small muted" }, `Sinon ${a.nameFr} : ${a.why}`));
+    for (const a of petAlts) body.push(h("p", { class: "small muted" }, `Sinon ${a.name} : ${a.why}`));
     const [boot, ...alts] = b.boots;
     body.push(h("p", { class: "small" }, h("b", {}, `Bottes : ${boot.name}`), ` (${boot.t3}) : ${boot.why}`));
     for (const a of alts) body.push(h("p", { class: "small muted" }, `Sinon ${a.name} : ${a.why}`));

@@ -130,7 +130,7 @@ describe("familier de jungle dans l'overlay", () => {
     const s = toLiveSnapshot(active, players)!;
     const v = buildOverlayView(s, "blue");
     // Ornn, Syndra et Nautilus ont du CC pour suivre les ganks → Gustwalker (vent).
-    expect(v.next).toMatchObject({ rank: 0, item: { id: "1102", name: "Bébé Saute-nuages", cost: 450 }, missingGold: 0, component: null });
+    expect(v.next).toMatchObject({ rank: 0, item: { id: "1102", name: "Gustwalker Hatchling", cost: 450 }, missingGold: 0, component: null });
     expect(v.next?.why).toMatch(/ganks/);
     // Les deux premiers items du build restent visibles en aperçu.
     expect(v.then.map((t) => t.id)).toEqual([ITEMS.voltaic.id, ITEMS.hubris.id]);
