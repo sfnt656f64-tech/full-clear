@@ -110,3 +110,38 @@ button.link:hover { color: var(--text); background: none; }
 .rune-row .keystone { width: 36px; height: 36px; }
 .rune-row .rune { width: 24px; height: 24px; }
 .rune-sep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; }
+
+/* Onglets */
+.tabs { display: flex; gap: 2px; margin: 0 -16px 12px; padding: 0 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+.tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); }
+.tabs button:hover { color: var(--text); background: none; }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--blue); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: 2px; }
+.dot[hidden] { display: none; }
+.alert { border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+.summary-line { display: flex; width: 100%; justify-content: space-between; align-items: center; text-align: left; background: var(--panel); padding: 10px 14px; border-radius: 8px; }
+.summary-line .status { font-size: 13px; }
+details { margin-top: 10px; }
+details summary { cursor: pointer; color: var(--muted); margin-bottom: 6px; }
+details summary:hover { color: var(--text); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 10px; border-radius: 12px; background: #2a2a3a; border: 1px solid var(--line); font-size: 13px; }
+.chip button { background: none; border: none; color: var(--muted); padding: 0 6px; font-size: 13px; }
+.chip button:hover { color: var(--red); background: none; }
+input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 200px; }
+
+/* Draft par rôle */
+.lanes { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 8px; }
+.lanes-head, .lane-row { display: grid; grid-template-columns: 76px 1fr 1fr; gap: 8px; align-items: center; }
+.lanes-head .blue { color: var(--blue); font-weight: 600; }
+.lanes-head .red { color: var(--red); font-weight: 600; }
+.lane-row { padding: 2px 4px; border-radius: 6px; }
+.lane-row.me { background: #242436; }
+.lane-label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.lane-ic { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.lane-row.me .lane-label { color: var(--text); }
+.lane-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lane-cell .champ { width: 30px; height: 30px; flex: none; }
+.lane-cell.al .champ:not(.empty) { border-color: var(--blue); }
+.lane-cell.en .champ:not(.empty) { border-color: var(--red); }
+.lane-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

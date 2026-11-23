@@ -1,7 +1,7 @@
 // Fenêtre d'état. Pas d'accès à Node : tout passe par window.kayn (preload.ts).
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
-import { champByKey } from "../../src/data/champions";
+import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
 import { runeIconUrl, runeName, RUNE_TREES, RUNES_BY_ID } from "../../src/data/runes";
 
@@ -121,14 +121,52 @@ function renderPicks(p: NonNullable<DraftView["picks"]>): HTMLElement {
     h("p", { class: "muted small" }, "Classés selon ton pool, les duels et associations en Émeraude+ et l'équilibre des dégâts. Mis à jour à chaque pick."));
 }
 
+// ---------- Draft par rôle ----------
+
+const LANE_LABELS: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "ADC", UTILITY: "Support" };
+/** Icônes de rôle dessinées ici (Data Dragon n'en fournit pas). */
+const LANE_PATHS: Record<string, string> = {
+  TOP: "M2 2h13l-4 4H6v5l-4 4z M9 9h5v5H9z",
+  JUNGLE: "M10 1c-1 4-4 6-4 10 0 2 1 4 2 5l-3 3h3l2-2 2 2h3l-3-3c1-1 2-3 2-5 0-4-3-6-4-10z",
+  MIDDLE: "M2 14 14 2h4v4L6 18H2z M2 2h5L2 7z M18 18h-5l5-5z",
+  BOTTOM: "M18 18H5l4-4h5V9l4-4z M6 6h5v5H6z",
+  UTILITY: "M10 2l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V5z",
+};
+function laneIcon(lane: string): Element {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("class", "lane-ic");
+  svg.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(NS, "path");
+  p.setAttribute("d", LANE_PATHS[lane] ?? "");
+  svg.append(p);
+  return svg;
+}
+
+function renderLanes(rows: NonNullable<DraftView["lanes"]>): HTMLElement {
+  const cell = (c: DraftView["enemies"][number], side: "al" | "en", extra: Child) =>
+    h("div", { class: `lane-cell ${side}` }, c ? icon(c.icon, c.name, "champ") : h("span", { class: "champ empty" }), h("span", { class: "lane-name" }, c?.name ?? "…", extra));
+  return h("div", { class: "lanes" },
+    h("div", { class: "lanes-head small muted" }, h("span", {}), h("span", { class: "blue" }, "Alliés"), h("span", { class: "red" }, "En face")),
+    ...rows.map((r) => h("div", { class: `lane-row${r.me ? " me" : ""}` },
+      h("span", { class: "lane-label", title: LANE_LABELS[r.lane] }, laneIcon(r.lane), h("span", { class: "small" }, LANE_LABELS[r.lane])),
+      cell(r.ally, "al", r.me ? h("span", { class: "small muted" }, " (toi)") : null),
+      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: "Rôle déduit de la méta Émeraude+" }, " probable") : null))));
+}
+
 let timerHandle: number | undefined;
 
 function renderDraft(s: AppState): void {
-  const sec = $("draft");
   const d = s.draft;
   window.clearInterval(timerHandle);
-  sec.hidden = !d;
-  if (!d) return;
+  $("draft-dot").hidden = !s.draftLive;
+  $("draft-empty").hidden = !!d;
+  if (!d) {
+    $("draft-title").textContent = "Draft";
+    $("draft-body").replaceChildren();
+    return;
+  }
   const title = $("draft-title");
   const setTitle = () => {
     const left = Math.max(0, d.timeLeftS - Math.floor((Date.now() - s.draftAt) / 1000));
@@ -143,8 +181,11 @@ function renderDraft(s: AppState): void {
   const me = d.me.champion;
   body.push(h("p", { class: "muted small" },
     `Toi : ${me ? `${me.name}${d.me.locked ? "" : " (survolé)"}` : "pas encore choisi"}${d.me.position ? ` · ${POSITIONS[d.me.position] ?? d.me.position}` : ""}`));
-  body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
-  body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
+  if (d.lanes) body.push(renderLanes(d.lanes));
+  else {
+    body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
+    body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
+  }
   if (d.picks) body.push(renderPicks(d.picks));
   if (d.runePage) body.push(renderRunePage(d.runePage, d.isKayn && d.runes ? d.runes.note : null));
   // Section Kayn (forme, runes, build) : seulement si tu survoles ou as verrouillé Kayn.
@@ -232,6 +273,7 @@ function renderLive(s: AppState): void {
   }
   $("live-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
   $<HTMLInputElement>("overlay-on").checked = l.overlayEnabled;
+  $<HTMLInputElement>("tips-on").checked = l.tipsEnabled;
   $<HTMLSelectElement>("form-choice").value = l.formChoice;
   for (const name of ["toggle", "move"] as const) {
     const sc = l.shortcuts[name];
@@ -307,6 +349,7 @@ window.addEventListener("keydown", async (e) => {
 });
 window.addEventListener("blur", () => void stopCapture());
 
+$<HTMLInputElement>("tips-on").addEventListener("change", async (e) => render(await window.kayn.setTipsEnabled((e.target as HTMLInputElement).checked)));
 $<HTMLInputElement>("overlay-on").addEventListener("change", async (e) => render(await window.kayn.setOverlayEnabled((e.target as HTMLInputElement).checked)));
 $<HTMLSelectElement>("form-choice").addEventListener("change", async (e) => render(await window.kayn.setFormChoice((e.target as HTMLSelectElement).value as "auto" | "blue" | "red")));
 $("overlay-reset").addEventListener("click", async () => render(await window.kayn.resetOverlayPosition()));
@@ -318,6 +361,8 @@ const PAUSE_LABELS: Record<string, string> = { game: "partie en cours", user: "p
 function renderCollector(s: AppState): void {
   const st = $("col-status");
   const body: Child[] = [];
+  const summary: Child[] = [];
+  let homeText = "";
   const c = s.collector;
   const btn = $<HTMLButtonElement>("col-pause");
   btn.textContent = s.collectorPaused ? "Reprendre la collecte" : "Mettre en pause";
@@ -335,19 +380,26 @@ function renderCollector(s: AppState): void {
       : x.state === "paused" ? ["idle", `En pause : ${reasons}`]
       : ["idle", "Arrêtée"];
     const games = Object.entries(x.myGames);
-    for (const acc of s.riotIds) body.push(h("p", { class: "small" }, `${acc} : ${x.myGames[acc] ?? 0} partie(s) Solo/Duo enregistrée(s)`));
-    for (const [acc, n] of games) if (!s.riotIds.includes(acc)) body.push(h("p", { class: "small muted" }, `${acc} (ancien compte) : ${n} partie(s)`));
+    for (const acc of s.riotIds) summary.push(h("p", { class: "small" }, `${acc} : ${x.myGames[acc] ?? 0} partie(s) Solo/Duo enregistrée(s)`));
+    for (const [acc, n] of games) if (!s.riotIds.includes(acc)) summary.push(h("p", { class: "small muted" }, `${acc} (ancien compte) : ${n} partie(s)`));
     for (const j of x.jobs) {
       if (!j.pending && !j.done && !j.failed) continue;
       body.push(h("p", { class: "small muted" }, `${j.label} : ${j.done} fait(s)${j.pending ? `, ${j.pending} en attente` : ""}${j.failed ? `, ${j.failed} en échec` : ""}`));
     }
-    if (x.meta.length) body.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games} partie(s) en ${m.patch}`).join(", ")}${x.poolSize ? ` · ordres d'achat suivis pour ${x.poolSize} champion(s) de ton pool` : ""}`));
+    if (x.meta.length) summary.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games.toLocaleString("fr-FR")} partie(s) en ${m.patch}`).join(", ")}`));
+    if (x.poolSize) body.push(h("p", { class: "small muted" }, `Ordres d'achat suivis pour ${x.poolSize} champion(s) de ton pool`));
+    const metaTotal = x.meta.reduce((n, m) => n + m.games, 0);
+    homeText = metaTotal ? ` · méta ${metaTotal.toLocaleString("fr-FR")} parties` : "";
     body.push(h("p", { class: "small muted" }, `Requêtes sur 2 min : europe ${x.usage.europe}/${x.budget} · euw1 ${x.usage.euw1}/${x.budget}`));
     if (x.lastError && x.state !== "running") body.push(h("p", { class: "small warn-text" }, `Dernière erreur : ${x.lastError}`));
   }
   st.className = `status ${cls}`;
   st.textContent = text;
+  $("col-summary").replaceChildren(...summary.filter((b): b is Node | string => !!b));
   $("col-body").replaceChildren(...body.filter((b): b is Node | string => !!b));
+  const home = $("home-col-text");
+  home.className = `status ${cls}`;
+  home.textContent = `Collecte : ${text.split(" (")[0].toLowerCase()}${homeText}`;
   $("accounts").textContent = s.riotIds.length > 1 ? `Comptes suivis : ${s.riotIds.join(", ")}` : s.riotIds.length ? `Compte suivi : ${s.riotIds[0]} (ajoute RIOT_ID_2 pour un 2ᵉ compte)` : "";
 }
 
@@ -376,6 +428,11 @@ function render(s: AppState): void {
     ul.append(li);
   }
   $("env-file").textContent = s.envFile ?? "aucun";
+  const alerts = [...s.problems, ...(s.envFile ? [] : ["Pas de fichier .env : voir Réglages."])];
+  $("home-alert").hidden = !alerts.length;
+  $("home-alert").textContent = alerts[0] ?? "";
+  renderExcluded(s.excludedChampions);
+  autoTab(s.draftLive);
   $<HTMLInputElement>("login").checked = s.openAtLogin;
   $("dev-note").hidden = !(s.dev && s.openAtLogin);
 }
@@ -383,6 +440,52 @@ function render(s: AppState): void {
 $("reload").addEventListener("click", async () => render(await window.kayn.reloadConfig()));
 $("open-dir").addEventListener("click", () => void window.kayn.openUserDataDir());
 $<HTMLInputElement>("login").addEventListener("change", async (e) => render(await window.kayn.setOpenAtLogin((e.target as HTMLInputElement).checked)));
+// ---------- Onglets ----------
+
+type Tab = "home" | "draft" | "collect" | "settings";
+const TABS: Tab[] = ["home", "draft", "collect", "settings"];
+
+function selectTab(tab: Tab): void {
+  for (const t of TABS) {
+    $(`tab-${t}`).hidden = t !== tab;
+    document.querySelector(`[data-tab="${t}"]`)!.setAttribute("aria-selected", String(t === tab));
+  }
+  try { localStorage.setItem("tab", tab); } catch { /* stockage indisponible */ }
+}
+for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
+$("home-col").addEventListener("click", () => selectTab("collect"));
+try { const t = localStorage.getItem("tab") as Tab | null; if (t && TABS.includes(t) && t !== "draft") selectTab(t); } catch { /* idem */ }
+
+/** Onglet Draft ouvert tout seul au début de la sélection, Accueil à la fin (seulement aux changements). */
+let wasLive: boolean | null = null;
+function autoTab(live: boolean): void {
+  if (wasLive !== null && live !== wasLive) selectTab(live ? "draft" : "home");
+  else if (wasLive === null && live) selectTab("draft");
+  wasLive = live;
+}
+
+// ---------- Champions exclus ----------
+
+let excludedNow: string[] = [];
+$("champ-list").replaceChildren(...CHAMPIONS.map((c) => h("option", { value: c.name })));
+function renderExcluded(ids: string[]): void {
+  if (ids.join() === excludedNow.join() && $("excluded").childElementCount) return;
+  excludedNow = [...ids];
+  $("excluded").replaceChildren(...(ids.length ? ids.map((id) => {
+    const c = findChamp(id);
+    const x = h("button", { type: "button", title: "Retirer", "aria-label": `Retirer ${c?.name ?? id}` }, "✕");
+    x.addEventListener("click", async () => render(await window.kayn.setExcludedChampions(excludedNow.filter((e) => e !== id))));
+    return h("span", { class: "chip" }, c?.name ?? id, x);
+  }) : [h("span", { class: "muted small" }, "Aucun")]));
+}
+$<HTMLInputElement>("excluded-add").addEventListener("change", async (e) => {
+  const input = e.target as HTMLInputElement;
+  const c = findChamp(input.value.trim());
+  if (!c?.id || excludedNow.includes(c.id)) return;
+  input.value = "";
+  render(await window.kayn.setExcludedChampions([...excludedNow, c.id]));
+});
+
 window.kayn.onState(render);
 void window.kayn.getState().then(render);
 

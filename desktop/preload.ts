@@ -18,6 +18,7 @@ const api: KaynApi = {
   setExcludedChampions: (ids) => ipcRenderer.invoke(IPC.setExcludedChampions, ids),
   openDraftInSimulator: () => ipcRenderer.invoke(IPC.openDraftInSimulator),
   setOverlayEnabled: (on) => ipcRenderer.invoke(IPC.setOverlayEnabled, on),
+  setTipsEnabled: (on) => ipcRenderer.invoke(IPC.setTipsEnabled, on),
   setFormChoice: (f) => ipcRenderer.invoke(IPC.setFormChoice, f),
   resetOverlayPosition: () => ipcRenderer.invoke(IPC.resetOverlayPosition),
   setShortcut: (name, acc) => ipcRenderer.invoke(IPC.setShortcut, name, acc),

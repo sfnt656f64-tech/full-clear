@@ -13,6 +13,8 @@ import { recommend } from "./reco/recommend.ts";
 import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "./reco/draft-pick.ts";
 import type { DraftSnapshot } from "./champ-select.ts";
 import { guidePage, metaPage, type RecommendedPage } from "./runes/rune-page.ts";
+import { laneRows, roleShares, type Lane, type LaneRow, type RoleShares } from "./reco/lanes.ts";
+import type { ChampLite } from "./draft-view.ts";
 import { importRunePage, lcuPerks } from "./runes/import.ts";
 import type { LcuCredentials } from "./lcu.ts";
 import { champByKey } from "../src/data/champions";
@@ -22,6 +24,9 @@ import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildOverlayView, type OverlayView } from "./next-item.ts";
+import { pregameTips, tipsAt } from "./coach/pregame.ts";
+import { statBuild, type StatBuild } from "./coach/stat-build.ts";
+import { readEnemyItems, SHOP } from "./next-item.ts";
 import { OverlayWindow } from "./overlay-window.ts";
 import { DEFAULT_SHORTCUTS, displayAccelerator, isValidAccelerator, type ShortcutName } from "./shortcuts.ts";
 import { loadSettings, parseWindowMode, saveSettings, type Settings, type WindowMode } from "./settings.ts";
@@ -78,14 +83,44 @@ function readWindowMode(): WindowMode {
   try { return parseWindowMode(readFileSync(join(dir, "Config", "game.cfg"), "utf8")); } catch { return "unknown"; }
 }
 
+/** Conseils d'avant-partie de la partie en cours, et début de leur affichage. */
+let coach: { tips: string[]; start: number } | null = null;
+let coachTimer: NodeJS.Timeout | null = null;
+/** Une draft de plus de 15 minutes n'est pas celle de cette partie. */
+const DRAFT_MAX_AGE = 15 * 60_000;
+
+function startCoach(): void {
+  coach = null;
+  if (!settings.overlay.tips || !draft?.lanes || Date.now() - draftAt > DRAFT_MAX_AGE) return;
+  const form = draft.isKayn ? (settings.formChoice !== "auto" ? settings.formChoice : draft.form?.value ?? null) : null;
+  const tips = pregameTips({ lanes: draft.lanes, form });
+  if (!tips.length) return;
+  coach = { tips, start: Date.now() };
+  // Défilement : on ne renvoie la vue que quand la paire affichée change.
+  let shown = "";
+  coachTimer = setInterval(() => {
+    const now = coach ? tipsAt(coach.tips, Date.now() - coach.start) : [];
+    if (now.join("|") !== shown) { shown = now.join("|"); updateLive(); }
+    if (!now.length) stopCoach();
+  }, 1000);
+}
+
+function stopCoach(): void {
+  if (coachTimer) clearInterval(coachTimer);
+  coachTimer = null;
+  coach = null;
+}
+
 function updateLive(): void {
-  liveView = liveSnap ? buildOverlayView(liveSnap, settings.formChoice) : null;
+  liveView = liveSnap ? buildOverlayView(liveSnap, settings.formChoice, SHOP, liveStatBuild(liveSnap)) : null;
+  if (liveView && coach && settings.overlay.tips) liveView.tips = tipsAt(coach.tips, Date.now() - coach.start);
   overlay.update(liveView);
   pushState();
 }
 
 const live = new LiveWatcher((snap) => {
-  if (snap && !liveSnap) windowMode = readWindowMode();
+  if (snap && !liveSnap) { windowMode = readWindowMode(); startCoach(); }
+  if (!snap) stopCoach();
   liveSnap = snap;
   updateLive();
 });
@@ -110,7 +145,8 @@ const watcher = new ClientWatcher(
   },
   (snap) => {
     draft = buildDraftView(snap);
-    draft.picks = safePicks(snap);
+    draft.lanes = safeLanes(snap, draft);
+    draft.picks = safePicks(snap, draft.lanes);
     draft.runePage = safeRunePage(snap, draft);
     draftAt = Date.now();
     pushState();
@@ -146,6 +182,7 @@ function state(): AppState {
       inGame: !!liveSnap,
       view: liveView,
       overlayEnabled: settings.overlay.enabled,
+      tipsEnabled: settings.overlay.tips,
       overlayVisible: overlay?.visible ?? false,
       overlayMoving: overlay?.moving ?? false,
       hiddenByUser: overlay?.hiddenByUser ?? false,
@@ -257,12 +294,48 @@ const ALL_ROLES: Record<string, string> = { top: "TOP", jungle: "JUNGLE", middle
 
 let lcuCreds: LcuCredentials | null = null;
 
-/** Lignes de méta des patchs récents (runes), gardées 5 minutes. */
-let partsCache: { at: number; parts: ReturnType<typeof readMeta>["parts"] } | null = null;
-function recentParts(): ReturnType<typeof readMeta>["parts"] {
-  if (partsCache && Date.now() - partsCache.at < 5 * 60_000) return partsCache.parts;
-  partsCache = { at: Date.now(), parts: readMeta(dbFile(), readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch)).parts };
-  return partsCache.parts;
+/** Méta des patchs récents (runes, rôles, builds), gardée 5 minutes. */
+let metaInputCache: { at: number; input: ReturnType<typeof readMeta> } | null = null;
+function recentMeta(): ReturnType<typeof readMeta> {
+  if (metaInputCache && Date.now() - metaInputCache.at < 5 * 60_000) return metaInputCache.input;
+  metaInputCache = { at: Date.now(), input: readMeta(dbFile(), readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch)) };
+  return metaInputCache.input;
+}
+const recentParts = () => recentMeta().parts;
+
+/** Build statistique de ton champion (autre que Kayn) pour la partie en cours ; recalculé si la situation change. */
+let statMemo: { key: string; value: StatBuild | null } | null = null;
+function liveStatBuild(snap: LiveSnapshot): StatBuild | null {
+  const ch = snap.me.champion ? findChamp(snap.me.champion) : undefined;
+  if (!ch?.key || ch.id === "Kayn") return null;
+  const enemies = snap.enemies.map((e) => (e.champion ? findChamp(e.champion) ?? null : null));
+  const enemyItems = readEnemyItems(snap.enemies, enemies, SHOP);
+  // Rôle : celui de la draft de cette partie, sinon le rôle le plus joué du champion dans la méta.
+  const fromDraft = draft && Date.now() - draftAt < DRAFT_MAX_AGE ? ALL_ROLES[draft.me.position] : undefined;
+  const key = [ch.key, fromDraft, enemies.map((e) => e?.id).join(","), enemyItems.healers, enemyItems.adShare == null ? "-" : Math.round(enemyItems.adShare * 10)].join("|");
+  if (statMemo?.key === key) return statMemo.value;
+  let value: StatBuild | null = null;
+  try {
+    const meta = recentMeta();
+    const rows = meta.parts.filter((p) => p.championId === ch.key);
+    let role = fromDraft;
+    if (!role || rows.filter((r) => r.role === role).length < 20) {
+      const counts = new Map<string, number>();
+      for (const r of rows) if (r.role) counts.set(r.role, (counts.get(r.role) ?? 0) + 1);
+      role = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    }
+    if (role) {
+      value = statBuild({
+        parts: rows.filter((r) => r.role === role),
+        builds: meta.builds.filter((b) => b.championId === ch.key && b.role === role),
+        role, enemies, enemyItems, shop: SHOP,
+      });
+    }
+  } catch (e) {
+    console.error("Build statistique :", e);
+  }
+  statMemo = { key, value };
+  return value;
 }
 
 /**
@@ -294,19 +367,50 @@ function safeRunePage(snap: DraftSnapshot, view: DraftView): (RecommendedPage & 
 }
 
 /** Tes meilleurs choix pour cette draft (jungle ou milieu seulement) ; jamais d'erreur bloquante pour la draft. */
+/** Parties par rôle de chaque champion (méta récente), gardées avec les lignes de méta. */
+let sharesCache: { parts: unknown; shares: RoleShares } | null = null;
+function getRoleShares(): RoleShares {
+  const parts = recentParts();
+  if (sharesCache?.parts !== parts) sharesCache = { parts, shares: roleShares(parts) };
+  return sharesCache.shares;
+}
+
+/** Les deux équipes rangées par rôle (rôles adverses probables d'après la méta). */
+function safeLanes(snap: DraftSnapshot, view: DraftView): LaneRow<ChampLite>[] | null {
+  try {
+    const allies = [
+      { champ: view.me.champion, position: snap.me.position, me: true },
+      ...snap.allies.slice(0, 4).map((a, i) => ({ champ: view.allies[i], position: a.position })),
+    ];
+    const enemies = snap.enemies.slice(0, 5).flatMap((e, i) => (e.championId && view.enemies[i] ? [{ id: e.championId, champ: view.enemies[i]! }] : []));
+    return laneRows(allies, enemies, getRoleShares());
+  } catch (e) {
+    console.error("Rôles de la draft :", e);
+    return null;
+  }
+}
+
 let picksMemo: { key: string; at: number; value: DraftPicks | null } | null = null;
-function safePicks(snap: DraftSnapshot): DraftPicks | null {
+function safePicks(snap: DraftSnapshot, lanes: LaneRow<ChampLite>[] | null): DraftPicks | null {
   const role = DRAFT_ROLES[snap.me.position];
   if (!role) return null;
   // Le client envoie la session très souvent : on ne recalcule que si la draft a changé (ou après 1 min).
   const key = JSON.stringify([role, snap.myTurn, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId), snap.unavailable]);
   if (picksMemo && picksMemo.key === key && Date.now() - picksMemo.at < 60_000) return picksMemo.value;
-  const value = computePicks(snap, role);
+  const enemyLanes = new Map<number, Lane>();
+  snap.enemies.forEach((e) => {
+    const row = lanes?.find((r) => r.enemy && view_id(r.enemy) === e.championId);
+    if (row && e.championId) enemyLanes.set(e.championId, row.lane);
+  });
+  const value = computePicks(snap, role, enemyLanes);
   picksMemo = { key, at: Date.now(), value };
   return value;
 }
 
-function computePicks(snap: DraftSnapshot, role: string): DraftPicks | null {
+/** Clé numérique d'un champion de la vue (identifiant Data Dragon). */
+const view_id = (c: ChampLite): number => findChamp(c.id)?.key ?? 0;
+
+function computePicks(snap: DraftSnapshot, role: string, enemyLanes: Map<number, Lane>): DraftPicks | null {
   try {
     const reco = getRecoView();
     const r = reco.roles.find((x) => x.role === role);
@@ -316,6 +420,7 @@ function computePicks(snap: DraftSnapshot, role: string): DraftPicks | null {
       myTurn: snap.myTurn,
       allies: snap.allies.map((a) => a.championId).filter(Boolean),
       enemies: snap.enemies.map((e) => e.championId).filter(Boolean),
+      enemyLanes,
       unavailable: snap.unavailable,
       excluded: excludedKeys(),
       pool: r.pool,
@@ -412,6 +517,13 @@ function setOverlayEnabled(on: boolean): void {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.setOverlayEnabled, (_e, on: unknown) => { setOverlayEnabled(on === true); return state(); });
+  ipcMain.handle(IPC.setTipsEnabled, (_e, on: unknown) => {
+    settings.overlay.tips = on === true;
+    saveSettings(settingsFile, settings);
+    if (!settings.overlay.tips) stopCoach();
+    updateLive();
+    return state();
+  });
   ipcMain.handle(IPC.setFormChoice, (_e, f: unknown) => {
     settings.formChoice = f === "blue" || f === "red" ? f : "auto";
     saveSettings(settingsFile, settings);

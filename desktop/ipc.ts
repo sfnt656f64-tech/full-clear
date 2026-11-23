@@ -36,6 +36,8 @@ export interface LiveState {
   inGame: boolean;
   view: import("./next-item.ts").OverlayView | null;
   overlayEnabled: boolean;
+  /** Conseils d'avant-partie dans l'overlay. */
+  tipsEnabled: boolean;
   overlayVisible: boolean;
   overlayMoving: boolean;
   hiddenByUser: boolean;
@@ -92,6 +94,7 @@ export interface KaynApi {
   setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
+  setTipsEnabled(on: boolean): Promise<AppState>;
   setFormChoice(f: "auto" | "blue" | "red"): Promise<AppState>;
   resetOverlayPosition(): Promise<AppState>;
   /** null : raccourci par défaut. Renvoie aussi une erreur si la combinaison est refusée. */
@@ -117,6 +120,7 @@ export const IPC = {
   setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",
+  setTipsEnabled: "kayn:set-tips-enabled",
   setFormChoice: "kayn:set-form-choice",
   resetOverlayPosition: "kayn:reset-overlay-position",
   setShortcut: "kayn:set-shortcut",

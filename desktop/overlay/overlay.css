@@ -31,3 +31,11 @@ body.moving .card { border: 1px dashed #e7b04b; cursor: move; -webkit-app-region
 .tag.red { background: #6e2a31; }
 .warn { color: #e7b04b; }
 img.broken { visibility: hidden; }
+
+/* Conseils d'avant-partie */
+.tips { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.tip { margin: 0 0 4px; font-size: 12px; line-height: 1.35; animation: tip-in 12s ease both; }
+.tip::before { content: "›"; color: #e7b04b; margin-right: 6px; }
+@keyframes tip-in { 0% { opacity: 0; transform: translateY(-3px); } 5% { opacity: 1; transform: none; } 92% { opacity: 1; } 100% { opacity: 0; } }
+.mt4 { margin-top: 4px; }
+.tag.meta { background: rgba(79,195,138,.18); color: #4fc38a; }

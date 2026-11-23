@@ -2,7 +2,8 @@
 //
 // Pour chaque champion C (dans ton rôle), on part de son score de pool (« Mon pool ») et on ajoute :
 //   - contres : win rate de C dans la méta Émeraude+ quand chaque adversaire révélé est en face,
-//     comparé à son win rate habituel (lissé : peu de parties → effet proche de 0) ;
+//     comparé à son win rate habituel (lissé : peu de parties → effet proche de 0), pondéré par le rôle :
+//     ton vis-à-vis probable (même rôle) compte ×1,5, les autres ×0,5 ;
 //   - synergie : idem avec chaque allié verrouillé ;
 //   - dégâts : bonus si C apporte le type de dégâts qui manque à ton équipe.
 // Un champion hors de ton pool n'est proposé que s'il est nettement meilleur (OFF_POOL_MARGIN points),
@@ -13,6 +14,7 @@ import { champByKey } from "../../src/data/champions";
 import type { Champion } from "../../src/data/types";
 import type { MetaChampion, MetaPartRow } from "../meta/meta-stats.ts";
 import type { PoolPick } from "./recommend.ts";
+import { LANE_LABELS, type Lane } from "./lanes.ts";
 
 /** Parties « fictives » au win rate habituel du champion, pour lisser un duel ou une association. */
 export const K_PAIR = 150;
@@ -26,6 +28,9 @@ export const PAIR_MIN_EFFECT = 0.5;
 export const OFF_POOL_MIN_GAMES = 100;
 export const OFF_POOL_PENALTY = 2;
 export const OFF_POOL_MARGIN = 3;
+/** Poids d'un duel : contre ton vis-à-vis (même rôle), contre les autres. */
+export const SAME_LANE_WEIGHT = 1.5;
+export const OTHER_LANE_WEIGHT = 0.5;
 /** Nombre de propositions. */
 export const DRAFT_COUNT = 3;
 
@@ -79,6 +84,8 @@ export interface DraftPickInput {
   myTurn: boolean;
   allies: number[];
   enemies: number[];
+  /** Rôle probable de chaque adversaire révélé (draft rangée par rôle). */
+  enemyLanes?: Map<number, Lane>;
   unavailable: number[];
   /** Champions exclus (réglage) : jamais proposés. */
   excluded?: number[];
@@ -142,16 +149,25 @@ function evaluate(input: DraftPickInput, championId: number, base: number, poolR
   if (!c) return null;
   const enemies = pairEffects(input.index, championId, input.role, input.enemies, "enemy");
   const allies = pairEffects(input.index, championId, input.role, input.allies, "ally");
+  const weight = (id: number) => {
+    const lane = input.enemyLanes?.get(id);
+    return !lane ? 1 : lane === input.role ? SAME_LANE_WEIGHT : OTHER_LANE_WEIGHT;
+  };
+  for (const e of enemies) e.effect *= weight(e.championId);
   const counter = clamp(enemies.reduce((s, e) => s + e.effect, 0), -TOTAL_CAP, TOTAL_CAP);
   const synergy = clamp(allies.reduce((s, e) => s + e.effect, 0), -TOTAL_CAP, TOTAL_CAP);
   const damage = damageBonus(c, need);
 
   const r: { w: number; text: string }[] = [];
   const cite = (e: PairEffect) => e.games >= PAIR_MIN_GAMES && Math.abs(e.effect) >= PAIR_MIN_EFFECT;
+  const who = (id: number) => {
+    const lane = input.enemyLanes?.get(id);
+    return lane ? `${name(id)} (${LANE_LABELS[lane].toLowerCase()})` : name(id);
+  };
   for (const e of enemies.filter(cite)) {
     r.push({ w: Math.abs(e.effect), text: e.effect > 0
-      ? `Bon contre ${name(e.championId)} : ${nf(e.winRate)} % sur ${e.games} parties en Émeraude+.`
-      : `Difficile contre ${name(e.championId)} : ${nf(e.winRate)} % sur ${e.games} parties en Émeraude+.` });
+      ? `Bon contre ${who(e.championId)} : ${nf(e.winRate)} % sur ${e.games} parties en Émeraude+.`
+      : `Difficile contre ${who(e.championId)} : ${nf(e.winRate)} % sur ${e.games} parties en Émeraude+.` });
   }
   for (const e of allies.filter(cite)) {
     r.push({ w: Math.abs(e.effect), text: e.effect > 0

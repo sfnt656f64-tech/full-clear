@@ -13,80 +13,126 @@
     <span id="version" class="muted"></span>
   </header>
 
-  <section>
-    <h2>Client League of Legends</h2>
-    <p id="client" class="status idle">Recherche du client…</p>
-    <p id="client-account" class="muted small" hidden></p>
-  </section>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="home" aria-selected="true">Accueil</button>
+    <button type="button" role="tab" data-tab="draft">Draft<span id="draft-dot" class="dot" hidden></span></button>
+    <button type="button" role="tab" data-tab="collect">Collecte</button>
+    <button type="button" role="tab" data-tab="settings">Réglages</button>
+  </nav>
 
-  <section>
-    <h2>Ton top 3</h2>
-    <div id="top3"><p class="muted small">Calcul…</p></div>
-  </section>
+  <!-- ===================== Accueil ===================== -->
+  <main id="tab-home" class="tab" role="tabpanel">
+    <p id="home-alert" class="alert" hidden></p>
+    <section>
+      <p id="client" class="status idle">Recherche du client…</p>
+      <p id="client-account" class="muted small" hidden></p>
+    </section>
 
-  <section>
-    <h2>Collecte (API Riot)</h2>
-    <p id="col-status" class="status idle"></p>
-    <div id="col-body"></div>
-    <div class="row"><button id="col-stats" type="button">Mes stats</button><button id="col-meta" type="button">Méta</button><button id="col-reco" type="button">Champions recommandés</button><button id="col-pause" type="button"></button></div>
-    <p class="muted small">Tourne seulement quand l'appli est ouverte, en arrière-plan et en priorité basse ; en pause du chargement à la fin de chaque partie. Reprend où elle s'était arrêtée.</p>
-  </section>
+    <section>
+      <h2>Ton top 3</h2>
+      <div id="top3"><p class="muted small">Calcul…</p></div>
+      <div class="row">
+        <button id="col-reco" type="button">Champions recommandés</button>
+        <button id="col-stats" type="button">Mes stats</button>
+        <button id="col-meta" type="button">Méta</button>
+      </div>
+    </section>
 
-  <section>
-    <h2>Overlay en jeu</h2>
-    <p id="live-status" class="status idle">Pas de partie en cours.</p>
-    <div id="live-body"></div>
-    <label class="check"><input id="overlay-on" type="checkbox"> Afficher l'overlay pendant les parties</label>
-    <div class="row">
-      <label for="form-choice" class="small">Forme :</label>
-      <select id="form-choice">
-        <option value="auto">Recommandée (auto)</option>
-        <option value="blue">Bleu (assassin)</option>
-        <option value="red">Rouge (Rhaast)</option>
-      </select>
-      <button id="overlay-reset" type="button">Replacer l'overlay</button>
-    </div>
-    <h3>Raccourcis (actifs en partie)</h3>
-    <div class="shortcut-row">
-      <span>Masquer / afficher</span>
-      <button id="sc-toggle" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
-      <span id="sc-toggle-status" class="badge"></span>
-      <button id="sc-toggle-reset" type="button" class="link">Par défaut</button>
-    </div>
-    <div class="shortcut-row">
-      <span>Déplacer / verrouiller</span>
-      <button id="sc-move" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
-      <span id="sc-move-status" class="badge"></span>
-      <button id="sc-move-reset" type="button" class="link">Par défaut</button>
-    </div>
-    <p id="sc-error" class="warn-text small" hidden></p>
-    <p class="muted small">Clique sur une combinaison puis appuie sur la nouvelle (Ctrl, Alt et/ou Maj + une lettre, un chiffre ou F1–F24). Échap pour annuler. « Masquer / afficher » est aussi dans le menu clic droit de l'icône.</p>
-    <p id="window-mode" class="small"></p>
-  </section>
+    <section>
+      <h2>En jeu</h2>
+      <p id="live-status" class="status idle">Pas de partie en cours.</p>
+      <div id="live-body"></div>
+      <p id="window-mode" class="small"></p>
+    </section>
 
-  <section id="draft" hidden>
-    <h2 id="draft-title">Draft</h2>
-    <div id="draft-body"></div>
-  </section>
+    <button id="home-col" type="button" class="summary-line"><span id="home-col-text" class="status idle">Collecte…</span><span class="muted small">Détails ›</span></button>
+  </main>
 
-  <section>
-    <h2>Configuration</h2>
-    <p id="riot-id" class="status"></p>
-    <ul id="problems" class="problems"></ul>
-    <p class="muted small">Fichier : <span id="env-file"></span></p>
-    <p id="accounts" class="muted small"></p>
-    <p class="muted small">La clé API (RIOT_API_KEY) sert uniquement à la collecte et n'est envoyée qu'à l'API Riot. Le client et le jeu sont lus en local.</p>
-    <div class="row">
-      <button id="reload" type="button">Relire le .env</button>
-      <button id="open-dir" type="button">Ouvrir le dossier de l'appli</button>
-    </div>
-  </section>
+  <!-- ===================== Draft ===================== -->
+  <main id="tab-draft" class="tab" role="tabpanel" hidden>
+    <section id="draft">
+      <h2 id="draft-title">Draft</h2>
+      <p id="draft-empty" class="muted">Pas de draft en cours. Cet onglet s'ouvre tout seul pendant la sélection des champions.</p>
+      <div id="draft-body"></div>
+    </section>
+  </main>
 
-  <section>
-    <h2>Démarrage</h2>
-    <label class="check"><input id="login" type="checkbox"> Lancer au démarrage de Windows (discret, dans la zone de notification)</label>
-    <p id="dev-note" class="muted small" hidden>Mode développement : Windows lancera Electron avec ce dépôt. La version installée (étape 5) utilisera son propre exécutable.</p>
-  </section>
+  <!-- ===================== Collecte ===================== -->
+  <main id="tab-collect" class="tab" role="tabpanel" hidden>
+    <section>
+      <h2>Collecte (API Riot)</h2>
+      <p id="col-status" class="status idle"></p>
+      <div id="col-summary"></div>
+      <div class="row"><button id="col-pause" type="button"></button></div>
+      <details id="col-details">
+        <summary class="small">Détails techniques</summary>
+        <div id="col-body"></div>
+      </details>
+      <p class="muted small">Tourne seulement quand l'appli est ouverte, en arrière-plan et en priorité basse ; en pause du chargement à la fin de chaque partie. Reprend où elle s'était arrêtée.</p>
+    </section>
+  </main>
+
+  <!-- ===================== Réglages ===================== -->
+  <main id="tab-settings" class="tab" role="tabpanel" hidden>
+    <section>
+      <h2>Démarrage</h2>
+      <label class="check"><input id="login" type="checkbox"> Lancer au démarrage de Windows (discret, dans la zone de notification)</label>
+      <p id="dev-note" class="muted small" hidden>Mode développement : Windows lancera Electron avec ce dépôt. La version installée utilise son propre exécutable.</p>
+    </section>
+
+    <section>
+      <h2>Overlay en jeu</h2>
+      <label class="check"><input id="overlay-on" type="checkbox"> Afficher l'overlay pendant les parties</label>
+      <label class="check"><input id="tips-on" type="checkbox"> Conseils d'avant-partie au début de la partie (tirés de la draft, deux à la fois, ils s'effacent seuls)</label>
+      <div class="row">
+        <label for="form-choice" class="small">Forme de Kayn :</label>
+        <select id="form-choice">
+          <option value="auto">Recommandée (auto)</option>
+          <option value="blue">Bleu (assassin)</option>
+          <option value="red">Rouge (Rhaast)</option>
+        </select>
+        <button id="overlay-reset" type="button">Replacer l'overlay</button>
+      </div>
+      <h3>Raccourcis (actifs en partie)</h3>
+      <div class="shortcut-row">
+        <span>Masquer / afficher</span>
+        <button id="sc-toggle" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
+        <span id="sc-toggle-status" class="badge"></span>
+        <button id="sc-toggle-reset" type="button" class="link">Par défaut</button>
+      </div>
+      <div class="shortcut-row">
+        <span>Déplacer / verrouiller</span>
+        <button id="sc-move" type="button" class="combo" title="Cliquer, puis appuyer sur la nouvelle combinaison"></button>
+        <span id="sc-move-status" class="badge"></span>
+        <button id="sc-move-reset" type="button" class="link">Par défaut</button>
+      </div>
+      <p id="sc-error" class="warn-text small" hidden></p>
+      <p class="muted small">Clique sur une combinaison puis appuie sur la nouvelle (Ctrl, Alt et/ou Maj + une lettre, un chiffre ou F1–F24). Échap pour annuler. « Masquer / afficher » est aussi dans le menu clic droit de l'icône.</p>
+    </section>
+
+    <section>
+      <h2>Champions exclus</h2>
+      <p class="muted small">Parties jouées par quelqu'un d'autre : retirées de tes stats, de ton pool et des recommandations (elles restent dans la méta).</p>
+      <div id="excluded" class="chips"></div>
+      <div class="row">
+        <input id="excluded-add" type="search" list="champ-list" placeholder="Ajouter un champion…">
+        <datalist id="champ-list"></datalist>
+      </div>
+    </section>
+
+    <section>
+      <h2>Configuration</h2>
+      <p id="riot-id" class="status"></p>
+      <ul id="problems" class="problems"></ul>
+      <p class="muted small">Fichier : <span id="env-file"></span></p>
+      <p id="accounts" class="muted small"></p>
+      <p class="muted small">La clé API (RIOT_API_KEY) sert uniquement à la collecte et n'est envoyée qu'à l'API Riot. Le client et le jeu sont lus en local.</p>
+      <div class="row">
+        <button id="reload" type="button">Relire le .env</button>
+        <button id="open-dir" type="button">Ouvrir le dossier de l'appli</button>
+      </div>
+    </section>
+  </main>
 
   <footer class="muted small">Fermer cette fenêtre la cache : l'appli reste dans la zone de notification. Pour quitter : clic droit sur l'icône → Quitter.</footer>
   <script src="renderer.js"></script>
