@@ -8,6 +8,7 @@ import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
 import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { readMyGames } from "./stats/read.ts";
+import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildOverlayView, type OverlayView } from "./next-item.ts";
@@ -148,6 +149,7 @@ function state(): AppState {
     hasApiKey: !!config.apiKey,
     collector: collector?.state ?? { kind: "off", reason: "no-key" },
     collectorPaused: settings?.collectorPaused ?? false,
+    excludedChampions: settings?.excludedChampions ?? [],
     problems: config.problems,
     openAtLogin: openAtLogin(),
     dev,
@@ -284,6 +286,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); configureCollector(); return state(); });
   ipcMain.handle(IPC.getMyGames, () => readMyGames(dbFile()));
   ipcMain.handle(IPC.openStatsWindow, () => showStatsWindow());
+  ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
+    // Seulement des champions qui existent (identifiants Data Dragon).
+    settings.excludedChampions = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string" && !!findChamp(x)?.id))] : settings.excludedChampions;
+    saveSettings(settingsFile, settings);
+    pushState();
+    return state();
+  });
   ipcMain.handle(IPC.setCollectorPaused, (_e, on: unknown) => {
     settings.collectorPaused = on === true;
     saveSettings(settingsFile, settings);

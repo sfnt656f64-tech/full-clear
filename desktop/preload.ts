@@ -10,6 +10,7 @@ const api: KaynApi = {
   setCollectorPaused: (on) => ipcRenderer.invoke(IPC.setCollectorPaused, on),
   getMyGames: () => ipcRenderer.invoke(IPC.getMyGames),
   openStatsWindow: () => ipcRenderer.invoke(IPC.openStatsWindow),
+  setExcludedChampions: (ids) => ipcRenderer.invoke(IPC.setExcludedChampions, ids),
   openDraftInSimulator: () => ipcRenderer.invoke(IPC.openDraftInSimulator),
   setOverlayEnabled: (on) => ipcRenderer.invoke(IPC.setOverlayEnabled, on),
   setFormChoice: (f) => ipcRenderer.invoke(IPC.setFormChoice, f),

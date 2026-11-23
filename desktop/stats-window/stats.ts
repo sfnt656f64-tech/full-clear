@@ -1,5 +1,5 @@
 // Fenêtre « Mes stats » : tableau par champion et par rôle, filtres et tri.
-import { champByKey } from "../../src/data/champions";
+import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
 import type { AppState, KaynApi } from "../ipc.ts";
 import { DEFAULT_FILTER, myStats, ROLE_LABELS, ROLES, type MyGameRow, type Period, type StatLine, type StatsFilter } from "../stats/my-stats.ts";
@@ -56,6 +56,32 @@ let games: MyGameRow[] = [];
 let filter: StatsFilter = { ...DEFAULT_FILTER };
 let sort = { key: "games", asc: false };
 let knownCount = -1;
+/** Champions exclus (identifiants Data Dragon), d'après les réglages de l'appli. */
+let excludedIds: string[] = [];
+
+function applyExcluded(ids: string[]): void {
+  excludedIds = ids;
+  filter.excluded = ids.map((id) => findChamp(id)?.key).filter((k): k is number => k != null);
+}
+
+function renderExcluded(): void {
+  $("ex-list").replaceChildren(...(excludedIds.length ? excludedIds.map((id) => {
+    const b = el("button", { type: "button", title: `Réintégrer ${findChamp(id)?.name ?? id}` }, "×");
+    b.addEventListener("click", () => void setExcluded(excludedIds.filter((x) => x !== id)));
+    return el("span", { class: "chip" }, findChamp(id)?.name ?? id, b);
+  }) : [el("span", { class: "muted" }, "aucun")]));
+  const sel = $<HTMLSelectElement>("ex-add");
+  sel.replaceChildren(el("option", { value: "" }, "+ Exclure…"),
+    ...CHAMPIONS.filter((c) => c.id && !excludedIds.includes(c.id)).map((c) => el("option", { value: c.id! }, c.name)));
+  sel.value = "";
+}
+
+async function setExcluded(ids: string[]): Promise<void> {
+  const s = await window.kayn.setExcludedChampions(ids);
+  applyExcluded(s.excludedChampions);
+  renderExcluded();
+  render();
+}
 
 function renderHead(): void {
   $("head").replaceChildren(...COLUMNS.map((c) => {
@@ -83,7 +109,17 @@ function render(): void {
   const empty = $("empty");
   empty.hidden = r.games > 0;
   empty.textContent = games.length ? "Aucune partie pour ces filtres." : "Pas encore de partie enregistrée : la collecte est peut-être en cours (voir la fenêtre principale).";
-  $("summary").textContent = `${nf(r.games)} partie(s)${r.remakes ? `, ${r.remakes} remake(s) exclu(s)` : ""} · ${lines.length} ligne(s)${r.patch ? ` · dernier patch : ${r.patch}` : ""}`;
+  $("summary").textContent = `${r.season ? `Saison ${r.season}` : "Toutes saisons"} · ${nf(r.games)} partie(s)`
+    + `${r.remakes ? `, ${r.remakes} remake(s) exclu(s)` : ""}${r.excludedGames ? `, ${r.excludedGames} sur des champions exclus` : ""}`
+    + ` · ${lines.length} ligne(s)${r.patch ? ` · dernier patch : ${r.patch}` : ""}`;
+
+  // Saisons présentes dans tes parties.
+  const ss = $<HTMLSelectElement>("f-season");
+  const sopts = ["current", ...r.seasons.slice(1).map(String), "all"];
+  if (ss.options.length !== sopts.length) {
+    ss.replaceChildren(...sopts.map((v) => el("option", { value: v }, v === "current" ? `En cours${r.seasons[0] ? ` (${r.seasons[0]})` : ""}` : v === "all" ? "Toutes" : v)));
+    ss.value = String(filter.season);
+  }
 
   // Comptes connus (dans la base) pour le filtre.
   const sel = $<HTMLSelectElement>("f-account");
@@ -95,7 +131,10 @@ function render(): void {
 }
 
 async function reload(): Promise<void> {
-  games = await window.kayn.getMyGames();
+  const [g, s] = await Promise.all([window.kayn.getMyGames(), window.kayn.getState()]);
+  games = g;
+  applyExcluded(s.excludedChampions);
+  renderExcluded();
   knownCount = games.length;
   render();
 }
@@ -109,11 +148,21 @@ const bind = (id: string, apply: (v: string) => void) =>
 bind("f-account", (v) => { filter.account = v; });
 bind("f-role", (v) => { filter.role = v; });
 bind("f-period", (v) => { filter.period = v as Period; });
+bind("f-season", (v) => { filter.season = v === "current" || v === "all" ? v : Number(v); });
+$<HTMLSelectElement>("ex-add").addEventListener("change", (e) => {
+  const id = (e.target as HTMLSelectElement).value;
+  if (id) void setExcluded([...excludedIds, id]);
+});
 bind("f-min", (v) => { filter.minGames = Number(v); });
 
 // Nouvelles parties enregistrées par la collecte : on recharge (au plus toutes les 10 s).
 let pending = false;
 window.kayn.onState((s: AppState) => {
+  if (s.excludedChampions.join() !== excludedIds.join()) {
+    applyExcluded(s.excludedChampions);
+    renderExcluded();
+    render();
+  }
   const n = s.collector.kind === "on" && s.collector.status ? Object.values(s.collector.status.myGames).reduce((a, b) => a + b, 0) : knownCount;
   if (n !== knownCount && !pending) {
     pending = true;

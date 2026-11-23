@@ -11,8 +11,8 @@ import { RateLimiter, realClock, type Clock, type Window } from "../../scripts/r
 export type Routing = "europe" | "euw1";
 export const ROUTINGS: Routing[] = ["europe", "euw1"];
 
-/** Priorités : plus petit = servi d'abord. */
-export const PRIORITY = { mine: 0, meta: 1 } as const;
+/** Priorités : plus petit = servi d'abord. Tes parties de la saison, puis tes anciennes saisons, puis la méta. */
+export const PRIORITY = { mine: 0, mineOld: 1, meta: 2 } as const;
 
 export const COLLECTOR_WINDOWS: Window[] = [
   { limit: 15, ms: 1_000 + 100 },

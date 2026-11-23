@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Collector, type CollectorStatus } from "../desktop/collector/collector";
-import { accountKey, idsKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { accountKey, historyKey, idsKey, scheduleAccounts } from "../desktop/collector/jobs";
 import { at15, patchOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "../desktop/collector/my-games";
 import { KeyRefusedError, PRIORITY, RiotScheduler } from "../desktop/collector/scheduler";
 import { CollectorStore } from "../desktop/collector/store";
@@ -147,7 +147,7 @@ describe("résumé de mes parties", () => {
   it("garde mes stats, l'or et les CS à 15 min, les items et les runes", () => {
     const g = summarizeMyGame(match("EUW1_1"), timeline, ME, "Moi#EUW")!;
     expect(g).toEqual({
-      matchId: "EUW1_1", account: "Moi#EUW", startMs: 2, durationS: 1800, patch: "16.23", championId: 141, role: "JUNGLE",
+      matchId: "EUW1_1", account: "Moi#EUW", startMs: 2, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
       win: true, remake: false, kills: 8, deaths: 2, assists: 6, cs: 190, vision: 31, gold15: 5015, cs15: 90,
       items: [6699, 6697, 3158],
       perks: { primary: 8100, sub: 8300, selections: [8128, 8143, 8347], shards: [5008, 5008, 5011] },
@@ -213,7 +213,8 @@ describe("collecte de mes parties", () => {
     await until(() => (store.gameCounts()["Moi#EUW"] ?? 0) === 149);
     col.stop();
     expect(store.get(accountKey("Moi#EUW"))).toBe(ME);
-    expect(calls.filter((c) => c.endsWith("/ids"))).toHaveLength(2);
+    // 2 pages pour la saison, 2 pour l'historique (dont les parties, déjà connues, ne sont pas redemandées).
+    expect(calls.filter((c) => c.endsWith("/ids"))).toHaveLength(4);
     expect(calls.filter((c) => c.endsWith("/timeline"))).toHaveLength(149); // pas de chronologie pour l'ARAM
     expect(last!.myGames).toEqual({ "Moi#EUW": 149 });
     expect(last!.jobs.find((j) => j.kind === "myMatch")).toMatchObject({ done: 150, failed: 0 });
@@ -260,9 +261,13 @@ describe("collecte de mes parties", () => {
     const ctx = { store, api, now: () => now };
     store.set(accountKey("Moi#EUW"), ME);
     scheduleAccounts(ctx, ["Moi#EUW"]);
+    // La saison d'abord, puis l'historique (une seule fois).
     const j = store.claimNext()!;
     expect(j.key).toBe(idsKey(ME, 0));
     store.done(j.id);
+    const h = store.claimNext()!;
+    expect(h.key).toBe(historyKey(ME, 0));
+    store.done(h.id);
     now += 60_000;
     scheduleAccounts(ctx, ["Moi#EUW"]);
     expect(store.claimNext()).toBeNull();
@@ -283,6 +288,50 @@ describe("collecte de mes parties", () => {
     col.stop();
     expect(store.counts().account).toEqual({ pending: 1 });
     expect(last!.lastError).toMatch(/Clé API refusée/);
+    store.close();
+  });
+});
+
+describe("anciennes saisons", () => {
+  it("parcourt tout l'historique après la saison, et enregistre la saison de chaque partie", async () => {
+    const season = Array.from({ length: 30 }, (_, i) => `EUW1_${900 - i}`);
+    const old = Array.from({ length: 120 }, (_, i) => `EUW1_${500 - i}`);
+    const order: string[] = [];
+    const f = (async (url: string) => {
+      const u = new URL(url);
+      if (u.pathname.includes("by-riot-id")) return json({ puuid: ME });
+      if (u.pathname.endsWith("/ids")) {
+        // Avec startTime : la saison en cours. Sans : tout l'historique (saison comprise).
+        const list = u.searchParams.has("startTime") ? season : [...season, ...old];
+        const start = Number(u.searchParams.get("start"));
+        return json(list.slice(start, start + 100));
+      }
+      const m = u.pathname.match(/matches\/([^/]+)(\/timeline)?$/);
+      if (m?.[2]) return json(timeline);
+      if (m) {
+        order.push(m[1]);
+        const mm = match(m[1]);
+        if (Number(m[1].slice(5)) <= 500) mm.info.gameVersion = "15.20.1.1";
+        return json(mm);
+      }
+      return json({}, 404);
+    }) as typeof fetch;
+    const store = new CollectorStore(tmpDb());
+    const api = new RiotScheduler({ apiKey: "k", windows: FAST, fetch: f });
+    let last: CollectorStatus | null = null;
+    const col = new Collector({ store, api, onStatus: (s) => { last = s; }, sleep: () => new Promise((ok) => setTimeout(ok, 5)) });
+    col.configure(["Moi#EUW"]);
+    col.start();
+    await until(() => (store.gameCounts()["Moi#EUW"] ?? 0) === 150);
+    col.stop();
+    // Chaque partie une seule fois, et toutes celles de la saison avant les anciennes.
+    expect(order).toHaveLength(150);
+    const firstOld = order.findIndex((id) => Number(id.slice(5)) <= 500);
+    expect(order.slice(0, firstOld).every((id) => season.includes(id))).toBe(true);
+    expect(firstOld).toBeGreaterThanOrEqual(season.length - 3); // 3 travaux en parallèle
+    const bySeason = store.db.prepare("select season, count(*) n from my_games group by season order by season").all();
+    expect(bySeason).toEqual([{ season: 2025, n: 120 }, { season: 2026, n: 30 }]);
+    expect(last!.jobs.find((j) => j.kind === "myOldMatch")).toMatchObject({ done: 120 });
     store.close();
   });
 });

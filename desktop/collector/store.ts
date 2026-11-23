@@ -26,6 +26,8 @@ export interface MyGame {
   durationS: number;
   /** « 16.23 » pour la version 16.23.xxx. */
   patch: string;
+  /** Saison (année) : 2026 pour la version 16.x, 2025 pour 15.x… */
+  season: number;
   championId: number;
   /** teamPosition de match-v5 : TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY (vide pour un remake). */
   role: string;
@@ -45,9 +47,10 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
-const SCHEMA_V1 = `
+/** Schéma initial (v1), gardé tel quel : les versions suivantes s'appliquent par migration. */
+export const SCHEMA_V1 = `
 create table if not exists kv (key text primary key, value text not null);
 create table if not exists jobs (
   id integer primary key,
@@ -96,7 +99,12 @@ export class CollectorStore {
     // WAL : les écritures n'empêchent pas les lectures, et un arrêt brutal ne corrompt pas la base.
     this.db.exec("pragma journal_mode = wal; pragma synchronous = normal; pragma busy_timeout = 3000;");
     const v = (this.db.prepare("pragma user_version").get() as { user_version: number }).user_version;
-    if (v < 1) this.db.exec(SCHEMA_V1 + `pragma user_version = ${SCHEMA_VERSION};`);
+    if (v < 1) this.db.exec(SCHEMA_V1 + "pragma user_version = 1;");
+    // v2 : saison de chaque partie (anciennes saisons), complétée d'après le patch pour les parties déjà enregistrées.
+    if (v < 2) this.tx(() => this.db.exec(`
+      alter table my_games add column season integer not null default 0;
+      update my_games set season = 2010 + cast(substr(patch, 1, instr(patch, '.') - 1) as integer);
+      pragma user_version = 2;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -113,8 +121,8 @@ export class CollectorStore {
       kvGet: this.db.prepare("select value from kv where key = ?"),
       kvSet: this.db.prepare("insert into kv (key, value) values (?, ?) on conflict(key) do update set value = excluded.value"),
       putGame: this.db.prepare(`insert or replace into my_games
-        (match_id, account, start_ms, duration_s, patch, champion_id, role, win, remake, kills, deaths, assists, cs, vision, gold15, cs15, items, perks)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+        (match_id, account, start_ms, duration_s, patch, season, champion_id, role, win, remake, kills, deaths, assists, cs, vision, gold15, cs15, items, perks)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
       countGames: this.db.prepare("select account, count(*) n from my_games group by account"),
     };
   }
@@ -183,7 +191,7 @@ export class CollectorStore {
   set(key: string, value: string): void { this.st.kvSet.run(key, value); }
 
   putGame(g: MyGame): void {
-    this.st.putGame.run(g.matchId, g.account, g.startMs, g.durationS, g.patch, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0,
+    this.st.putGame.run(g.matchId, g.account, g.startMs, g.durationS, g.patch, g.season, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0,
       g.kills, g.deaths, g.assists, g.cs, g.vision, g.gold15, g.cs15, JSON.stringify(g.items), g.perks ? JSON.stringify(g.perks) : null);
   }
 

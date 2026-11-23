@@ -51,6 +51,8 @@ export interface AppState {
   collector: HostState;
   /** Pause manuelle de la collecte. */
   collectorPaused: boolean;
+  /** Champions exclus de tes stats (identifiants Data Dragon). */
+  excludedChampions: string[];
   problems: string[];
   openAtLogin: boolean;
   /** Vrai en développement (npm run desktop) : le démarrage automatique pointe alors vers Electron + le dépôt. */
@@ -66,6 +68,7 @@ export interface KaynApi {
   /** Tes parties enregistrées (pour la fenêtre « Mes stats »). */
   getMyGames(): Promise<MyGameRow[]>;
   openStatsWindow(): Promise<void>;
+  setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
   setFormChoice(f: "auto" | "blue" | "red"): Promise<AppState>;
@@ -85,6 +88,7 @@ export const IPC = {
   setCollectorPaused: "kayn:set-collector-paused",
   getMyGames: "kayn:get-my-games",
   openStatsWindow: "kayn:open-stats-window",
+  setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",
   setFormChoice: "kayn:set-form-choice",

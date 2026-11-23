@@ -37,6 +37,9 @@ export interface TimelineV5 {
 /** « 16.23.734.1234 » → « 16.23 ». */
 export const patchOf = (gameVersion: string): string => gameVersion.split(".").slice(0, 2).join(".");
 
+/** Saison (année) d'un patch : 16.x → 2026, 15.x → 2025, 11.x → 2021. */
+export const seasonOf = (patch: string): number => 2010 + Number(patch.split(".")[0]);
+
 const MIN15 = 15 * 60_000;
 
 /** Or et CS à 15 min : image de la chronologie la plus proche de 15:00 (à 30 s près). */
@@ -58,6 +61,7 @@ export function summarizeMyGame(m: MatchV5, t: TimelineV5 | null, puuid: string,
     startMs: m.info.gameStartTimestamp ?? m.info.gameCreation,
     durationS: m.info.gameDuration,
     patch: patchOf(m.info.gameVersion),
+    season: seasonOf(patchOf(m.info.gameVersion)),
     championId: p.championId,
     role: p.teamPosition ?? "",
     win: p.win,
