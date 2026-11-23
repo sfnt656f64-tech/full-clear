@@ -54,7 +54,7 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -179,6 +179,17 @@ export class CollectorStore {
       alter table meta_parts add column team_kills15 integer;
       alter table meta_parts add column gold15 integer;
       pragma user_version = 4;`));
+    // v5 : ta maîtrise de champion (points), par compte, relue chaque jour.
+    if (v < 5) this.tx(() => this.db.exec(`
+      create table my_mastery (
+        account text not null,
+        champion_id integer not null,
+        points integer not null,
+        level integer not null,
+        last_play_ms integer not null,
+        primary key (account, champion_id)
+      );
+      pragma user_version = 5;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -288,6 +299,15 @@ export class CollectorStore {
     this.st.putGame.run(g.matchId, g.account, g.startMs, g.durationS, g.patch, g.season, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0,
       g.kills, g.deaths, g.assists, g.cs, g.vision, g.gold15, g.cs15,
       g.teamKills, g.kills15, g.assists15, g.teamKills15, JSON.stringify(g.items), g.perks ? JSON.stringify(g.perks) : null);
+  }
+
+  /** Remplace ta maîtrise de champion pour un compte. */
+  putMyMastery(account: string, rows: { championId: number; points: number; level: number; lastPlayMs: number }[]): void {
+    this.tx(() => {
+      this.db.prepare("delete from my_mastery where account = ?").run(account);
+      const ins = this.db.prepare("insert into my_mastery (account, champion_id, points, level, last_play_ms) values (?, ?, ?, ?, ?)");
+      for (const r of rows) ins.run(account, r.championId, r.points, r.level, r.lastPlayMs);
+    });
   }
 
   /** Parties enregistrées avant la v4, à relire une fois (participation aux kills). */

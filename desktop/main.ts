@@ -7,7 +7,7 @@ import { ClientWatcher } from "./client-watch.ts";
 import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
 import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
-import { readMyGames } from "./stats/read.ts";
+import { readMyGames, readMyMastery } from "./stats/read.ts";
 import { readMeta, readMetaMastery, readMetaPatches } from "./meta/read.ts";
 import { recommend } from "./reco/recommend.ts";
 import { metaStats } from "./meta/meta-stats.ts";
@@ -227,7 +227,7 @@ function getRecoView(): RecoView {
   const patches = readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch);
   const input = readMeta(dbFile(), patches);
   const view: RecoView = {
-    ...recommend({ myGames: readMyGames(dbFile()), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(dbFile()), metaMatches: input.matches, excluded }),
+    ...recommend({ myGames: readMyGames(dbFile()), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(dbFile()), metaMatches: input.matches, excluded, myMastery: readMyMastery(dbFile()) }),
     patches,
   };
   recoCache = { at: Date.now(), key, view };

@@ -85,3 +85,9 @@ select { font: inherit; color: var(--text); background: #2a2a3a; border: 1px sol
 button.link { background: none; border: none; padding: 2px 4px; color: var(--muted); font-size: 12px; text-decoration: underline; }
 button.link:hover { color: var(--text); background: none; }
 @media (max-width: 420px) { .shortcut-row { grid-template-columns: 1fr auto; } }
+
+/* Top 3 */
+.top3-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; font-size: 13px; }
+.top3-role { width: 52px; color: var(--muted); font-size: 12px; }
+.top3-pick { display: inline-flex; align-items: center; gap: 5px; }
+.top3-pick .ic { width: 24px; height: 24px; border-radius: 5px; }

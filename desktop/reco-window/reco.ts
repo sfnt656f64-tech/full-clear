@@ -60,9 +60,18 @@ function poolCard(p: PoolPick, i: number): HTMLElement {
     el("div", {},
       el("div", { class: "name" }, champName(p.championId), ...prov(p.provisional)),
       el("div", { class: "facts", title: `Parties par saison : ${seasons}` },
-        `${p.games} parties · ${nf(p.winRate)} % (lissé ${nf(p.adjustedWinRate, 1)} %) · KDA ${nf(p.kda, 1)} · ${meta}`)),
+        `${p.games} parties · ${nf(p.winRate)} % (lissé ${nf(p.adjustedWinRate, 1)} %) · KDA ${nf(p.kda, 1)}${p.masteryPoints ? ` · ${nf(Math.round(p.masteryPoints / 1000))} k pts` : ""} · ${meta}`)),
     el("div", { class: "score", title: "Score de classement (proche d'un win rate attendu)" }, nf(p.score, 1), el("small", {}, "score")),
-    reasons(p.reasons));
+    reasons(p.reasons),
+    breakdown(p));
+}
+
+/** Calcul du score en clair : la somme des 4 termes. */
+function breakdown(p: PoolPick): HTMLElement {
+  const b = p.breakdown;
+  const sign = (x: number) => `${x < 0 ? "−" : "+"} ${nf(Math.abs(x), 1)}`;
+  return el("p", { class: "calc", title: "Ton win rate lissé (saisons pondérées, ramené vers la méta) + force méta + bonus parties classées + bonus points de maîtrise" },
+    `Score ${nf(p.score, 1)} = ${nf(b.winRate, 1)} ton WR lissé ${sign(b.meta)} méta ${sign(b.games)} parties ${sign(b.mastery)} maîtrise`);
 }
 
 function tryCard(t: TryPick, i: number): HTMLElement {
@@ -89,7 +98,7 @@ function render(): void {
   const r: RoleReco | undefined = view.roles.find((x) => x.role === role);
   if (!r) return;
   renderProfile(r.profile);
-  $("pool").replaceChildren(...(r.pool.length ? r.pool.map(poolCard) : [el("li", { class: "empty" }, "Aucun champion avec au moins 3 parties dans ce rôle.")]));
+  $("pool").replaceChildren(...(r.pool.length ? r.pool.map(poolCard) : [el("li", { class: "empty" }, "Aucun champion avec au moins 10 parties dans ce rôle (les autres sont dans « À essayer »).")]));
   $("try").replaceChildren(...(r.tryList.length ? r.tryList.map(tryCard) : [el("li", { class: "empty" }, "Pas encore assez de méta pour proposer des champions : la collecte continue en arrière-plan.")]));
 }
 

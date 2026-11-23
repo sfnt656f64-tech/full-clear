@@ -26,14 +26,14 @@ const input = (over: Partial<RecoInput>): RecoInput => ({ myGames: [], meta: [],
 const jungle = (r: ReturnType<typeof recommend>) => r.roles.find((x) => x.role === "JUNGLE")!;
 
 describe("mon pool", () => {
-  it("3 victoires sur 3 ne passent pas devant un champion gagnant sur beaucoup de parties", () => {
+  it("10 parties à 70 % ne passent pas devant un champion gagnant sur beaucoup de parties", () => {
     const r = recommend(input({
-      myGames: [...games(VIEGO, 3, 0), ...games(KAYN, 34, 26)],
+      myGames: [...games(VIEGO, 7, 3), ...games(KAYN, 34, 26)],
       meta: [meta(VIEGO, 500, 50), meta(KAYN, 500, 50)],
     }));
     const pool = jungle(r).pool;
     expect(pool.map((p) => p.championId)).toEqual([KAYN, VIEGO]);
-    expect(pool[1].reasons.join(" ")).toContain("Seulement 3 parties");
+    expect(pool[1].winRate).toBe(70);
     expect(pool[0].reasons[0]).toContain("Tu gagnes 57 % de tes 60 parties");
   });
 
@@ -62,17 +62,43 @@ describe("mon pool", () => {
     expect(jungle(r).tryList.map((p) => p.championId)).toEqual([KHAZIX]);
   });
 
+  it("score = somme du détail ; les points de maîtrise départagent deux champions égaux", () => {
+    const r = recommend(input({
+      myGames: [...games(KAYN, 10, 10), ...games(VIEGO, 10, 10)],
+      meta: [meta(VIEGO, 500, 50), meta(KAYN, 500, 50)],
+      myMastery: new Map([[KAYN, 400_000]]),
+    }));
+    const [first, second] = jungle(r).pool;
+    expect(first.championId).toBe(KAYN);
+    expect(first.masteryPoints).toBe(400_000);
+    expect(first.breakdown.mastery).toBeCloseTo(1.5); // plein à 300 000 points
+    expect(second.breakdown.mastery).toBe(0);
+    for (const p of [first, second]) {
+      const b = p.breakdown;
+      expect(p.score).toBeCloseTo(b.winRate + b.meta + b.games + b.mastery);
+    }
+    expect(first.reasons.join(" ")).toContain("400 k points de maîtrise");
+  });
+
+  it("moins de 10 parties : pas dans le pool, mais proposé dans « À essayer »", () => {
+    const r = recommend(input({ myGames: [...games(KAYN, 30, 20), ...games(VIEGO, 3, 0)], meta: [meta(KAYN, 500, 50), meta(VIEGO, 500, 53)] }));
+    expect(jungle(r).pool.map((p) => p.championId)).toEqual([KAYN]);
+    const v = jungle(r).tryList.find((t) => t.championId === VIEGO)!;
+    expect(v.tried).toEqual({ games: 3, wins: 3 });
+    expect(v.reasons.join(" ")).toContain("déjà joué 3 fois (3 victoires)");
+  });
+
   it("remakes écartés ; méta absente → provisoire", () => {
-    const r = recommend(input({ myGames: [...games(KAYN, 3, 0), ...games(KAYN, 0, 5, { remake: true })] }));
+    const r = recommend(input({ myGames: [...games(KAYN, 10, 0), ...games(KAYN, 0, 5, { remake: true })] }));
     const k = jungle(r).pool[0];
-    expect(k.games).toBe(3);
+    expect(k.games).toBe(10);
     expect(k.provisional).toBe(true);
   });
 });
 
 describe("à essayer", () => {
   const base = {
-    myGames: [...games(KAYN, 30, 20), ...games(BRIAR, 12, 8), ...games(AKALI, 3, 2, { role: "MIDDLE" })],
+    myGames: [...games(KAYN, 30, 20), ...games(BRIAR, 12, 8), ...games(AKALI, 6, 4, { role: "MIDDLE" })],
     meta: [meta(KAYN, 500, 50), meta(KHAZIX, 400, 52), meta(ZAC, 400, 52), meta(VI, 400, 46), meta(AKALI, 300, 53), meta(AHRI, 400, 52, "MIDDLE")],
   };
 

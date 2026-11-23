@@ -1,6 +1,8 @@
 // Fenêtre d'état. Pas d'accès à Node : tout passe par window.kayn (preload.ts).
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
+import { champByKey } from "../../src/data/champions";
+import { DDRAGON_VERSION } from "../../src/data/version";
 
 declare global {
   interface Window { kayn: KaynApi }
@@ -320,3 +322,26 @@ $("open-dir").addEventListener("click", () => void window.kayn.openUserDataDir()
 $<HTMLInputElement>("login").addEventListener("change", async (e) => render(await window.kayn.setOpenAtLogin((e.target as HTMLInputElement).checked)));
 window.kayn.onState(render);
 void window.kayn.getState().then(render);
+
+// ---------- Top 3 ----------
+
+const nf1 = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Les 3 meilleurs champions de ton pool en jungle et au milieu (score de la vue « Champions recommandés »). */
+async function renderTop3(): Promise<void> {
+  const r = await window.kayn.getRecommendations();
+  const rows = r.roles.map((role) => {
+    const top = role.pool.slice(0, 3);
+    return h("div", { class: "top3-row" },
+      h("span", { class: "top3-role" }, role.role === "JUNGLE" ? "Jungle" : "Milieu"),
+      ...(top.length ? top.map((p, i) => {
+        const ch = champByKey(p.championId);
+        const img = h("img", { src: ch?.image ? `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${ch.image}` : "", alt: "", class: "ic" });
+        return h("span", { class: "top3-pick", title: [`Score ${nf1(p.score)} · ${p.games} parties · ${Math.round(p.winRate)} %`, ...p.reasons].join("\n") },
+          `${i + 1}.`, img, ch?.name ?? `#${p.championId}`, p.provisional ? h("span", { class: "muted small" }, " (provisoire)") : null);
+      }) : [h("span", { class: "muted small" }, "pas assez de parties dans ce rôle")]));
+  });
+  $("top3").replaceChildren(...rows, h("p", { class: "muted small" }, "Survole un champion pour le détail ; « Champions recommandés » pour le calcul complet."));
+}
+void renderTop3();
+window.setInterval(() => void renderTop3(), 120_000);

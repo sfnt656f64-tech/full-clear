@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Collector, type CollectorStatus } from "../desktop/collector/collector";
-import { accountKey, historyKey, idsKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { accountKey, HANDLERS, historyKey, idsKey, masteryKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { readMyMastery } from "../desktop/stats/read";
 import { at15, patchOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "../desktop/collector/my-games";
 import { KeyRefusedError, PRIORITY, RiotScheduler } from "../desktop/collector/scheduler";
 import { CollectorStore } from "../desktop/collector/store";
@@ -279,10 +280,14 @@ describe("collecte de mes parties", () => {
     const ctx = { store, api, now: () => now, pool: () => new Set<number>() };
     store.set(accountKey("Moi#EUW"), ME);
     scheduleAccounts(ctx, ["Moi#EUW"]);
-    // La saison d'abord, puis l'historique (une seule fois).
+    // La saison d'abord, puis la maîtrise, puis l'historique (une seule fois).
     const j = store.claimNext()!;
     expect(j.key).toBe(idsKey(ME, 0));
     store.done(j.id);
+    // Maîtrise : une fois par jour, même priorité que tes parties de la saison.
+    const m = store.claimNext()!;
+    expect(m.key).toBe(masteryKey("Moi#EUW", now));
+    store.done(m.id);
     const h = store.claimNext()!;
     expect(h.key).toBe(historyKey(ME, 0));
     store.done(h.id);
@@ -292,7 +297,24 @@ describe("collecte de mes parties", () => {
     now += 20 * 60_000;
     scheduleAccounts(ctx, ["Moi#EUW"]);
     expect(store.claimNext()?.key).toBe(idsKey(ME, 0));
+    now += 86_400_000;
+    scheduleAccounts(ctx, ["Moi#EUW"]);
+    expect(store.claimNext()?.key).toBe(masteryKey("Moi#EUW", now));
     store.close();
+  });
+
+  it("enregistre ma maîtrise de champion (points par compte)", async () => {
+    const file = tmpDb();
+    const store = new CollectorStore(file);
+    const f = (async (url: string) => {
+      expect(new URL(url).pathname).toBe(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${ME}`);
+      return json([{ championId: 141, championPoints: 250_000, championLevel: 30, lastPlayTime: 5 }, { championId: 233, championPoints: 40_000, championLevel: 9, lastPlayTime: 4 }]);
+    }) as typeof fetch;
+    const api = new RiotScheduler({ apiKey: "k", windows: FAST, fetch: f });
+    await HANDLERS.myMastery({ store, api, now: () => 0, pool: () => new Set<number>() }, { puuid: ME, riotId: "Moi#EUW" } as never);
+    store.putMyMastery("Autre#EUW", [{ championId: 141, points: 10_000, level: 3, lastPlayMs: 1 }]);
+    store.close();
+    expect(readMyMastery(file)).toEqual(new Map([[141, 260_000], [233, 40_000]]));
   });
 
   it("met le travail de côté et s'arrête sur une clé refusée", async () => {
