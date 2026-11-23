@@ -8,6 +8,9 @@ import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
 import { envCandidates, loadDesktopConfig, riotIdText, type DesktopConfig } from "./config.ts";
 import { buildDraftView, type DraftView } from "./draft-view.ts";
 import { readMyGames } from "./stats/read.ts";
+import { readMeta, readMetaPatches } from "./meta/read.ts";
+import { metaStats } from "./meta/meta-stats.ts";
+import type { MetaView } from "./ipc.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -50,10 +53,15 @@ let windowMode: WindowMode = "unknown";
 let overlay: OverlayWindow;
 let collector: CollectorHost;
 
+/** Champions exclus (réglage), en clés numériques Riot. */
+function excludedKeys(): number[] {
+  return settings.excludedChampions.map((id) => findChamp(id)?.key).filter((k): k is number => k != null);
+}
+
 /** (Re)configure la collecte : clé et comptes du .env, pause manuelle mémorisée. */
 function configureCollector(): void {
   collector.setPaused("user", settings.collectorPaused);
-  collector.configure(config.apiKey, config.riotIds.map(riotIdText));
+  collector.configure(config.apiKey, config.riotIds.map(riotIdText), excludedKeys());
 }
 
 /** Mode d'affichage du jeu, lu dans Config\game.cfg (simple lecture de fichier). */
@@ -164,33 +172,57 @@ function pushState(): void {
 }
 
 let statsWin: BrowserWindow | null = null;
+let metaWin: BrowserWindow | null = null;
 const dbFile = () => join(app.getPath("userData"), "riot.db");
 
-/** Fenêtre « Mes stats » (une seule à la fois). */
-function showStatsWindow(): void {
-  if (statsWin) {
-    if (statsWin.isMinimized()) statsWin.restore();
-    statsWin.focus();
-    return;
+/** Fenêtre d'outil (« Mes stats », « Méta ») : une seule de chaque, ré-affichée si déjà ouverte. */
+function toolWindow(existing: BrowserWindow | null, title: string, page: string, width: number, onClosed: () => void): BrowserWindow {
+  if (existing) {
+    if (existing.isMinimized()) existing.restore();
+    existing.focus();
+    return existing;
   }
-  statsWin = new BrowserWindow({
-    width: 1080,
+  const w = new BrowserWindow({
+    width,
     height: 720,
     minWidth: 640,
     minHeight: 400,
-    title: "Kayn Sim · Mes stats",
+    title,
     icon: join(here, "icon.png"),
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#14141c",
     webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
-  statsWin.removeMenu();
-  statsWin.on("closed", () => { statsWin = null; });
-  statsWin.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  statsWin.webContents.on("will-navigate", (e) => e.preventDefault());
-  void statsWin.loadFile(join(here, "stats-window", "index.html"));
-  statsWin.once("ready-to-show", () => statsWin?.show());
+  w.removeMenu();
+  w.on("closed", onClosed);
+  w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  w.webContents.on("will-navigate", (e) => e.preventDefault());
+  void w.loadFile(join(here, page));
+  w.once("ready-to-show", () => w.show());
+  return w;
+}
+
+function showStatsWindow(): void {
+  statsWin = toolWindow(statsWin, "Kayn Sim · Mes stats", "stats-window/index.html", 1080, () => { statsWin = null; });
+}
+
+function showMetaWindow(): void {
+  metaWin = toolWindow(metaWin, "Kayn Sim · Méta", "meta-window/index.html", 1240, () => { metaWin = null; });
+}
+
+/** Méta calculée, gardée une minute (le calcul relit toute la base). */
+const metaCache = new Map<number, { at: number; view: MetaView }>();
+function getMetaView(scope: number): MetaView {
+  const n = Math.min(3, Math.max(1, Math.trunc(scope) || 1));
+  const hit = metaCache.get(n);
+  if (hit && Date.now() - hit.at < 60_000) return hit.view;
+  const patches = readMetaPatches(dbFile());
+  const selected = patches.slice(0, n).map((p) => p.patch);
+  const input = readMeta(dbFile(), selected);
+  const view: MetaView = { patches, selected, matches: input.matches, champions: metaStats(input) };
+  metaCache.set(n, { at: Date.now(), view });
+  return view;
 }
 
 function showWindow(focus = true): void {
@@ -229,6 +261,7 @@ function refreshTrayMenu(): void {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Ouvrir Kayn Sim", click: () => showWindow() },
     { label: "Mes stats", click: () => showStatsWindow() },
+    { label: "Méta", click: () => showMetaWindow() },
     { type: "separator" },
     {
       label: `Masquer / afficher l'overlay (${displayAccelerator(settings.shortcuts.toggle)})`,
@@ -286,10 +319,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.reloadConfig, () => { config = readConfig(); watcher.refresh(); configureCollector(); return state(); });
   ipcMain.handle(IPC.getMyGames, () => readMyGames(dbFile()));
   ipcMain.handle(IPC.openStatsWindow, () => showStatsWindow());
+  ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
+  ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
   ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
     // Seulement des champions qui existent (identifiants Data Dragon).
     settings.excludedChampions = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string" && !!findChamp(x)?.id))] : settings.excludedChampions;
     saveSettings(settingsFile, settings);
+    configureCollector(); // le pool suivi dans la méta change
     pushState();
     return state();
   });

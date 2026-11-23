@@ -2,6 +2,16 @@
 import type { DraftView } from "./draft-view.ts";
 import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
+import type { MetaChampion } from "./meta/meta-stats.ts";
+import type { MetaPatchInfo } from "./meta/read.ts";
+
+/** Méta calculée pour la fenêtre « Méta ». */
+export interface MetaView {
+  patches: MetaPatchInfo[];
+  selected: string[];
+  matches: number;
+  champions: MetaChampion[];
+}
 
 export type { DraftView };
 
@@ -68,6 +78,9 @@ export interface KaynApi {
   /** Tes parties enregistrées (pour la fenêtre « Mes stats »). */
   getMyGames(): Promise<MyGameRow[]>;
   openStatsWindow(): Promise<void>;
+  openMetaWindow(): Promise<void>;
+  /** Méta des `scope` derniers patchs (1 à 3). */
+  getMeta(scope: number): Promise<MetaView>;
   setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
@@ -88,6 +101,8 @@ export const IPC = {
   setCollectorPaused: "kayn:set-collector-paused",
   getMyGames: "kayn:get-my-games",
   openStatsWindow: "kayn:open-stats-window",
+  openMetaWindow: "kayn:open-meta-window",
+  getMeta: "kayn:get-meta",
   setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",

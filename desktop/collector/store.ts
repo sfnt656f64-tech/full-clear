@@ -6,6 +6,7 @@
 // - kv : petit stockage clé → valeur (comptes résolus, dates de rafraîchissement…).
 // Aucune donnée d'identité d'autres joueurs n'est stockée.
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import type { MetaGame } from "./meta-parse.ts";
 
 export type JobStatus = "pending" | "running" | "done" | "failed";
 
@@ -47,7 +48,60 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+
+/**
+ * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
+ * - meta_games / meta_parts : une partie, 10 lignes (champion, rôle, victoire, KDA, items finaux, runes)
+ * - meta_builds : ordre d'achat des items terminés (chronologie), pour les champions de ton pool
+ * - meta_mastery : maîtrise du joueur source sur son champion (difficulté de prise en main)
+ * - jobs.rank : ordre aléatoire des joueurs à interroger (mélange des rangs dès le début)
+ */
+const SCHEMA_V3 = `
+alter table jobs add column rank real not null default 0;
+drop index if exists jobs_next;
+create index jobs_next on jobs (status, priority, not_before, rank, id);
+create table meta_games (
+  match_id text primary key,
+  patch text not null,
+  start_ms integer not null,
+  duration_s integer not null,
+  tier text not null,
+  remake integer not null
+);
+create index meta_games_patch on meta_games (patch);
+create table meta_parts (
+  match_id text not null,
+  participant_id integer not null,
+  team integer not null,
+  champion_id integer not null,
+  role text not null,
+  win integer not null,
+  kills integer not null,
+  deaths integer not null,
+  assists integer not null,
+  items text not null,
+  perks text,
+  primary key (match_id, participant_id)
+);
+create index meta_parts_champ on meta_parts (champion_id, role);
+create table meta_builds (
+  match_id text not null,
+  participant_id integer not null,
+  champion_id integer not null,
+  role text not null,
+  win integer not null,
+  items text not null,
+  primary key (match_id, participant_id)
+);
+create table meta_mastery (
+  match_id text primary key,
+  champion_id integer not null,
+  role text not null,
+  win integer not null,
+  points integer not null
+);
+pragma user_version = 3;`;
 
 /** Schéma initial (v1), gardé tel quel : les versions suivantes s'appliquent par migration. */
 export const SCHEMA_V1 = `
@@ -105,14 +159,24 @@ export class CollectorStore {
       alter table my_games add column season integer not null default 0;
       update my_games set season = 2010 + cast(substr(patch, 1, instr(patch, '.') - 1) as integer);
       pragma user_version = 2;`));
+    if (v < 3) this.tx(() => this.db.exec(SCHEMA_V3));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
-      enqueue: this.db.prepare("insert or ignore into jobs (kind, key, priority, payload, updated_at) values (?, ?, ?, ?, ?)"),
+      enqueue: this.db.prepare("insert or ignore into jobs (kind, key, priority, payload, updated_at, rank) values (?, ?, ?, ?, ?, ?)"),
       requeue: this.db.prepare("update jobs set status = 'pending', attempts = 0, not_before = 0, error = null, updated_at = ? where key = ? and status in ('done', 'failed')"),
-      next: this.db.prepare("select id, kind, key, priority, payload, attempts from jobs where status = 'pending' and not_before <= ? order by priority, id limit 1"),
+      next: this.db.prepare("select id, kind, key, priority, payload, attempts from jobs where status = 'pending' and not_before <= ? order by priority, rank, id limit 1"),
       claim: this.db.prepare("update jobs set status = 'running', updated_at = ? where id = ? and status = 'pending'"),
       done: this.db.prepare("update jobs set status = 'done', error = null, updated_at = ? where id = ?"),
+      clearPayload: this.db.prepare("update jobs set payload = '{}' where id = ?"),
+      hasMeta: this.db.prepare("select 1 from meta_games where match_id = ?"),
+      putMetaGame: this.db.prepare("insert or ignore into meta_games (match_id, patch, start_ms, duration_s, tier, remake) values (?, ?, ?, ?, ?, ?)"),
+      putMetaPart: this.db.prepare(`insert or ignore into meta_parts (match_id, participant_id, team, champion_id, role, win, kills, deaths, assists, items, perks)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      putBuild: this.db.prepare("insert or replace into meta_builds (match_id, participant_id, champion_id, role, win, items) values (?, ?, ?, ?, ?, ?)"),
+      putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
+      metaCount: this.db.prepare("select count(*) n, max(patch) p from meta_games"),
+      metaPatches: this.db.prepare("select patch, count(*) n from meta_games group by patch"),
       retry: this.db.prepare("update jobs set status = 'pending', attempts = attempts + 1, not_before = ?, error = ?, updated_at = ? where id = ?"),
       fail: this.db.prepare("update jobs set status = 'failed', attempts = attempts + 1, error = ?, updated_at = ? where id = ?"),
       release: this.db.prepare("update jobs set status = 'pending', updated_at = ? where id = ?"),
@@ -143,8 +207,9 @@ export class CollectorStore {
   }
 
   /** Ajoute un travail s'il n'existe pas déjà (même clé). Renvoie vrai s'il est nouveau. */
-  enqueue(kind: string, key: string, priority: number, payload: unknown): boolean {
-    return Number(this.st.enqueue.run(kind, key, priority, JSON.stringify(payload), this.now()).changes) > 0;
+  /** `rank` : ordre entre travaux de même priorité (0 par défaut ; aléatoire pour mélanger). */
+  enqueue(kind: string, key: string, priority: number, payload: unknown, rank = 0): boolean {
+    return Number(this.st.enqueue.run(kind, key, priority, JSON.stringify(payload), this.now(), rank).changes) > 0;
   }
 
   /** Remet en attente un travail terminé ou abandonné (rafraîchissement). */
@@ -166,12 +231,18 @@ export class CollectorStore {
     }
   }
 
-  done(id: number): void { this.st.done.run(this.now(), id); }
+  /** Travail terminé. `forget` : efface son contenu (données d'autres joueurs, devenues inutiles). */
+  done(id: number, forget = false): void {
+    this.st.done.run(this.now(), id);
+    if (forget) this.st.clearPayload.run(id);
+  }
 
-  /** Échec : nouvel essai plus tard, ou abandon après `maxAttempts`. */
-  failed(job: Job, error: string, maxAttempts = 5, backoffMs = 60_000): void {
-    if (job.attempts + 1 >= maxAttempts) this.st.fail.run(error, this.now(), job.id);
-    else this.st.retry.run(this.now() + backoffMs * 2 ** job.attempts, error, this.now(), job.id);
+  /** Échec : nouvel essai plus tard, ou abandon après `maxAttempts` (contenu effacé si `forget`). */
+  failed(job: Job, error: string, maxAttempts = 5, backoffMs = 60_000, forget = false): void {
+    if (job.attempts + 1 >= maxAttempts) {
+      this.st.fail.run(error, this.now(), job.id);
+      if (forget) this.st.clearPayload.run(job.id);
+    } else this.st.retry.run(this.now() + backoffMs * 2 ** job.attempts, error, this.now(), job.id);
   }
 
   /** Rend un travail sans le compter comme un échec (pause, arrêt). */
@@ -193,6 +264,46 @@ export class CollectorStore {
   putGame(g: MyGame): void {
     this.st.putGame.run(g.matchId, g.account, g.startMs, g.durationS, g.patch, g.season, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0,
       g.kills, g.deaths, g.assists, g.cs, g.vision, g.gold15, g.cs15, JSON.stringify(g.items), g.perks ? JSON.stringify(g.perks) : null);
+  }
+
+  // ---------- Méta ----------
+
+  hasMetaGame(matchId: string): boolean { return !!this.st.hasMeta.get(matchId); }
+
+  /** Une partie de méta et ses 10 lignes anonymes. `tier` : rang du joueur par lequel on l'a trouvée. */
+  putMetaGame(g: MetaGame, tier: string): void {
+    this.tx(() => {
+      this.st.putMetaGame.run(g.matchId, g.patch, g.startMs, g.durationS, tier, g.remake ? 1 : 0);
+      for (const p of g.parts) {
+        this.st.putMetaPart.run(g.matchId, p.participantId, p.team, p.championId, p.role, p.win ? 1 : 0, p.kills, p.deaths, p.assists,
+          JSON.stringify(p.items), p.perks ? JSON.stringify(p.perks) : null);
+      }
+    });
+  }
+
+  putBuild(matchId: string, participantId: number, championId: number, role: string, win: boolean, items: number[]): void {
+    this.st.putBuild.run(matchId, participantId, championId, role, win ? 1 : 0, JSON.stringify(items));
+  }
+
+  putMastery(matchId: string, championId: number, role: string, win: boolean, points: number): void {
+    this.st.putMastery.run(matchId, championId, role, win ? 1 : 0, points);
+  }
+
+  /** Parties de méta par patch, du plus récent au plus ancien. */
+  metaPatches(): { patch: string; games: number }[] {
+    const cmp = (a: string, b: string) => { const [a1, a2] = a.split(".").map(Number); const [b1, b2] = b.split(".").map(Number); return b1 - a1 || b2 - a2; };
+    return (this.st.metaPatches.all() as { patch: string; n: number }[]).map((r) => ({ patch: r.patch, games: r.n })).sort((a, b) => cmp(a.patch, b.patch));
+  }
+
+  /** Supprime la méta des patchs hors de `keep` (les plus récents). */
+  purgeMeta(keep: string[]): number {
+    if (!keep.length) return 0;
+    const marks = keep.map(() => "?").join(",");
+    return this.tx(() => {
+      const old = `select match_id from meta_games where patch not in (${marks})`;
+      for (const t of ["meta_parts", "meta_builds", "meta_mastery"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
+      return Number(this.db.prepare(`delete from meta_games where patch not in (${marks})`).run(...keep).changes);
+    });
   }
 
   /** Parties enregistrées par compte. */

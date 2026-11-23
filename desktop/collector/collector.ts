@@ -1,6 +1,7 @@
 // Moteur de la collecte : exécute les travaux de la file (store.jobs) au rythme permis par le planificateur.
 // Indépendant d'Electron (testable) : le processus de fond (collector-main.ts) ne fait que le brancher.
 import { HANDLERS, JOB_LABELS, scheduleAccounts, type JobContext } from "./jobs.ts";
+import { FORGET_KINDS, scheduleMeta } from "./meta-jobs.ts";
 import { BUDGET_2MIN, KeyRefusedError, ROUTINGS, type RiotScheduler, type Routing } from "./scheduler.ts";
 import type { CollectorStore, Job, JobStatus } from "./store.ts";
 
@@ -21,6 +22,10 @@ export interface CollectorStatus {
   budget: number;
   /** Tes parties enregistrées, par compte. */
   myGames: Record<string, number>;
+  /** Parties de méta par patch (du plus récent au plus ancien). */
+  meta: { patch: string; games: number }[];
+  /** Champions de ton pool suivis dans la méta (ordre d'achat). */
+  poolSize: number;
   lastError: string | null;
 }
 
@@ -37,6 +42,8 @@ export class Collector {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly onStatus: (s: CollectorStatus) => void;
   private accounts: string[] = [];
+  private excluded = new Set<number>();
+  private pool = new Set<number>();
   private running = false;
   private stopped = false;
   private active = 0;
@@ -46,18 +53,34 @@ export class Collector {
 
   constructor(o: CollectorOptions) {
     const now = o.now ?? Date.now;
-    this.ctx = { store: o.store, api: o.api, now };
+    this.ctx = { store: o.store, api: o.api, now, pool: () => this.pool };
     this.sleep = o.sleep ?? ((ms) => new Promise((ok) => setTimeout(ok, ms)));
     this.onStatus = o.onStatus ?? (() => {});
   }
 
-  /** Comptes à suivre (« Nom#TAG ») ; relance la recherche de nouvelles parties. */
-  configure(accounts: string[]): void {
+  /**
+   * Comptes à suivre (« Nom#TAG ») et champions exclus (clés) ; relance la recherche de nouvelles parties
+   * et les pages de classement de la semaine pour la méta.
+   */
+  configure(accounts: string[], excluded: number[] = []): void {
     this.accounts = accounts;
+    this.excluded = new Set(excluded);
     this.keyRefused = false;
     this.ctx.api.resume("key");
+    this.refreshPool();
     scheduleAccounts(this.ctx, accounts);
+    scheduleMeta(this.ctx);
     this.poke();
+  }
+
+  /**
+   * Ton pool : champions joués au moins 3 fois sur la saison en cours et la précédente,
+   * hors champions exclus.
+   */
+  private refreshPool(): void {
+    const rows = this.ctx.store.db.prepare(`select champion_id c, count(*) n from my_games
+      where remake = 0 and season >= (select coalesce(max(season), 0) - 1 from my_games) group by champion_id having n >= 3`).all() as { c: number }[];
+    this.pool = new Set(rows.map((r) => r.c).filter((c) => !this.excluded.has(c)));
   }
 
   pause(reason: string): void { this.ctx.api.pause(reason); this.publish(); }
@@ -102,8 +125,12 @@ export class Collector {
       if (!job) {
         this.publish();
         await this.idle(IDLE_MS);
-        // File vide : on revérifie de temps en temps les nouvelles parties de tes comptes.
-        if (!this.stopped && !this.ctx.api.paused) scheduleAccounts(this.ctx, this.accounts);
+        // File vide : on revérifie de temps en temps tes nouvelles parties et la méta de la semaine.
+        if (!this.stopped && !this.ctx.api.paused) {
+          this.refreshPool();
+          scheduleAccounts(this.ctx, this.accounts);
+          scheduleMeta(this.ctx);
+        }
         continue;
       }
       await this.run(job);
@@ -117,14 +144,14 @@ export class Collector {
     try {
       if (!handler) throw new Error(`Type de travail inconnu : ${job.kind}`);
       await handler(this.ctx, job.payload as never);
-      this.ctx.store.done(job.id);
+      this.ctx.store.done(job.id, FORGET_KINDS.has(job.kind));
     } catch (e) {
       if (e instanceof KeyRefusedError) {
         // Pas la faute du travail : on le rend tel quel, et tout s'arrête jusqu'à une nouvelle clé.
         this.keyRefused = true;
         this.ctx.store.release(job.id);
       } else {
-        this.ctx.store.failed(job, (e as Error).message);
+        this.ctx.store.failed(job, (e as Error).message, 5, 60_000, FORGET_KINDS.has(job.kind));
       }
       this.lastError = (e as Error).message;
     } finally {
@@ -152,6 +179,8 @@ export class Collector {
       usage: api.usage(),
       budget: BUDGET_2MIN,
       myGames: this.ctx.store.gameCounts(),
+      meta: this.ctx.store.metaPatches(),
+      poolSize: this.pool.size,
       lastError: this.lastError,
     };
   }

@@ -35,7 +35,7 @@ port.on("message", ({ data: m }) => {
     case "configure":
       api.setApiKey(m.apiKey);
       api.resume("config");
-      collector.configure(m.accounts);
+      collector.configure(m.accounts, m.excluded);
       collector.start();
       break;
     case "pause":

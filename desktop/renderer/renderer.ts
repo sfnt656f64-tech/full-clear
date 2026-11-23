@@ -276,6 +276,7 @@ function renderCollector(s: AppState): void {
       if (!j.pending && !j.done && !j.failed) continue;
       body.push(h("p", { class: "small muted" }, `${j.label} : ${j.done} fait(s)${j.pending ? `, ${j.pending} en attente` : ""}${j.failed ? `, ${j.failed} en échec` : ""}`));
     }
+    if (x.meta.length) body.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games} partie(s) en ${m.patch}`).join(", ")}${x.poolSize ? ` · ordres d'achat suivis pour ${x.poolSize} champion(s) de ton pool` : ""}`));
     body.push(h("p", { class: "small muted" }, `Requêtes sur 2 min : europe ${x.usage.europe}/${x.budget} · euw1 ${x.usage.euw1}/${x.budget}`));
     if (x.lastError && x.state !== "running") body.push(h("p", { class: "small warn-text" }, `Dernière erreur : ${x.lastError}`));
   }
@@ -286,6 +287,7 @@ function renderCollector(s: AppState): void {
 }
 
 $("col-stats").addEventListener("click", () => void window.kayn.openStatsWindow());
+$("col-meta").addEventListener("click", () => void window.kayn.openMetaWindow());
 $("col-pause").addEventListener("click", async () => {
   const s = await window.kayn.getState();
   render(await window.kayn.setCollectorPaused(!s.collectorPaused));

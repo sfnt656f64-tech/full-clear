@@ -258,7 +258,7 @@ describe("collecte de mes parties", () => {
     let now = 0;
     const store = new CollectorStore(tmpDb(), () => now);
     const api = new RiotScheduler({ apiKey: "k", windows: FAST });
-    const ctx = { store, api, now: () => now };
+    const ctx = { store, api, now: () => now, pool: () => new Set<number>() };
     store.set(accountKey("Moi#EUW"), ME);
     scheduleAccounts(ctx, ["Moi#EUW"]);
     // La saison d'abord, puis l'historique (une seule fois).

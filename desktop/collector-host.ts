@@ -17,7 +17,7 @@ export const GAME_PHASES = new Set(["GameStart", "InProgress", "Reconnect", "Wai
 export class CollectorHost {
   private child: UtilityProcess | null = null;
   private readonly pauses = new Set<string>();
-  private config: { apiKey: string | null; accounts: string[] } = { apiKey: null, accounts: [] };
+  private config: { apiKey: string | null; accounts: string[]; excluded: number[] } = { apiKey: null, accounts: [], excluded: [] };
   state: HostState = { kind: "off", reason: "no-key" };
   private readonly dir: string;
   private readonly dbFile: string;
@@ -31,8 +31,8 @@ export class CollectorHost {
   }
 
   /** Nouvelle configuration (.env relu) : démarre, reconfigure ou arrête la collecte. */
-  configure(apiKey: string | null, accounts: string[]): void {
-    this.config = { apiKey, accounts };
+  configure(apiKey: string | null, accounts: string[], excluded: number[] = []): void {
+    this.config = { apiKey, accounts, excluded };
     if (!apiKey || !accounts.length) {
       this.stop();
       this.state = { kind: "off", reason: !apiKey ? "no-key" : "no-account" };
@@ -40,7 +40,7 @@ export class CollectorHost {
       return;
     }
     if (!this.child) this.spawn();
-    else this.send({ type: "configure", apiKey, accounts });
+    else this.send({ type: "configure", apiKey, accounts, excluded });
   }
 
   setPaused(reason: string, on: boolean): void {
@@ -82,7 +82,7 @@ export class CollectorHost {
       if (this.restarts++ < 3) setTimeout(() => { if (!this.child && this.config.apiKey) this.spawn(); }, 10_000 * this.restarts).unref();
     });
     for (const reason of this.pauses) this.send({ type: "pause", reason });
-    this.send({ type: "configure", apiKey: this.config.apiKey!, accounts: this.config.accounts });
+    this.send({ type: "configure", apiKey: this.config.apiKey!, accounts: this.config.accounts, excluded: this.config.excluded });
     this.onChange();
   }
 }

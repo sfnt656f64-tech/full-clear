@@ -11,6 +11,7 @@ import { parseRiotId } from "../../scripts/riot/config.ts";
 import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
 import type { CollectorStore } from "./store.ts";
 import { summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
+import { META_LABELS, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
 
 export const QUEUE_SOLO_DUO = 420;
 const PAGE = 100;
@@ -21,6 +22,8 @@ export interface JobContext {
   store: CollectorStore;
   api: RiotScheduler;
   now: () => number;
+  /** Ton pool (clés de champions) : ordre d'achat collecté pour ces champions dans la méta. */
+  pool: () => Set<number>;
 }
 
 type Handler = (ctx: JobContext, payload: never) => Promise<void>;
@@ -103,7 +106,10 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
   if (g) ctx.store.putGame(g);
 };
 
-export const HANDLERS: Record<string, Handler> = { account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch };
+export const HANDLERS: Record<string, Handler> = {
+  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch,
+  metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
+};
 
 /** Libellés pour l'affichage. */
 export const JOB_LABELS: Record<string, string> = {
@@ -112,4 +118,5 @@ export const JOB_LABELS: Record<string, string> = {
   myMatch: "Mes parties (saison)",
   myHistoryIds: "Listes de parties (anciennes saisons)",
   myOldMatch: "Mes parties (anciennes saisons)",
+  ...META_LABELS,
 };
