@@ -26,8 +26,9 @@ describe("mesures de duel (chronologie)", () => {
   ] };
   it("écarts à 10 et 15 min, first blood, morts en 1 contre 1, objectifs avant 20 min", () => {
     const v = duelValues(timeline, parts, 2);
-    expect(v).toMatchObject({ gd10: 300, xd10: 200, gd15: -300, fb: 1, solo15: 1, conc20: 1 });
-    expect(v.obj20).toBeCloseTo(100 / 3, 5);
+    // Avant 15 min : 3 objectifs (1 à toi) ; 2 cédés, dont 1 compensé par une tour dans la minute → 50 %.
+    expect(v).toMatchObject({ gd10: 300, xd10: 200, gd15: -300, fb: 1, solo15: 1, unc15: 50 });
+    expect(v.obj15).toBeCloseTo(100 / 3, 5);
     // Ton adversaire : écarts opposés, pas au first blood.
     expect(duelValues(timeline, parts, 7)).toMatchObject({ gd10: -300, fb: 0, solo15: 0 });
   });

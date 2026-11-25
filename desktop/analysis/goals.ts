@@ -41,7 +41,7 @@ export interface GameMetrics {
   uncompensatedEarly: number;
 }
 
-const OBJECTIVES = new Set(["DRAGON", "HORDE", "RIFTHERALD"]);
+export const OBJECTIVES = new Set(["DRAGON", "HORDE", "RIFTHERALD"]);
 /** Zone d'une position pour ton équipe (base bleue en bas à gauche ; la rivière suit x + y ≈ 14 700). */
 export function zoneOf(p: { x: number; y: number }, team: number): "base" | "lane" | "river" | "own" | "enemy" {
   const { x, y } = p;

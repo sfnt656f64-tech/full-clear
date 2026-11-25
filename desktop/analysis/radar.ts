@@ -18,9 +18,10 @@ export interface RadarAxis {
 // - Early : la participation aux kills seule ne disait rien (aucun lien avec la victoire, très bruitée) ; on y ajoute
 //   l'écart d'XP à 10 min et le first blood. Pas l'écart d'or à 10 min : il recoupait l'axe Or (corrélation 0,75
 //   entre les deux axes, partie par partie), l'avance en or aurait compté deux fois dans le score.
-// - Objectifs : la participation aux objectifs (≈ 95 % pour tout le monde) ne distinguait personne ; on mesure la part
-//   des objectifs neutres pris par ton équipe avant 20 min et ceux cédés sans contrepartie. Mesure d'équipe : dépend
-//   aussi de tes coéquipiers et de l'avance de la partie.
+// - Objectifs : la participation aux objectifs (≈ 95 % pour tout le monde) ne distinguait personne ; on mesure, avant
+//   15 min, la part des objectifs neutres pris par ton équipe et la part de ceux cédés sans contrepartie, avec la même
+//   règle que l'objectif de la semaine (à 15 min, l'axe est aussi stable qu'à 20 min : écart-type par partie 24,9
+//   contre 26,4). Mesure d'équipe : dépend aussi de tes coéquipiers et de l'avance de la partie.
 // - Survie : les morts par 10 min sur toute la partie suivaient l'issue (on meurt plus dans une partie perdue) ; on garde
 //   les morts avant 15 min et on ajoute les morts en 1 contre 1 avant 15 min.
 // - Or : l'or brut dépend du rythme de la partie ; l'écart d'or avec ton adversaire direct à 15 min, non.
@@ -29,7 +30,7 @@ export const AXES: RadarAxis[] = [
   { key: "farm", label: "Farm", metrics: ["cs10", "cs15"], hint: "CS à 10 et 15 min" },
   { key: "early", label: "Early", metrics: ["kp15", "xd10", "fb"], hint: "participation aux kills avant 15 min, écart d'XP à 10 min, first blood" },
   { key: "teamfight", label: "Teamfight", metrics: ["kpLate", "dmgShare"], hint: "participation aux kills après 15 min, part des dégâts (toute la partie : suit en partie l'issue)" },
-  { key: "objectives", label: "Objectifs", metrics: ["obj20", "conc20"], hint: "objectifs neutres avant 20 min pris par ton équipe, cédés sans contrepartie (mesure d'équipe)" },
+  { key: "objectives", label: "Objectifs", metrics: ["obj15", "unc15"], hint: "avant 15 min : part des objectifs neutres pris par ton équipe, et part des objectifs cédés sans contrepartie (même règle que l'objectif de la semaine ; mesure d'équipe)" },
   { key: "survival", label: "Survie", metrics: ["deaths15", "solo15"], hint: "morts avant 15 min, dont en 1 contre 1" },
   { key: "gold", label: "Or", metrics: ["gd15"], hint: "écart d'or avec ton adversaire direct à 15 min" },
 ];

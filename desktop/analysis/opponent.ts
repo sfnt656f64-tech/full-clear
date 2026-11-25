@@ -2,6 +2,7 @@
 // (même rôle, même partie) pour les saisons sans méta. Fonctions pures.
 import type { Detail } from "../collector/detail.ts";
 import type { DuelValues, Values } from "./analysis.ts";
+import { OBJECTIVES, trades } from "./goals.ts";
 
 const MIN = 60_000;
 const n = (v: unknown) => (typeof v === "number" ? v : 0);
@@ -59,18 +60,24 @@ export function duelValues(timeline: NonNullable<Detail["timeline"]>, parts: { p
   const kills = ev.filter((e) => e.type === "CHAMPION_KILL").sort((a, b) => n(a.timestamp) - n(b.timestamp));
   const helpers = (e: Record<string, unknown>) => (e.assistingParticipantIds as number[] | undefined) ?? [];
   const first = kills[0];
-  const elite = ev.filter((e) => e.type === "ELITE_MONSTER_KILL" && n(e.killerTeamId) > 0);
-  const towers = ev.filter((e) => e.type === "BUILDING_KILL");
-  const early = elite.filter((e) => n(e.timestamp) < 20 * MIN);
-  // Contrepartie : un objectif neutre ou une tour pour ton équipe à 90 s près.
-  const traded = (t: number) => elite.some((e) => n(e.killerTeamId) === p.teamId && Math.abs(n(e.timestamp) - t) <= 90_000)
-    || towers.some((e) => n(e.teamId) !== p.teamId && n(e.teamId) > 0 && Math.abs(n(e.timestamp) - t) <= 90_000);
+  // Objectifs neutres avant 15 min (dragons, larves regroupées, héraut), mêmes règles que l'objectif de la semaine
+  // « objectifs cédés avant 15 min sans contrepartie » (goals.ts) : contrepartie dans la minute (objectif, tour ou
+  // plus de kills que l'adversaire).
+  const objs: { t: number; type: string; team: number }[] = [];
+  for (const e of ev) {
+    if (e.type !== "ELITE_MONSTER_KILL" || !OBJECTIVES.has(String(e.monsterType)) || n(e.killerTeamId) <= 0 || n(e.timestamp) >= 15 * MIN) continue;
+    let last: (typeof objs)[number] | undefined;
+    for (const o of objs) if (o.team === n(e.killerTeamId)) last = o;
+    if (last && last.type === e.monsterType && n(e.timestamp) - last.t < 90_000) continue;
+    objs.push({ t: n(e.timestamp), type: String(e.monsterType), team: n(e.killerTeamId) });
+  }
+  const t15 = trades(ev, p.teamId, new Map(parts.map((x) => [x.participantId, x.teamId])), 15 * MIN);
   return {
     gd10: diff(10, "totalGold"), xd10: diff(10, "xp"), gd15: diff(15, "totalGold"),
     fb: first ? (n(first.killerId) === pid || helpers(first).includes(pid) ? 1 : 0) : null,
     solo15: kills.filter((e) => n(e.victimId) === pid && n(e.timestamp) < 15 * MIN && !helpers(e).length).length,
-    obj20: early.length ? (early.filter((e) => n(e.killerTeamId) === p.teamId).length / early.length) * 100 : null,
-    conc20: early.filter((e) => n(e.killerTeamId) !== p.teamId && !traded(n(e.timestamp))).length,
+    obj15: objs.length ? (objs.filter((o) => o.team === p.teamId).length / objs.length) * 100 : null,
+    unc15: t15.ceded ? (t15.uncompensated / t15.ceded) * 100 : null,
   };
 }
 

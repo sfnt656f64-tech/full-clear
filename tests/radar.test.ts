@@ -9,7 +9,7 @@ let n = 0;
 const game = (over: Partial<AnalysisGame> = {}): AnalysisGame => ({
   matchId: `G${n++}`, account: "A#1", startMs: 1, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE", win: true,
   kills: 6, deaths: 3, assists: 8, cs: 200, gold15: 6000, cs15: 100, cs10: 60, teamKills: 30, kills15: 2, assists15: 3, teamKills15: 10,
-  objTeam: 4, objMine: 2, deaths15: 1, damage: 20000, teamDamage: 100000, gd10: 0, xd10: 0, fb: 0.5, gd15: 0, solo15: 0.5, obj20: 50, conc20: 1, ...over,
+  objTeam: 4, objMine: 2, deaths15: 1, damage: 20000, teamDamage: 100000, gd10: 0, xd10: 0, fb: 0.5, gd15: 0, solo15: 0.5, obj15: 50, unc15: 50, ...over,
 });
 /** Méta : valeurs réparties autour des mêmes médianes que `game()` par défaut. */
 const meta: MetaMetricRow[] = Array.from({ length: 200 }, (_, i) => {
@@ -17,7 +17,7 @@ const meta: MetaMetricRow[] = Array.from({ length: 200 }, (_, i) => {
   return { championId: 1, win: i % 2 === 0, cs10: 60 + d, cs15: 100 + d, gold15: 6000 + d * 50, deaths15: 1 + Math.sign(d) * (Math.abs(d) > 5 ? 1 : 0),
     kills15: 2, assists15: 3 + Math.round(d / 4), teamKills15: 10, objTeam: 4, objMine: 2 + Math.round(d / 5), kills: 6, assists: 8 + Math.round(d / 3), teamKills: 30,
     deaths: 3 + Math.round(d / 4), durationS: 1800, damage: 20000 + d * 1000, teamDamage: 100000,
-    gd10: d * 40, xd10: d * 30, fb: i % 2, gd15: d * 60, solo15: Math.abs(d) > 5 ? 1 : 0, obj20: 50 + d * 4, conc20: 1 + Math.sign(d) };
+    gd10: d * 40, xd10: d * 30, fb: i % 2, gd15: d * 60, solo15: Math.abs(d) > 5 ? 1 : 0, obj15: 50 + d * 4, unc15: 50 + d * 4 };
 });
 const ref = new MetaRef(new Map([["JUNGLE", meta]]));
 const pool = (games: number, wr: number): PoolPick => ({

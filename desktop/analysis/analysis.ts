@@ -36,7 +36,7 @@ export interface DuelValues {
   /** Morts sans aucun allié adverse en assistance (1 contre 1) avant 15 min. */
   solo15?: number | null;
   /** Objectifs neutres avant 20 min (dragons, larves, héraut) : part prise par ton équipe (%), et nombre cédés sans contrepartie. */
-  obj20?: number | null; conc20?: number | null;
+  obj15?: number | null; unc15?: number | null;
 }
 
 export type Values = Pick<AnalysisGame, "cs10" | "cs15" | "gold15" | "kills15" | "assists15" | "teamKills15" | "objTeam" | "objMine"> & DuelValues & {
@@ -79,8 +79,8 @@ export const METRICS: Metric[] = [
   { key: "fb", label: "Participation au first blood", better: "+", group: null, unit: " %", value: (v) => (v.fb == null ? null : v.fb * 100) },
   { key: "gd15", label: "Écart d'or à 15 min", better: "+", group: null, unit: "", value: (v) => v.gd15 ?? null },
   { key: "solo15", label: "Morts en 1 contre 1 avant 15 min", better: "-", group: null, unit: "", value: (v) => v.solo15 ?? null },
-  { key: "obj20", label: "Objectifs neutres avant 20 min pris par ton équipe", better: "+", group: null, unit: " %", value: (v) => v.obj20 ?? null },
-  { key: "conc20", label: "Objectifs cédés sans contrepartie avant 20 min", better: "-", group: null, unit: "", value: (v) => v.conc20 ?? null },
+  { key: "obj15", label: "Objectifs neutres avant 15 min pris par ton équipe", better: "+", group: null, unit: " %", value: (v) => v.obj15 ?? null },
+  { key: "unc15", label: "Objectifs cédés avant 15 min sans contrepartie", better: "-", group: null, unit: " %", value: (v) => v.unc15 ?? null },
 ];
 
 /** Parties de méta minimales sur ton champion pour s'y comparer (sinon : tout le rôle). */
