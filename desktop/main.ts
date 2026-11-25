@@ -1,8 +1,10 @@
 // Processus principal de l'application de bureau : icône dans la zone de notification, fenêtre d'état,
 // lancement au démarrage. Aucune console : en version installée, rien ne s'affiche hors de nos fenêtres.
+import { execFileSync } from "node:child_process";
+import { DATA_DIR, LEGACY_DIR, legacyChangedSince, migrateUserData, type MigrationResult } from "./migrate.ts";
 import { DEFAULT_REF_TIER, isRefTier } from "./analysis/ref-tier.ts";
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ClientWatcher } from "./client-watch.ts";
 import { CollectorHost, GAME_PHASES } from "./collector-host.ts";
@@ -30,21 +32,33 @@ import { loadSettings, parseWindowMode, saveSettings, type Settings, type Window
 const HIDDEN_ARG = "--hidden";
 const dev = !app.isPackaged;
 const here = __dirname; // desktop/dist une fois compilé
-/** Identifiant Windows de l'appli (barre des tâches, notifications) : identique à appId dans package.json. */
+/**
+ * Identifiant Windows de l'appli (barre des tâches, notifications) : identique à appId dans package.json.
+ * Inchangé depuis « Kayn Sim » : l'installeur de Full Clear reconnaît ainsi l'ancienne version et la remplace
+ * (désinstallation de l'ancienne, raccourcis compris) au lieu d'installer une deuxième appli à côté.
+ */
 const APP_ID = "io.github.kayn-sim";
 /**
  * Nom de l'entrée « démarrage » dans HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
  * Fixe, pour que le désinstalleur puisse la retirer (desktop/installer.nsh).
  */
-const LOGIN_ITEM_NAME = "KaynSim";
+const LOGIN_ITEM_NAME = "FullClear";
+/** Entrée de démarrage de l'ancienne version (« Kayn Sim »), reprise puis retirée au premier lancement. */
+const LEGACY_LOGIN_ITEM_NAME = "KaynSim";
 
-// Dossier des réglages et du .env : %APPDATA%\kayn-sim, en développement comme une fois installée
-// (sans cela, Electron le nommerait d'après le nom affiché de l'appli).
-// KAYN_SIM_USER_DATA : dossier de données de test (développement) ; sinon %APPDATA%kayn-sim.
-app.setPath("userData", process.env.KAYN_SIM_USER_DATA || join(app.getPath("appData"), "kayn-sim"));
+// Dossier des réglages, du .env et de la base : %APPDATA%\full-clear, en développement comme une fois installée
+// (sans cela, Electron le nommerait d'après le nom affiché de l'appli). Au premier lancement, l'ancien dossier
+// %APPDATA%\kayn-sim y est recopié (desktop/migrate.ts) et gardé tel quel ; si la copie échoue, l'appli continue
+// sur l'ancien dossier, sans rien perdre.
+// FULL_CLEAR_USER_DATA (ou KAYN_SIM_USER_DATA) : dossier de données de test (développement).
+// FULL_CLEAR_APPDATA : autre dossier %APPDATA% (test de la reprise, sans toucher au vrai).
+if (process.env.FULL_CLEAR_APPDATA) app.setPath("appData", process.env.FULL_CLEAR_APPDATA);
+const testData = process.env.FULL_CLEAR_USER_DATA || process.env.KAYN_SIM_USER_DATA;
+const migration: MigrationResult = testData ? { status: "none" } : migrateUserData(app.getPath("appData"));
+app.setPath("userData", testData || join(app.getPath("appData"), migration.status === "failed" ? LEGACY_DIR : DATA_DIR));
 
-/** KAYN_SIM_PROFILE=1 : temps de chaque appel IPC et taille de la réponse, dans la console (développement). */
-const PROFILE = process.env.KAYN_SIM_PROFILE === "1";
+/** FULL_CLEAR_PROFILE=1 : temps de chaque appel IPC et taille de la réponse, dans la console (développement). */
+const PROFILE = (process.env.FULL_CLEAR_PROFILE || process.env.KAYN_SIM_PROFILE) === "1";
 if (PROFILE) {
   const handle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = (channel: string, fn: Parameters<typeof ipcMain.handle>[1]) => handle(channel, async (e, ...args) => {
@@ -188,7 +202,7 @@ const watcher = new ClientWatcher(
     // Pause de la collecte du chargement à la fin de la partie : rien ne doit gêner le jeu.
     collector?.setPaused("game", GAME_PHASES.has(phase));
     pushState();
-    if (tray) tray.setToolTip(s.kind === "connected" ? `Kayn Sim · ${s.phaseLabel}` : "Kayn Sim · client LoL fermé");
+    if (tray) tray.setToolTip(s.kind === "connected" ? `Full Clear · ${s.phaseLabel}` : "Full Clear · client LoL fermé");
   },
   (snap) => {
     const view = buildDraftView(snap);
@@ -228,6 +242,24 @@ function setOpenAtLogin(on: boolean): void {
   refreshTrayMenu();
 }
 
+/**
+ * Lancement au démarrage de l'ancienne version (« KaynSim », vers l'ancien exécutable) : retiré, et repris sous le
+ * nouveau nom s'il était actif (pas s'il avait été désactivé dans le Gestionnaire des tâches).
+ */
+function migrateLoginItem(): void {
+  // Version installée seulement : une version de développement ou de test ne touche jamais au registre de l'appli
+  // installée.
+  if (process.platform !== "win32" || dev || testData || process.env.FULL_CLEAR_APPDATA) return;
+  const RUN = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+  const APPROVED = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run";
+  const reg = (args: string[]) => execFileSync("reg", args, { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+  try { reg(["query", RUN, "/v", LEGACY_LOGIN_ITEM_NAME]); } catch { return; } // pas d'ancienne entrée
+  let disabled = false;
+  try { disabled = /REG_BINARY\s+03/i.test(reg(["query", APPROVED, "/v", LEGACY_LOGIN_ITEM_NAME])); } catch { /* jamais désactivée */ }
+  for (const key of [RUN, APPROVED]) { try { reg(["delete", key, "/v", LEGACY_LOGIN_ITEM_NAME, "/f"]); } catch { /* absente */ } }
+  if (!disabled) setOpenAtLogin(true);
+}
+
 function state(): AppState {
   return {
     client: watcher.status,
@@ -259,6 +291,14 @@ function state(): AppState {
     collectorPaused: settings?.collectorPaused ?? false,
     excludedChampions: settings?.excludedChampions ?? [],
     refTier: settings?.refTier ?? DEFAULT_REF_TIER,
+    data: {
+      dir: app.getPath("userData"),
+      migratedFrom: migration.status === "migrated" ? migration.from : null,
+      // Ancien dossier encore présent : à supprimer à la main une fois que tout fonctionne.
+      legacyKept: !testData && existsSync(join(app.getPath("appData"), LEGACY_DIR)) && app.getPath("userData") !== join(app.getPath("appData"), LEGACY_DIR) ? join(app.getPath("appData"), LEGACY_DIR) : null,
+      changedAfter: testData ? null : legacyChangedSince(app.getPath("appData")),
+      error: migration.status === "failed" ? `Reprise de ${migration.from} impossible (${migration.error}) : l'appli continue sur l'ancien dossier, rien n'est perdu.` : null,
+    },
     problems: config.problems,
     openAtLogin: openAtLogin(),
     dev,
@@ -317,7 +357,7 @@ function showWindow(focus = true): void {
       height: 820,
       minWidth: 900,
       minHeight: 560,
-      title: "Kayn Sim",
+      title: "Full Clear",
       icon: join(here, "icon.png"),
       show: false,
       autoHideMenuBar: true,
@@ -345,7 +385,7 @@ function showWindow(focus = true): void {
 function refreshTrayMenu(): void {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Ouvrir Kayn Sim", click: () => showWindow() },
+    { label: "Ouvrir Full Clear", click: () => showWindow() },
     { label: "Champions recommandés", click: () => showRecoWindow() },
     { label: "Mes stats", click: () => showStatsWindow() },
     { label: "Méta", click: () => showMetaWindow() },
@@ -365,7 +405,7 @@ function refreshTrayMenu(): void {
 function createTray(): void {
   const icon = nativeImage.createFromPath(join(here, "icon.png")).resize({ width: 16, height: 16, quality: "best" });
   tray = new Tray(icon);
-  tray.setToolTip("Kayn Sim");
+  tray.setToolTip("Full Clear");
   tray.on("click", () => showWindow());
   refreshTrayMenu();
 }
@@ -493,6 +533,7 @@ if (!app.requestSingleInstanceLock()) {
     configureCollector();
     registerIpc();
     createTray();
+    migrateLoginItem();
     overlay.applyShortcuts(); // diagnostic immédiat : raccourcis libres ou déjà pris
     watcher.start();
     live.start();

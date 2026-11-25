@@ -185,7 +185,7 @@ export class OverlayWindow {
       hasShadow: false,
       alwaysOnTop: true,
       show: false,
-      title: "Kayn Sim · overlay",
+      title: "Full Clear · overlay",
       webPreferences: { preload: join(this.opt.dir, "preload-overlay.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
     });
     this.win.setIgnoreMouseEvents(true, { forward: true });

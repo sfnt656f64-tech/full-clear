@@ -1,7 +1,7 @@
 {
-  "name": "kayn-sim",
+  "name": "full-clear",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "desktop/dist/main.cjs",
   "scripts": {
@@ -37,7 +37,7 @@
   "description": "Simulateur de build pour Kayn, avec une application de bureau (draft et overlay en jeu).",
   "build": {
     "appId": "io.github.kayn-sim",
-    "productName": "Kayn Sim",
+    "productName": "Full Clear",
     "directories": {
       "output": "release"
     },
@@ -63,8 +63,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Kayn Sim",
-      "artifactName": "KaynSim-Setup-${version}.${ext}",
+      "shortcutName": "Full Clear",
+      "artifactName": "FullClear-Setup-${version}.${ext}",
       "include": "desktop/installer.nsh",
       "runAfterFinish": true
     }

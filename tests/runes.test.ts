@@ -26,7 +26,7 @@ describe("page de runes", () => {
       { perks: null, win: true },
     ];
     const p = metaPage(rows, "Viego")!;
-    expect(p).toMatchObject({ primary: 8000, sub: 8400, selections: CONQ.selections, shards: CONQ.shards, source: "meta", games: 35, name: "KaynSim Viego" });
+    expect(p).toMatchObject({ primary: 8000, sub: 8400, selections: CONQ.selections, shards: CONQ.shards, source: "meta", games: 35, name: "FullClear Viego" });
     expect(p.winRate).toBeCloseTo((17 / 35) * 100);
     expect(validPage(p)).toBe(true);
   });
@@ -56,14 +56,14 @@ function fakeApi(pages: { id: number; name: string; isDeletable: boolean }[], ow
 }
 
 describe("import dans le client", () => {
-  const page = { ...CONQ, name: "KaynSim Viego", source: "meta" as const };
+  const page = { ...CONQ, name: "FullClear Viego", source: "meta" as const };
 
-  it("remplace l'ancienne page KaynSim et sélectionne la nouvelle", async () => {
+  it("remplace la page de l'ancienne version (KaynSim) et sélectionne la nouvelle", async () => {
     const f = fakeApi([{ id: 1, name: "Ma page", isDeletable: true }, { id: 2, name: "KaynSim Briar", isDeletable: true }, { id: 3, name: "Défaut", isDeletable: false }], 2);
     const r = await importRunePage(f.api, page);
     expect(r.ok).toBe(true);
     expect(f.calls).toEqual(["delete 2", "create"]);
-    expect(f.body()).toEqual({ name: "KaynSim Viego", primaryStyleId: 8000, subStyleId: 8400, selectedPerkIds: [...CONQ.selections, ...CONQ.shards], current: true });
+    expect(f.body()).toEqual({ name: "FullClear Viego", primaryStyleId: 8000, subStyleId: 8400, selectedPerkIds: [...CONQ.selections, ...CONQ.shards], current: true });
   });
 
   it("ne supprime jamais une de tes pages : message si tout est plein", async () => {

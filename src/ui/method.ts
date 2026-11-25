@@ -5,7 +5,7 @@ import { $ } from "./html";
 import { ddImg } from "./icons";
 
 /** Nom du projet, repris dans la mention légale de Riot. */
-export const PRODUCT_NAME = "Kayn Sim";
+export const PRODUCT_NAME = "Full Clear";
 
 /**
  * « Legal Jibber Jabber » : mention exigée par la politique de Riot Games pour les projets de fans

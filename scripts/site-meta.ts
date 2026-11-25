@@ -2,14 +2,14 @@
 // deux derniers patchs, toutes les parties collectées (Émeraude et au-dessus). Agrégats anonymes de parties
 // publiques : aucun identifiant, aucun Riot ID, rien de tes propres parties.
 //
-// Usage : npm run site:meta [-- chemin/vers/riot.db]   (par défaut : %APPDATA%\kayn-sim\riot.db)
+// Usage : npm run site:meta [-- chemin/vers/riot.db]   (par défaut : %APPDATA%\full-clear\riot.db)
 // Écrit src/data/generated/kayn-meta.json, à commiter avec la date de génération.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { buildKaynMeta, type MetaRow } from "../src/data/kayn-meta";
 
-const file = process.argv[2] ?? join(process.env.APPDATA ?? "", "kayn-sim", "riot.db");
+const file = process.argv[2] ?? join(process.env.APPDATA ?? "", "full-clear", "riot.db");
 const db = new DatabaseSync(file, { readOnly: true });
 const patches = (db.prepare("select patch from meta_games group by patch").all() as { patch: string }[])
   .map((r) => r.patch).sort((a, b) => { const [x, y] = a.split(".").map(Number), [u, v] = b.split(".").map(Number); return u - x || v - y; }).slice(0, 2);

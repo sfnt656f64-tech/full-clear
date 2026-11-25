@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://ddragon.leagueoflegends.com; frame-src 'self'">
-  <title>Kayn Sim</title>
+  <title>Full Clear</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="app">
   <aside class="side">
     <div class="brand">
       <img src="../icon.png" alt="" width="28" height="28">
-      <div><h1>Kayn Sim</h1><span id="version" class="muted small"></span></div>
+      <div><h1>Full Clear</h1><span id="version" class="muted small"></span></div>
     </div>
     <nav class="side-nav" role="tablist" aria-orientation="vertical">
       <button type="button" role="tab" data-tab="home" aria-selected="true">Accueil</button>
@@ -256,6 +256,7 @@
       <p id="riot-id" class="status"></p>
       <ul id="problems" class="problems"></ul>
       <p class="muted small">Fichier : <span id="env-file"></span></p>
+      <p id="data-dir" class="muted small"></p>
       <p id="accounts" class="muted small"></p>
       <p class="muted small">La clé API (RIOT_API_KEY) sert uniquement à la collecte et n'est envoyée qu'à l'API Riot. Le client et le jeu sont lus en local.</p>
       <div class="row">

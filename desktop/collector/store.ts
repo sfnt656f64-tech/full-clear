@@ -1,4 +1,4 @@
-// Base locale de la collecte (%APPDATA%\kayn-sim\riot.db), SQLite intégré à Node (aucun module natif).
+// Base locale de la collecte (%APPDATA%\full-clear\riot.db), SQLite intégré à Node (aucun module natif).
 //
 // - jobs : file d'attente persistante. Chaque travail a une clé unique (pas de doublon) ; un travail
 //   interrompu (appli fermée) repasse en attente au démarrage : la collecte reprend où elle s'était arrêtée.

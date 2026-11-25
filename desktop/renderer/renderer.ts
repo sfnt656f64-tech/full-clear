@@ -439,6 +439,11 @@ $("col-pause").addEventListener("click", async () => {
   render(await window.kayn.setCollectorPaused(!s.collectorPaused));
 });
 
+/** L'ancienne appli a écrit dans l'ancien dossier après la reprise : ses données récentes ne sont pas ici. */
+const legacyWarning = (s: AppState) => s.data.changedAfter
+  ? `L'ancien dossier ${s.data.legacyKept ?? "kayn-sim"} a été modifié après la reprise du ${new Date(s.data.changedAfter).toLocaleString("fr-FR")} : l'ancienne appli « Kayn Sim » tourne peut-être encore. Quitte-la (icône de notification → Quitter) ; rien n'est perdu, l'ancien dossier est intact.`
+  : null;
+
 function render(s: AppState): void {
   const ref = $<HTMLSelectElement>("af-ref");
   if (document.activeElement !== ref) ref.value = s.refTier;
@@ -458,7 +463,13 @@ function render(s: AppState): void {
     ul.append(li);
   }
   $("env-file").textContent = s.envFile ?? "aucun";
-  const alerts = [...s.problems, ...(s.envFile ? [] : ["Pas de fichier .env : voir Réglages."])];
+  $("data-dir").textContent = [
+    `Données (base, réglages, rapports) : ${s.data.dir}.`,
+    s.data.legacyKept ? `Ancien dossier de Kayn Sim conservé tel quel : ${s.data.legacyKept}. Supprime-le à la main quand tout fonctionne.` : "",
+    s.data.error ?? "",
+    legacyWarning(s) ?? "",
+  ].filter(Boolean).join(" ");
+  const alerts = [...(s.data.error ? [s.data.error] : []), ...(legacyWarning(s) ? [legacyWarning(s)!] : []), ...s.problems, ...(s.envFile ? [] : ["Pas de fichier .env : voir Réglages."])];
   $("home-alert").hidden = !alerts.length;
   $("home-alert").textContent = alerts[0] ?? "";
   renderExcluded(s.excludedChampions);

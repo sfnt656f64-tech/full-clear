@@ -6,10 +6,10 @@ Après chaque changement :
 
 1. Vérification des types (`npx tsc --noEmit`), tests (`npx vitest run`) et build (`npm run desktop:build`).
 2. Lancer une copie de l'appli sur une copie de la base de l'utilisateur, avec une collecte simulée :
-   - copie cohérente de la base : `vacuum into` depuis `%APPDATA%\kayn-sim\riot.db` vers un dossier de test, avec un
+   - copie cohérente de la base : `vacuum into` depuis `%APPDATA%\full-clear\riot.db` vers un dossier de test, avec un
      `settings.json` dont la collecte est en pause (aucune requête à l'API Riot) ;
-   - lancement : `KAYN_SIM_USER_DATA=<dossier de test> KAYN_SIM_PROFILE=1 npx electron . --remote-debugging-port=9333`
-     (`KAYN_SIM_PROFILE` journalise le temps de chaque appel IPC et les blocages du processus principal) ;
+   - lancement : `FULL_CLEAR_USER_DATA=<dossier de test> FULL_CLEAR_PROFILE=1 npx electron . --remote-debugging-port=9333`
+     (`FULL_CLEAR_PROFILE` journalise le temps de chaque appel IPC et les blocages du processus principal) ;
    - collecte simulée : ajouter régulièrement des lignes dans `my_detail` de la copie pendant le parcours.
 3. Parcourir chaque onglet ou fenêtre concerné par le changement (pilotage par le protocole DevTools) et prendre des
    captures.

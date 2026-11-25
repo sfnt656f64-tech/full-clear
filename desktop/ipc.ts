@@ -124,6 +124,8 @@ export interface AppState {
   excludedChampions: string[];
   /** Niveau de référence choisi. */
   refTier: RefTier;
+  /** Dossier de données, et reprise de l'ancien dossier « kayn-sim » (changement de nom). */
+  data: { dir: string; migratedFrom: string | null; legacyKept: string | null; error: string | null; /** Ancien dossier modifié après la reprise (date de la reprise). */ changedAfter: string | null };
   problems: string[];
   openAtLogin: boolean;
   /** Vrai en développement (npm run desktop) : le démarrage automatique pointe alors vers Electron + le dépôt. */

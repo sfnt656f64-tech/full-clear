@@ -23,7 +23,11 @@ export interface RecommendedPage extends RuneIds {
 export const MIN_PAGE_GAMES = 20;
 /** Fragments valides par ligne (offensif, flexible, défensif). */
 export const SHARD_ROWS: number[][] = [[5008, 5005, 5007], [5008, 5010, 5001], [5011, 5013, 5001]];
-export const PAGE_PREFIX = "KaynSim";
+export const PAGE_PREFIX = "FullClear";
+/** Préfixe des pages importées par l'ancienne version (« Kayn Sim ») : remplacées elles aussi. */
+export const LEGACY_PAGE_PREFIX = "KaynSim";
+/** Page importée par l'appli (jamais une page à toi). */
+export const isOurPage = (name: string) => name.startsWith(PAGE_PREFIX) || name.startsWith(LEGACY_PAGE_PREFIX);
 
 function mostPlayed<T>(values: T[], key: (v: T) => string | number = (v) => String(v)): T | undefined {
   const m = new Map<string | number, { v: T; n: number }>();

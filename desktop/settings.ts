@@ -1,4 +1,4 @@
-// Réglages de l'appli (%APPDATA%\kayn-sim\settings.json). Aucune donnée de partie ni d'autre joueur.
+// Réglages de l'appli (%APPDATA%\full-clear\settings.json). Aucune donnée de partie ni d'autre joueur.
 import { DEFAULT_REF_TIER, isRefTier, type RefTier } from "./analysis/ref-tier.ts";
 import { readFileSync, writeFileSync } from "node:fs";
 import type { Form } from "../src/data/types";

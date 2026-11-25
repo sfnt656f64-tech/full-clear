@@ -1,9 +1,9 @@
 // Import d'une page de runes dans le client (API locale LCU), seulement quand tu cliques sur « Importer ».
 //
-// - L'ancienne page « KaynSim … » est remplacée (jamais une de tes pages).
+// - L'ancienne page « FullClear … » (ou « KaynSim … », ancienne version) est remplacée (jamais une de tes pages).
 // - Si toutes tes pages sont utilisées, rien n'est supprimé : un message explique quoi faire.
 import { lcuGet, lcuRequest, type LcuCredentials } from "../lcu.ts";
-import { PAGE_PREFIX, validPage, type RecommendedPage } from "./rune-page.ts";
+import { isOurPage, validPage, type RecommendedPage } from "./rune-page.ts";
 
 interface LcuPage { id: number; name: string; isDeletable: boolean; isEditable?: boolean }
 
@@ -30,11 +30,11 @@ export async function importRunePage(api: PerksApi, page: RecommendedPage): Prom
   if (!validPage(page)) return { ok: false, message: "Page de runes incomplète : import annulé." };
   const pages = await api.pages();
   // Nos anciennes pages d'abord : la place qu'elles occupent est réutilisée.
-  for (const p of pages.filter((x) => x.isDeletable && x.name.startsWith(PAGE_PREFIX))) await api.remove(p.id);
-  const mine = pages.filter((x) => x.isDeletable && !x.name.startsWith(PAGE_PREFIX)).length;
+  for (const p of pages.filter((x) => x.isDeletable && isOurPage(x.name))) await api.remove(p.id);
+  const mine = pages.filter((x) => x.isDeletable && !isOurPage(x.name)).length;
   const owned = await api.ownedPageCount();
   if (owned != null && mine >= owned) {
-    return { ok: false, message: "Toutes tes pages de runes sont utilisées : supprime-en une dans le client (ou renomme-la « KaynSim »), puis réessaie." };
+    return { ok: false, message: "Toutes tes pages de runes sont utilisées : supprime-en une dans le client (ou renomme-la « FullClear »), puis réessaie." };
   }
   await api.create({
     name: page.name.slice(0, 25),

@@ -96,7 +96,7 @@ ${kpi("Bottes", ["Celles recommandées", c.bootsMatched], ["D'autres", c.bootsDi
 <thead><tr><th>Date</th><th>Résultat</th><th>Forme</th><th>Tes 3 items + bottes</th><th>Recommandé</th><th>Commun</th><th>En face</th></tr></thead>
 <tbody>${games || '<tr><td colspan="7" class="sub">Aucune partie.</td></tr>'}</tbody></table></div>
 
-<div class="note">Données : API Riot (match-v5) avec ta clé personnelle, icônes Data Dragon ${esc(ddVersion)}. Kayn Sim isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</div>
+<div class="note">Données : API Riot (match-v5) avec ta clé personnelle, icônes Data Dragon ${esc(ddVersion)}. Full Clear isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</div>
 </div></body></html>
 `;
 }
