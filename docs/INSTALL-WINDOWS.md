@@ -67,7 +67,7 @@ Dans le Bloc-notes, remplis les deux lignes, sans espace autour du `=` :
 
 ```
 RIOT_API_KEY=RGAPI-...ta clé complète...
-RIOT_ID=Invincy#TIG
+RIOT_ID=Pseudo#TAG
 ```
 
 Enregistre (**Ctrl+S**) et ferme le Bloc-notes.
