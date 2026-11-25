@@ -1,6 +1,10 @@
 // Potentiel de progression d'un champion (mode « Progresser sur de nouveaux champions »). Fonctions pures.
 //
-// Score = 40 % force à maîtrise égale + 35 % accord avec tes points forts + 25 % durée d'apprentissage.
+// Score = 55 % force à maîtrise égale + 45 % accord avec tes points forts. La durée d'apprentissage est à 0 % tant
+// que les courbes des groupes moyen et difficile ne se distinguent pas ; elle est mesurée sans la tranche ≥ 200 k
+// points (surtout de la sélection : les joueurs qui ont fait du champion leur spécialité). La difficulté Riot est
+// affichée en information.
+// Sur un champion où tu as déjà joué, ton score de stats y est mélangé au potentiel : moitié-moitié à 20 parties.
 // Le plafond (forte maîtrise sur le champion contre forte maîtrise sur les autres junglers) n'est qu'affiché, tant
 // qu'il n'est pas mesurable (4 écarts nets sur 29 champions mesurables : à peine plus que le hasard).
 //
@@ -9,7 +13,13 @@
 
 export const BUCKETS = [0, 10_000, 30_000, 60_000, 100_000, 200_000, Infinity] as const;
 export const POINTS_PER_GAME = { low: 1_000, high: 1_500 } as const;
-export const WEIGHTS = { force: 0.4, fit: 0.35, learning: 0.25 } as const;
+export const WEIGHTS = { force: 0.55, fit: 0.45, learning: 0 } as const;
+/** Tes parties sur le champion pour que ton score de stats y pèse autant que le potentiel. */
+export const MINE_HALF = 20;
+/** Parties avec maîtrise sur le champion pour que sa correction de maîtrise soit mesurée (sinon : « à confirmer »). */
+export const MIX_MEASURED_MIN = 100;
+/** Accord : parties de méta « fictives » sans effet (un accord tiré de peu de parties reste proche de 50). */
+export const K_FIT = 300;
 /** Parties « fictives » au niveau du groupe, par tranche : rapproche la courbe d'un champion de celle de son groupe. */
 export const K_BUCKET = 20;
 /** Plafond : parties à forte maîtrise minimales, et seuil de forte maîtrise. */
@@ -49,7 +59,7 @@ export function isotonic(ys: number[], ws: number[]): number[] {
 export interface Curve {
   /** Win rate par tranche de points (rapproché du groupe, puis rendu croissant), et parties réelles par tranche. */
   points: { wr: number; n: number }[];
-  /** Win rate des joueurs expérimentés du champion (≥ 200 k points), rapproché du groupe. */
+  /** Win rate des joueurs expérimentés du champion (100 à 200 k points ; au-delà, surtout de la sélection). */
   plateau: number;
   /** Tranche où la courbe atteint le plateau (à REACH_TOLERANCE près). */
   reach: number;
@@ -75,7 +85,8 @@ export function learningCurve(champRows0: MasteryRow[], groupRows: MasteryRow[])
   const c = Array.from({ length: nb }, (_, b) => rate(champRows.filter((r) => bucketOf(r.points) === b)));
   const raw = c.map((x, b) => (x.w + (K_BUCKET * (pct(g[b]) || 50)) / 100) / (x.n + K_BUCKET) * 100);
   const fit = isotonic(raw, c.map((x) => x.n + K_BUCKET));
-  const plateau = fit[nb - 1];
+  // Niveau des joueurs expérimentés : la dernière tranche avant 200 k points (au-delà, surtout de la sélection).
+  const plateau = fit[nb - 2];
   const reach = fit.findIndex((y) => y >= plateau - REACH_TOLERANCE);
   const lo = BUCKETS[reach], hi = Math.min(BUCKETS[reach + 1], BUCKETS[nb - 1] * 1.5);
   return {
@@ -96,6 +107,8 @@ export interface Force {
   mix: number;
   /** Force à maîtrise égale = brut − effet de la maîtrise, puis rapprochée de 50 % selon le nombre de parties. */
   adjusted: number;
+  /** Part de débutants mesurée sur le champion lui-même (sinon tirée de son groupe : « à confirmer »). */
+  mixMeasured: boolean;
 }
 
 /** Force du champion à maîtrise égale (corrige la part de débutants, par groupe de difficulté). */
@@ -110,7 +123,7 @@ export function forceAtEqualMastery(meta: Rate, champRows: MasteryRow[], groupRo
   const mix = expected(mixC) - expected(sg);
   const raw = pct(meta);
   const eq = raw - mix;
-  return { raw, games: meta.n, margin: wilson(meta.w, meta.n), mix, adjusted: (eq * meta.n + 50 * K_FORCE) / (meta.n + K_FORCE) };
+  return { raw, games: meta.n, margin: wilson(meta.w, meta.n), mix, adjusted: (eq * meta.n + 50 * K_FORCE) / (meta.n + K_FORCE), mixMeasured: champRows.length >= MIX_MEASURED_MIN };
 }
 
 export interface Ceiling { delta: number; margin: number; games: number; measurable: boolean }
@@ -120,36 +133,73 @@ export function ceiling(champRows: MasteryRow[], otherRows: MasteryRow[]): Ceili
   return { delta: pct(me) - pct(others), margin: Math.hypot(wilson(me.w, me.n), wilson(others.w, others.n)), games: me.n, measurable: me.n >= CAP_MIN };
 }
 
-/**
- * Accord avec tes points forts : sur tes axes au-dessus de la médiane (50), l'écart du champion à la médiane,
- * pondéré par ton avance sur cet axe. Tes axes faibles ne comptent pas. Ce n'est pas la ressemblance avec tes
- * champions habituels.
- */
-export function profileFit(user: (number | null)[], champ: (number | null)[]): number {
-  let num = 0, den = 0;
-  user.forEach((u, i) => {
-    const c = champ[i];
-    if (u == null || c == null || u <= 50) return;
-    num += (u - 50) * (c - 50);
-    den += Math.abs(u - 50);
-  });
-  return den ? num / den : 0;
+/** Partie de méta sur un champion : victoire et position (0–100) sur chaque axe du radar. */
+export interface AxisGame { win: boolean; axes: (number | null)[] }
+export interface AxisImpact { hi: Rate; lo: Rate }
+
+/** Sur chaque axe : victoires quand le joueur est au-dessus de la médiane sur cet axe, et en dessous. */
+export function axisImpact(games: AxisGame[], nAxes: number): AxisImpact[] {
+  return Array.from({ length: nAxes }, (_, i) => ({
+    hi: rate(games.filter((g) => g.axes[i] != null && g.axes[i]! >= 50)),
+    lo: rate(games.filter((g) => g.axes[i] != null && g.axes[i]! < 50)),
+  }));
 }
 
-export interface PotentialParts { force: Force; fit: number; curve: Curve; ceiling: Ceiling }
-export interface PotentialScore { total: number; force: number; fit: number; learning: number }
+export interface Fit { value: number; margin: number; games: number; axes: { axis: number; effect: number }[] }
+
+/**
+ * Accord avec tes points forts : à quel point être fort sur TES axes forts fait gagner sur ce champion, par rapport
+ * aux autres junglers. Sur chaque axe où tu es au-dessus de la médiane : (win rate des joueurs du champion forts sur
+ * cet axe − ceux faibles sur cet axe), moins le même écart pour tous les junglers ; pondéré par ton avance sur l'axe.
+ * Ce n'est ni la ressemblance avec tes champions habituels, ni le fait que le champion ait « naturellement » beaucoup
+ * de survie ou de teamfight. Rapproché de 0 avec peu de parties (K_FIT), avec sa marge.
+ * Attention : sur les axes mesurés sur toute la partie (Teamfight), l'écart suit en partie l'issue de la partie ;
+ * la soustraction de l'écart de tous les junglers en retire la part commune.
+ */
+export function strengthFit(user: (number | null)[], champ: AxisImpact[], all: AxisImpact[]): Fit {
+  const gap = (x: AxisImpact) => pct(x.hi) - pct(x.lo);
+  const m = (x: AxisImpact) => Math.hypot(wilson(x.hi.w, x.hi.n), wilson(x.lo.w, x.lo.n));
+  let num = 0, den = 0, var2 = 0, games = 0;
+  const axes: Fit["axes"] = [];
+  user.forEach((u, i) => {
+    if (u == null || u <= 50 || !champ[i] || !(champ[i].hi.n + champ[i].lo.n)) return;
+    const n = champ[i].hi.n + champ[i].lo.n;
+    const shrink = n / (n + K_FIT);
+    const effect = Number.isFinite(gap(champ[i])) ? (gap(champ[i]) - gap(all[i])) * shrink : 0;
+    axes.push({ axis: i, effect });
+    num += (u - 50) * effect;
+    den += u - 50;
+    var2 += ((u - 50) * m(champ[i]) * shrink) ** 2;
+    games = Math.max(games, n);
+  });
+  return den ? { value: num / den, margin: Math.sqrt(var2) / den, games, axes } : { value: 0, margin: 0, games, axes };
+}
+
+export interface PotentialParts { force: Force; fit: Fit; curve: Curve; ceiling: Ceiling }
+export interface PotentialScore {
+  /** Score final : potentiel, mélangé à ton score de stats sur le champion si tu y as déjà joué. */
+  total: number;
+  potential: number; force: number; fit: number; learning: number;
+  /** Ton score de stats sur le champion (0–100, même échelle), ses parties et son poids dans le total. */
+  mine: { score: number; games: number; weight: number } | null;
+}
 
 /** Notes sur 100 de chaque critère, puis total pondéré. */
-export function potentialScore(p: PotentialParts): PotentialScore {
+export function potentialScore(p: PotentialParts, mine?: { stats: number; games: number } | null): PotentialScore {
   const clamp = (x: number) => Math.max(0, Math.min(100, x));
   // Force : ±10 points de win rate autour de 50 % couvrent toute l'échelle.
   const force = clamp(50 + (p.force.adjusted - 50) * 5);
-  // Accord : ±10 points d'écart du champion sur tes axes forts couvrent toute l'échelle.
-  const fit = clamp(50 + p.fit * 5);
+  // Accord : ±10 points de win rate d'écart sur tes axes forts couvrent toute l'échelle.
+  const fit = clamp(50 + p.fit.value * 5);
   // Durée : 5 parties → 100, 300 parties → 0 (échelle logarithmique), au milieu de la fourchette.
   const mid = Math.max(1, (p.curve.games[0] + p.curve.games[1]) / 2);
   const learning = clamp(100 - (100 * Math.log10(mid / 5)) / Math.log10(300 / 5));
-  return { total: WEIGHTS.force * force + WEIGHTS.fit * fit + WEIGHTS.learning * learning, force, fit, learning };
+  const potential = WEIGHTS.force * force + WEIGHTS.fit * fit + WEIGHTS.learning * learning;
+  // Tes résultats sur le champion : la preuve la plus directe ; leur poids monte avec tes parties (½ à 20 parties).
+  // Même échelle que la force : stats 40 → 0, 50 → 50, 60 → 100.
+  const m = mine && mine.games > 0 ? { score: clamp(50 + (mine.stats - 50) * 5), games: mine.games, weight: mine.games / (mine.games + MINE_HALF) } : null;
+  const total = m ? m.weight * m.score + (1 - m.weight) * potential : potential;
+  return { total, potential, force, fit, learning, mine: m };
 }
 
 export interface FirstGames { champions: number; first: number; after: number; diff: number; margin: number; n1: number; n2: number }

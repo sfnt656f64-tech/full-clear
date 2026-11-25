@@ -310,7 +310,7 @@ export class CollectorStore {
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
       putJungleMastery: this.db.prepare("insert or replace into meta_jungle_mastery (match_id, participant_id, champion_id, win, points, read_after_ms) values (?, ?, ?, ?, ?, ?)"),
       hasJungleMastery: this.db.prepare("select 1 from meta_jungle_mastery where match_id = ?"),
-      recentMetaWithoutJungleMastery: this.db.prepare("select g.match_id from meta_games g where g.remake = 0 and g.start_ms > ? and not exists (select 1 from meta_jungle_mastery j where j.match_id = g.match_id)"),
+      recentMetaWithoutJungleMastery: this.db.prepare("select g.match_id, g.start_ms from meta_games g where g.remake = 0 and g.start_ms > ? and not exists (select 1 from meta_jungle_mastery j where j.match_id = g.match_id) order by g.start_ms desc"),
       metaCount: this.db.prepare("select count(*) n, max(patch) p from meta_games"),
       // Parties utilisables (remakes exclus), comme dans la fenêtre Méta.
       metaPatches: this.db.prepare("select patch, sum(remake = 0) n from meta_games group by patch"),
@@ -514,8 +514,9 @@ export class CollectorStore {
   }
   hasJungleMastery(matchId: string): boolean { return !!this.st.hasJungleMastery.get(matchId); }
   /** Parties de méta récentes (après `sinceMs`) dont la maîtrise des junglers n'a pas encore été lue. */
-  recentMetaWithoutJungleMastery(sinceMs: number): string[] {
-    return (this.st.recentMetaWithoutJungleMastery.all(sinceMs) as { match_id: string }[]).map((r) => r.match_id);
+  /** Les plus récentes d'abord. */
+  recentMetaWithoutJungleMastery(sinceMs: number): { matchId: string; startMs: number }[] {
+    return (this.st.recentMetaWithoutJungleMastery.all(sinceMs) as { match_id: string; start_ms: number }[]).map((r) => ({ matchId: r.match_id, startMs: r.start_ms }));
   }
 
   /** Parties de méta par patch, du plus récent au plus ancien. */

@@ -72,8 +72,11 @@ export function scheduleMeta(ctx: JobContext): void {
   const w = week(ctx.now());
   // Maîtrise des junglers des parties récentes déjà collectées (après les nouvelles parties dans la file).
   ctx.store.tx(() => {
-    for (const matchId of ctx.store.recentMetaWithoutJungleMastery(ctx.now() - JUNGLE_MASTERY_BACKFILL_MS)) {
-      ctx.store.enqueue("metaJungleMastery", `metaJungleMastery:${matchId}`, PRIORITY.meta, { matchId }, RANK.backfill);
+    // Les plus récentes d'abord : écart plus faible avec la partie, et pas de travail perdu sur celles qui vont
+    // dépasser 14 jours (rang 0,50 pour une partie d'aujourd'hui, 0,51 pour une partie de 14 jours).
+    for (const { matchId, startMs } of ctx.store.recentMetaWithoutJungleMastery(ctx.now() - JUNGLE_MASTERY_BACKFILL_MS)) {
+      const age = Math.max(0, ctx.now() - startMs) / JUNGLE_MASTERY_BACKFILL_MS;
+      ctx.store.enqueue("metaJungleMastery", `metaJungleMastery:${matchId}`, PRIORITY.meta, { matchId }, RANK.backfill + age * 0.01);
     }
   });
   for (const tier of DIVISION_TIERS) {

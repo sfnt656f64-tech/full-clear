@@ -197,6 +197,12 @@ describe("collecte de la méta", () => {
     scheduleMeta(ctx);
     const jobs = store.db.prepare("select key from jobs where kind = 'metaJungleMastery'").all() as { key: string }[];
     expect(jobs.map((j) => j.key)).toEqual(["metaJungleMastery:R"]);
+    // Les plus récentes d'abord.
+    const r2 = summarizeMetaMatch(metaMatch("N"));
+    store.putMetaGame({ ...r2, startMs: now - 1 * DAY }, "EMERALD");
+    scheduleMeta(ctx);
+    const order = store.db.prepare("select key from jobs where kind = 'metaJungleMastery' order by priority, rank, id").all() as { key: string }[];
+    expect(order.map((j) => j.key)).toEqual(["metaJungleMastery:N", "metaJungleMastery:R"]);
     await metaJungleMastery(ctx, { matchId: "R" });
     expect(store.db.prepare("select participant_id, champion_id, points from meta_jungle_mastery").all()).toEqual([
       { participant_id: 1, champion_id: 141, points: 4_200 }, { participant_id: 6, champion_id: 5, points: 4_200 },
