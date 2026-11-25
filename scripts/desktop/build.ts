@@ -1,8 +1,10 @@
 // Compile l'application de bureau dans desktop/dist (ignoré par git) :
-//   main.cjs (processus principal), preload.cjs, renderer/ (fenêtre), overlay/ (en jeu), icon.png.
+//   main.cjs (processus principal), preload.cjs, renderer/ (fenêtre), overlay/ (en jeu), icon.png,
+//   site/ (simulateur Kayn, le même que le site web, intégré dans Champions).
 // npm run desktop:build   compile seulement
 // npm run desktop         compile puis lance l'appli
 import { build } from "esbuild";
+import { build as viteBuild } from "vite";
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +27,8 @@ await Promise.all([
   build({ ...common, entryPoints: [resolve(SRC, "main.ts")], outfile: resolve(OUT, "main.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "preload.ts")], outfile: resolve(OUT, "preload.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "collector/collector-main.ts")], outfile: resolve(OUT, "collector.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
+  // Moteur de données (worker du processus principal) : tous les calculs lourds, hors du fil de l'interface.
+  build({ ...common, entryPoints: [resolve(SRC, "data/engine-worker.ts")], outfile: resolve(OUT, "engine-worker.cjs"), platform: "node", format: "cjs" }),
   build({ ...common, entryPoints: [resolve(SRC, "preload-overlay.ts")], outfile: resolve(OUT, "preload-overlay.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "renderer/renderer.ts")], outfile: resolve(OUT, "renderer/renderer.js"), platform: "browser", format: "iife" }),
   build({ ...common, entryPoints: [resolve(SRC, "meta-window/meta.ts")], outfile: resolve(OUT, "meta-window/meta.js"), platform: "browser", format: "iife" }),
@@ -38,4 +42,6 @@ for (const f of ["index.html", "stats.css"]) copyFileSync(resolve(SRC, "stats-wi
 for (const f of ["index.html", "meta.css"]) copyFileSync(resolve(SRC, "meta-window", f), resolve(OUT, "meta-window", f));
 for (const f of ["index.html", "reco.css"]) copyFileSync(resolve(SRC, "reco-window", f), resolve(OUT, "reco-window", f));
 writeFileSync(resolve(OUT, "icon.png"), iconPng(256));
+// Simulateur Kayn : le site web, compilé avec des chemins relatifs pour être chargé depuis les fichiers de l'appli.
+await viteBuild({ root: ROOT, base: "./", logLevel: "warn", build: { outDir: resolve(OUT, "site"), emptyOutDir: true } });
 console.log("Appli de bureau compilée dans desktop/dist.");

@@ -15,6 +15,10 @@ import type { JobContext } from "./jobs.ts";
 import { buildOrders, earlyStats, summarizeMetaMatch, type MetaMatchV5, type TimelineEventsV5 } from "./meta-parse.ts";
 import type { TimelineV5 } from "./my-games.ts";
 import { earlyKills, partExtras } from "./timeline-parse.ts";
+import { jungleCurve } from "./detail.ts";
+import itemIndex from "../../src/data/generated/item-index.json";
+
+const LEGENDARY = new Set(Object.entries(itemIndex as Record<string, { kind: string }>).filter(([, v]) => v.kind === "legendary").map(([k]) => Number(k)));
 
 /** Kills de début de partie gardés (plan d'avant-partie : ganks avant 10 min ; 15 pour la marge). */
 const EARLY_MS = 15 * 60_000;
@@ -141,6 +145,12 @@ export async function metaTimeline(ctx: JobContext, p: { matchId: string; parts:
   ctx.store.tx(() => {
     ctx.store.putEarly(p.matchId, early);
     ctx.store.putMetaTimeline(p.matchId, partExtras(t, roster), earlyKills(t, roster, EARLY_MS));
+    // Junglers : CS minute par minute jusqu'à 15 min et premier item légendaire (analyse du farm).
+    for (const [pid, r] of roster) {
+      if (r.role !== "JUNGLE") continue;
+      const c = jungleCurve(t as never, pid, (id) => LEGENDARY.has(id));
+      ctx.store.putJungleCurve(p.matchId, pid, r.championId, c.cs, c.firstItem);
+    }
     for (const x of p.parts) ctx.store.putBuild(p.matchId, x.pid, x.championId, x.role, x.win, orders.get(x.pid) ?? []);
   });
 }

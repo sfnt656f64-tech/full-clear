@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com">
-  <title>Kayn Sim · Champions recommandés</title>
+  <title>Full Clear · Champions recommandés</title>
   <link rel="stylesheet" href="../renderer/style.css">
   <link rel="stylesheet" href="../stats-window/stats.css">
   <link rel="stylesheet" href="reco.css">
@@ -15,17 +15,21 @@
   </header>
   <div class="filters">
     <div id="tabs" class="tabs" role="tablist"></div>
+    <label class="small">Référence <select id="ref-tier"><option value="EMERALD">Émeraude (ton niveau)</option><option value="DIAMOND">Diamant (ton objectif)</option></select></label>
   </div>
   <p id="warn" class="warn-box" hidden></p>
   <section id="profile" class="profile"></section>
+  <section id="advice" class="advice"></section>
   <div class="cols">
     <section class="col">
       <h2>Mon pool, par potentiel</h2>
-      <p class="muted small">Classés d'abord sur tes stats de jeu (mini-radar : Farm, Early, Teamfight, Objectifs, Survie, Or, face aux joueurs Émeraude+ du rôle ; pointillés = médiane), plus stables que le win rate sur peu de parties, puis sur ton win rate lissé.</p>
+      <p class="muted small">Classés d'abord sur tes stats de jeu (mini-radar : Farm, Early, Teamfight, Objectifs, Survie, Or ; parties de la saison en cours face aux joueurs du rôle au niveau de référence choisi, parties de la saison précédente face à ton adversaire direct ; pointillés = la référence), plus stables que le win rate sur peu de parties, puis sur ton win rate lissé.</p>
       <h3 class="grp keep">À garder</h3>
       <ol id="g-keep" class="cards"></ol>
       <h3 class="grp potential">Potentiel à développer</h3>
       <ol id="g-potential" class="cards"></ol>
+      <h3 class="grp neutral">Neutre, pas prioritaire</h3>
+      <ol id="g-neutral" class="cards"></ol>
       <h3 class="grp shelve">À mettre de côté</h3>
       <ol id="g-shelve" class="cards"></ol>
     </section>

@@ -1,4 +1,4 @@
-# Installer Kayn Sim sur Windows (depuis zéro)
+# Installer Full Clear sur Windows (depuis zéro)
 
 Ce guide installe le projet sur ton PC pour utiliser **l'application de bureau** (draft et overlay en jeu),
 **`npm run stats`** (tes parties) et, en secours, **`npm run live`**. Le site lui-même n'a besoin d'aucune
@@ -67,7 +67,7 @@ Dans le Bloc-notes, remplis les deux lignes, sans espace autour du `=` :
 
 ```
 RIOT_API_KEY=RGAPI-...ta clé complète...
-RIOT_ID=Invincy#TIG
+RIOT_ID=Pseudo#TAG
 ```
 
 Enregistre (**Ctrl+S**) et ferme le Bloc-notes.
@@ -119,19 +119,19 @@ npm run desktop:dist
 ```
 
 Le premier lancement télécharge les outils d'empaquetage (quelques minutes). Le résultat est
-`release\KaynSim-Setup-<version>.exe`.
+`release\FullClear-Setup-<version>.exe`.
 
 ### Installer
 
-1. Lance `KaynSim-Setup-<version>.exe`. L'installation se fait pour ton compte seulement (pas besoin d'être
-   administrateur), par défaut dans `%LOCALAPPDATA%\Programs\kayn-sim`.
+1. Lance `FullClear-Setup-<version>.exe`. L'installation se fait pour ton compte seulement (pas besoin d'être
+   administrateur), par défaut dans `%LOCALAPPDATA%\Programs\full-clear`.
 2. L'installeur n'est pas signé : Windows affiche « Windows a protégé votre ordinateur ». Clique sur
    **Informations complémentaires** → **Exécuter quand même**.
 3. Copie ton `.env` dans le dossier de l'appli :
 
    ```powershell
-   New-Item -ItemType Directory -Force "$env:APPDATA\kayn-sim" | Out-Null
-   Copy-Item "$HOME\Documents\kayn-sim\.env" "$env:APPDATA\kayn-sim\.env"
+   New-Item -ItemType Directory -Force "$env:APPDATA\full-clear" | Out-Null
+   Copy-Item "$HOME\Documents\kayn-sim\.env" "$env:APPDATA\full-clear\.env"
    ```
 
    L'appli n'y lit que `RIOT_ID` (pour vérifier que le compte connecté au client est le tien) et, s'il est
@@ -167,9 +167,9 @@ ne sont jamais affichés ni enregistrés. Pas de compteurs de sorts adverses, pa
 ### Mettre à jour ou désinstaller
 
 - Mise à jour : après `git pull` et `npm ci` (étape 7), relance `npm run desktop:dist` et installe le nouvel
-  installeur par-dessus. Ton `.env` et tes réglages (dans `%APPDATA%\kayn-sim`) sont conservés.
-- Désinstallation : Paramètres → Applications → **Kayn Sim** → Désinstaller. Le lancement au démarrage est
-  retiré ; le dossier `%APPDATA%\kayn-sim` est conservé (supprime-le à la main si tu veux).
+  installeur par-dessus. Ton `.env` et tes réglages (dans `%APPDATA%\full-clear`) sont conservés.
+- Désinstallation : Paramètres → Applications → **Full Clear** → Désinstaller. Le lancement au démarrage est
+  retiré ; le dossier `%APPDATA%\full-clear` est conservé (supprime-le à la main si tu veux).
 
 ### Pour développer
 
@@ -226,6 +226,17 @@ Ton `.env` et ton cache de parties sont conservés.
 | Le navigateur ne s'ouvre pas | Copie le lien affiché dans le terminal et colle-le dans ton navigateur. |
 | Le script semble en pause pendant `npm run stats` | Normal au 1er lancement : il respecte la limite de 100 requêtes / 2 min de la clé. |
 | Appli : « Client LoL fermé » alors qu'il est ouvert | Attends 15 s (détection périodique). Si le client est lancé en administrateur, lance aussi l'appli en administrateur, ou plus simplement aucun des deux. |
-| Appli : compte « différent du RIOT_ID du .env » | Mets ton Riot ID actuel dans `%APPDATA%\kayn-sim\.env`, puis **Relire le .env**. |
+| Appli : compte « différent du RIOT_ID du .env » | Mets ton Riot ID actuel dans `%APPDATA%\full-clear\.env`, puis **Relire le .env**. |
 | Appli : l'overlay n'apparaît pas en jeu | Jeu en « Sans bordure » ? Case **Afficher l'overlay** cochée ? Pas masqué par le raccourci (menu de l'icône → Masquer / afficher) ? |
 | Appli : un raccourci ne réagit pas | S'il est marqué « déjà pris », change-le dans la fenêtre. Certaines applis (overlays de jeu, macros clavier) captent des touches sans les réserver : essaie une autre combinaison. |
+
+## Passage de Kayn Sim à Full Clear
+
+L'appli s'appelle désormais **Full Clear**. Installer la nouvelle version remplace l'ancienne « Kayn Sim »
+(désinstallée automatiquement, raccourcis compris). Au premier lancement :
+
+- le dossier `%APPDATA%\kayn-sim` (base, `.env`, réglages, rapports, sauvegardes) est recopié dans
+  `%APPDATA%\full-clear` ; la base est copiée de façon cohérente puis vérifiée ;
+- l'ancien dossier est **gardé tel quel** : supprime-le à la main quand tout fonctionne (son chemin est rappelé
+  dans Réglages › Configuration) ;
+- si le lancement au démarrage était activé, il est repris sous le nouveau nom (l'ancienne entrée est retirée).

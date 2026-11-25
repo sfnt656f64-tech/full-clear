@@ -21,10 +21,10 @@ function el(tag: string, attrs: Record<string, string>, parent: Element, title?:
 }
 
 /**
- * Radar : la médiane Émeraude+ (50 sur chaque axe) en pointillés, puis chaque série (0–100).
+ * Radar : la médiane du niveau de référence (50 sur chaque axe) en pointillés, puis chaque série (0–100).
  * `labels` : noms des axes autour (grand radar) ; sinon mini-radar sans texte.
  */
-export function radarSvg(series: RadarSeries[], opts: { size: number; labels: boolean }): SVGSVGElement {
+export function radarSvg(series: RadarSeries[], opts: { size: number; labels: boolean; refName: string }): SVGSVGElement {
   const pad = opts.labels ? 62 : 3;
   const W = opts.size + 2 * pad;
   const c = W / 2, R = opts.size / 2;
@@ -40,7 +40,7 @@ export function radarSvg(series: RadarSeries[], opts: { size: number; labels: bo
   // Grille : 25 / 75 / 100, axes.
   for (const lvl of [25, 75, 100]) el("polygon", { points: poly(AXES.map(() => lvl)), class: "radar-grid" }, svg);
   for (let i = 0; i < n; i++) { const [x, y] = pt(i, 100); el("line", { x1: String(c), y1: String(c), x2: String(x), y2: String(y), class: "radar-grid" }, svg); }
-  el("polygon", { points: poly(AXES.map(() => 50)), class: "radar-median" }, svg, "Médiane Émeraude+ (50 sur chaque axe)");
+  el("polygon", { points: poly(AXES.map(() => 50)), class: "radar-median" }, svg, `Médiane ${opts.refName} (50 sur chaque axe)`);
   for (const s of series) {
     const vals = s.values.map((v) => v ?? 0);
     el("polygon", { points: poly(vals), class: `radar-shape ${s.cls}` }, svg, s.name);
@@ -58,6 +58,8 @@ export function radarSvg(series: RadarSeries[], opts: { size: number; labels: bo
       const t = el("text", { x: String(x), y: String(y + 4), class: "radar-label", "text-anchor": x < c - 5 ? "end" : x > c + 5 ? "start" : "middle" }, svg, a.hint);
       t.append(document.createTextNode(a.label));
     });
+    // Référence écrite sur le radar lui-même.
+    el("text", { x: "4", y: String(W - 6), class: "radar-ref" }, svg, "Niveau de référence des positions").append(document.createTextNode(`Réf. : ${opts.refName}`));
   }
   return svg;
 }

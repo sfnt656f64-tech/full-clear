@@ -29,7 +29,7 @@ export const riotIdText = (r: RiotIdParts): string => `${r.gameName}#${r.tagLine
 
 /**
  * Dossiers où chercher le .env, dans l'ordre : le dépôt (en développement), puis
- * %APPDATA%\kayn-sim (version installée, où le dossier de l'appli est en lecture seule).
+ * %APPDATA%\full-clear (version installée, où le dossier de l'appli est en lecture seule).
  */
 export function envCandidates(repoDir: string | null, userDataDir: string): string[] {
   return [...(repoDir ? [join(repoDir, ".env")] : []), join(userDataDir, ".env")];

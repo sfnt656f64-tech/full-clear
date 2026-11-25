@@ -147,7 +147,7 @@ describe("configuration (.env)", () => {
   });
 
   it("le # d'un Riot ID est gardé (le lecteur intégré à Node le prendrait pour un commentaire)", () => {
-    expect(parseEnvText("RIOT_ID=Invincy#TIG\n# commentaire\nA = 'x y'\nB=\"q#1\"\n=vide\nsansegal\n")).toEqual({ RIOT_ID: "Invincy#TIG", A: "x y", B: "q#1" });
+    expect(parseEnvText("RIOT_ID=Pseudo#TAG\n# commentaire\nA = 'x y'\nB=\"q#1\"\n=vide\nsansegal\n")).toEqual({ RIOT_ID: "Pseudo#TAG", A: "x y", B: "q#1" });
   });
 
   it(".env édité sous Windows (BOM, CRLF, commentaires) : lu correctement, sans écraser l'environnement", () => {

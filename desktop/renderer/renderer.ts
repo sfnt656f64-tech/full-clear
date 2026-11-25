@@ -2,9 +2,10 @@
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
 import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
+import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
-import { DDRAGON_VERSION } from "../../src/data/version";
+import { DDRAGON_VERSION, officialPatch } from "../../src/data/version";
 import { runeIconUrl, runeName, RUNE_TREES, RUNES_BY_ID } from "../../src/data/runes";
 
 declare global {
@@ -68,6 +69,12 @@ function slots(list: (DraftView["enemies"][number])[], side: "en" | "al"): HTMLE
 }
 
 const CDN_CHAMP = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/`;
+/** Marge à 95 % (Wilson) d'un win rate en %, sur n parties. */
+const wilsonPm = (wr: number, n: number) => {
+  if (!n) return 100;
+  const z = 1.96, p = wr / 100, d = 1 + z * z / n;
+  return ((z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d) * 100;
+};
 const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
 
 /** Plan d'avant-partie (jungle) : chance de gank par lane, premier gank, départ, objectifs. */
@@ -84,7 +91,7 @@ function renderPlan(p: NonNullable<DraftView["plan"]>): HTMLElement {
       ` · départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}`,
       p.start.topShare != null ? h("span", { class: "muted" }, ` · en Émeraude+ : ${Math.round(p.start.topShare)} % des départs côté top`) : null),
     ...p.objectives.map((o) => h("p", { class: "small" }, "› ", o)),
-    h("p", { class: "small muted" }, `Chances estimées depuis les ganks des junglers Émeraude+ avant 10 min (${p.games} parties avec ton champion), le contrôle de tes alliés, les duels et les laners adverses. Calculé une fois, avec la draft.`));
+    h("p", { class: "small muted" }, `Chances estimées depuis les ganks des junglers Émeraude+ avant 10 min (${p.games} parties avec ton champion), le contrôle de tes alliés, les duels et les laners adverses. Estimation, pas une mesure : les ganks ratés sans mort n'apparaissent pas dans les chronologies, la réussite est donc surestimée ; seul l'ordre entre les lanes compte. Calculé une fois, avec la draft.`));
 }
 
 /** Page de runes recommandée, avec le bouton d'import dans le client. */
@@ -96,7 +103,7 @@ function renderRunePage(p: NonNullable<DraftView["runePage"]>, note: string | nu
   const tree = (id: number) => RUNE_TREES[id]?.nameEn ?? String(id);
   const source = p.source === "guide"
     ? "Guide Kayn pour la forme recommandée."
-    : `Page la plus jouée en Émeraude+ avec ${runeName(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % de victoires.`;
+    : `Page la plus jouée en Émeraude+ avec ${runeName(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % ± ${Math.round(wilsonPm(p.winRate ?? 0, p.games ?? 0))} de victoires.`;
   const status = h("p", { class: "small muted", role: "status" });
   const btn = h("button", { type: "button" }, "Importer dans le client") as HTMLButtonElement;
   btn.addEventListener("click", async () => {
@@ -171,7 +178,8 @@ function renderLanes(rows: NonNullable<DraftView["lanes"]>): HTMLElement {
     ...rows.map((r) => h("div", { class: `lane-row${r.me ? " me" : ""}` },
       h("span", { class: "lane-label", title: LANE_LABELS[r.lane] }, laneIcon(r.lane), h("span", { class: "small" }, LANE_LABELS[r.lane])),
       cell(r.ally, "al", r.me ? h("span", { class: "small muted" }, " (toi)") : null),
-      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: "Rôle déduit de la méta Émeraude+" }, " probable") : null))));
+      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: "Rôle déduit de la méta Émeraude+ : part de ses parties dans ce rôle" },
+        r.games == null || r.games < 20 ? " rôle incertain (moins de 20 parties de méta)" : ` probable (${Math.round(r.share ?? 0)} % de ses ${r.games.toLocaleString("fr-FR")} parties)`) : null))));
 }
 
 let timerHandle: number | undefined;
@@ -409,7 +417,7 @@ function renderCollector(s: AppState): void {
       if (!j.pending && !j.done && !j.failed) continue;
       body.push(h("p", { class: "small muted" }, `${j.label} : ${j.done} fait(s)${j.pending ? `, ${j.pending} en attente` : ""}${j.failed ? `, ${j.failed} en échec` : ""}`));
     }
-    if (x.meta.length) summary.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games.toLocaleString("fr-FR")} partie(s) en ${m.patch}`).join(", ")}`));
+    if (x.meta.length) summary.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games.toLocaleString("fr-FR")} partie(s) en ${officialPatch(m.patch)}`).join(", ")}`));
     if (x.poolSize) body.push(h("p", { class: "small muted" }, `Ordres d'achat suivis pour ${x.poolSize} champion(s) de ton pool`));
     const metaTotal = x.meta.reduce((n, m) => n + m.games, 0);
     homeText = metaTotal ? ` · méta ${metaTotal.toLocaleString("fr-FR")} parties` : "";
@@ -426,15 +434,19 @@ function renderCollector(s: AppState): void {
   $("accounts").textContent = s.riotIds.length > 1 ? `Comptes suivis : ${s.riotIds.join(", ")}` : s.riotIds.length ? `Compte suivi : ${s.riotIds[0]} (ajoute RIOT_ID_2 pour un 2ᵉ compte)` : "";
 }
 
-$("col-stats").addEventListener("click", () => void window.kayn.openStatsWindow());
-$("col-meta").addEventListener("click", () => void window.kayn.openMetaWindow());
-$("col-reco").addEventListener("click", () => void window.kayn.openRecoWindow());
 $("col-pause").addEventListener("click", async () => {
   const s = await window.kayn.getState();
   render(await window.kayn.setCollectorPaused(!s.collectorPaused));
 });
 
+/** L'ancienne appli a écrit dans l'ancien dossier après la reprise : ses données récentes ne sont pas ici. */
+const legacyWarning = (s: AppState) => s.data.changedAfter
+  ? `L'ancien dossier ${s.data.legacyKept ?? "kayn-sim"} a été modifié après la reprise du ${new Date(s.data.changedAfter).toLocaleString("fr-FR")} : l'ancienne appli « Kayn Sim » tourne peut-être encore. Quitte-la (icône de notification → Quitter) ; rien n'est perdu, l'ancien dossier est intact.`
+  : null;
+
 function render(s: AppState): void {
+  const ref = $<HTMLSelectElement>("af-ref");
+  if (document.activeElement !== ref) ref.value = s.refTier;
   renderClient(s);
   renderCollector(s);
   renderLive(s);
@@ -451,7 +463,13 @@ function render(s: AppState): void {
     ul.append(li);
   }
   $("env-file").textContent = s.envFile ?? "aucun";
-  const alerts = [...s.problems, ...(s.envFile ? [] : ["Pas de fichier .env : voir Réglages."])];
+  $("data-dir").textContent = [
+    `Données (base, réglages, rapports) : ${s.data.dir}.`,
+    s.data.legacyKept ? `Ancien dossier de Kayn Sim conservé tel quel : ${s.data.legacyKept}. Supprime-le à la main quand tout fonctionne.` : "",
+    s.data.error ?? "",
+    legacyWarning(s) ?? "",
+  ].filter(Boolean).join(" ");
+  const alerts = [...(s.data.error ? [s.data.error] : []), ...(legacyWarning(s) ? [legacyWarning(s)!] : []), ...s.problems, ...(s.envFile ? [] : ["Pas de fichier .env : voir Réglages."])];
   $("home-alert").hidden = !alerts.length;
   $("home-alert").textContent = alerts[0] ?? "";
   renderExcluded(s.excludedChampions);
@@ -465,8 +483,8 @@ $("open-dir").addEventListener("click", () => void window.kayn.openUserDataDir()
 $<HTMLInputElement>("login").addEventListener("change", async (e) => render(await window.kayn.setOpenAtLogin((e.target as HTMLInputElement).checked)));
 // ---------- Onglets ----------
 
-type Tab = "home" | "draft" | "analysis" | "collect" | "settings";
-const TABS: Tab[] = ["home", "draft", "analysis", "collect", "settings"];
+type Tab = "home" | "draft" | "analysis" | "champions" | "settings";
+const TABS: Tab[] = ["home", "draft", "analysis", "champions", "settings"];
 
 function selectTab(tab: Tab): void {
   for (const t of TABS) {
@@ -476,9 +494,35 @@ function selectTab(tab: Tab): void {
   try { localStorage.setItem("tab", tab); } catch { /* stockage indisponible */ }
   // Après l'initialisation du script (l'onglet peut être restauré au démarrage).
   if (tab === "analysis") queueMicrotask(() => void loadAnalysis(anKey));
+  if (tab === "champions") selectSub(currentSub);
 }
+
+// ---------- Champions : vues intégrées (chargées à la première ouverture) ----------
+
+type Sub = "reco" | "stats" | "meta" | "sim";
+const SUBS: Sub[] = ["reco", "stats", "meta", "sim"];
+let currentSub: Sub = "reco";
+function selectSub(sub: Sub, hash?: string): void {
+  currentSub = sub;
+  for (const x of SUBS) {
+    const fr = $<HTMLIFrameElement>(`frame-${x}`);
+    fr.hidden = x !== sub;
+    document.querySelector(`[data-sub="${x}"]`)!.setAttribute("aria-selected", String(x === sub));
+    if (x === sub && (!fr.src || hash)) fr.src = fr.dataset.src! + (hash ? `#${hash}` : "");
+  }
+  try { localStorage.setItem("sub", sub); } catch { /* stockage indisponible */ }
+}
+for (const x of SUBS) document.querySelector(`[data-sub="${x}"]`)!.addEventListener("click", () => selectSub(x));
+try { const x = localStorage.getItem("sub") as Sub | null; if (x && SUBS.includes(x)) currentSub = x; } catch { /* idem */ }
+// Menu de l'icône, simulateur avec la draft : le processus principal demande une vue.
+window.kayn.onNavigate((n) => {
+  if (n.sub) currentSub = n.sub;
+  selectTab(n.tab);
+  if (n.tab === "champions" && n.sub) selectSub(n.sub, n.hash);
+});
 for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
-$("home-col").addEventListener("click", () => selectTab("collect"));
+$("home-col").addEventListener("click", () => selectTab("settings"));
+$("home-reco").addEventListener("click", () => { selectTab("champions"); selectSub("reco"); });
 try { const t = localStorage.getItem("tab") as Tab | null; if (t && TABS.includes(t) && t !== "draft") selectTab(t); } catch { /* idem */ }
 
 /** Onglet Draft ouvert tout seul au début de la sélection, Accueil à la fin (seulement aux changements). */
@@ -500,6 +544,8 @@ let anKey: string | null = null;
 let anFilter: "all" | "early" | "late" = "all";
 let anView: Awaited<ReturnType<typeof window.kayn.getAnalysis>> | null = null;
 let ov: Awaited<ReturnType<typeof window.kayn.getOverview>> | null = null;
+/** Niveau de référence des données affichées (« Émeraude » ou « Diamant »). */
+let refShort = "Émeraude";
 let heatKinds: "both" | "kills" | "deaths" = "both";
 let heatTime: "all" | "early" | "late" = "all";
 let tableSort = { key: "games", asc: false };
@@ -511,20 +557,36 @@ const champName = (id: number) => champByKey(id)?.name ?? `#${id}`;
 try { const saved = JSON.parse(localStorage.getItem("anFilter") ?? "null"); if (saved && typeof saved === "object") anFilterSel = { ...anFilterSel, ...saved }; } catch { /* rien */ }
 for (const img of document.querySelectorAll<HTMLImageElement>(".an-map-bg")) img.src = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/map/map11.png`;
 
-/** Recharge selon la vue choisie. */
+/** Recharge selon la vue choisie. Pendant le calcul : indicateur de chargement ; seule la dernière demande compte. */
+let anRequest = 0;
 async function loadAnalysis(key: string | null): Promise<void> {
   try { localStorage.setItem("anFilter", JSON.stringify(anFilterSel)); } catch { /* rien */ }
   $("an-overview").hidden = anViewMode !== "overview";
   $("an-game-view").hidden = anViewMode !== "game";
-  if (anViewMode === "overview") {
-    ov = await window.kayn.getOverview(anFilterSel, compareId);
-    renderFilters();
-    renderOverview();
-  } else {
-    if (!ov) { ov = await window.kayn.getOverview(anFilterSel); renderFilters(); }
-    anView = await window.kayn.getAnalysis(key, anFilterSel);
-    anKey = anView.selected;
-    renderAnalysis();
+  const req = ++anRequest;
+  const box = $("tab-analysis");
+  box.classList.add("loading");
+  try {
+    if (anViewMode === "overview") {
+      const v = await window.kayn.getOverview(anFilterSel, compareId);
+      if (req !== anRequest) return; // une demande plus récente est partie entre-temps
+      ov = v;
+      refShort = v.reference.short;
+      renderFilters();
+      renderOverview();
+    } else {
+      const [o, a] = await Promise.all([ov ? Promise.resolve(ov) : window.kayn.getOverview(anFilterSel, compareId), window.kayn.getAnalysis(key, anFilterSel)]);
+      if (req !== anRequest) return;
+      if (!ov) { ov = o; renderFilters(); }
+      anView = a;
+      if (a.reference) refShort = a.reference.short;
+      anKey = anView.selected;
+      renderAnalysis();
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    if (req === anRequest) box.classList.remove("loading");
   }
 }
 
@@ -554,6 +616,11 @@ function readFilters(): void {
   };
 }
 for (const id of ["af-champ", "af-role", "af-period", "af-account"]) $(id).addEventListener("change", () => { readFilters(); anKey = null; void loadAnalysis(null); });
+// Niveau de référence : mémorisé dans les réglages (partagé avec Champions recommandés), puis tout est recalculé.
+$<HTMLSelectElement>("af-ref").addEventListener("change", (e) => {
+  const tier = (e.target as HTMLSelectElement).value as AppState["refTier"];
+  void window.kayn.setRefTier(tier).then(() => { ov = null; void loadAnalysis(anKey); });
+});
 for (const b of document.querySelectorAll<HTMLButtonElement>(".an-views button")) {
   b.addEventListener("click", () => {
     anViewMode = b.dataset.view as typeof anViewMode;
@@ -563,14 +630,14 @@ for (const b of document.querySelectorAll<HTMLButtonElement>(".an-views button")
 }
 
 /** Ligne de mesure : valeur, barre de position, médiane. */
-function metricRow(label: string, mine: number | null, unit: string, rank: number | null, med: number | null, extra = ""): HTMLElement {
+function metricRow(label: string, mine: number | null, unit: string, rank: number | null, med: number | null, extra = "", medLabel = "méd."): HTMLElement {
   const fill = h("span", { class: "an-fill", "data-pct": String(Math.round(rank ?? 0)) });
   const cls = rank == null ? "" : rank >= 60 ? " good" : rank < 40 ? " bad" : "";
   return h("div", { class: `an-metric${cls}` },
     h("span", { class: "an-label" }, label, extra ? h("span", { class: "small muted" }, extra) : null),
     h("span", { class: "an-val" }, fmtNum(mine, unit)),
-    h("span", { class: "an-bar", title: rank == null ? "" : `Mieux que ${Math.round(rank)} % des joueurs Émeraude+` }, fill),
-    h("span", { class: "an-med small muted" }, med == null ? "" : `méd. ${fmtNum(med, unit)}`));
+    h("span", { class: "an-bar", title: rank == null ? "" : `Mieux que ${Math.round(rank)} % des joueurs ${refShort}` }, fill),
+    h("span", { class: "an-med small muted" }, med == null ? "" : `${medLabel} ${fmtNum(med, unit)}`));
 }
 const applyBars = () => { for (const f of document.querySelectorAll<HTMLElement>(".an-fill")) f.style.width = `${f.dataset.pct}%`; };
 
@@ -584,12 +651,15 @@ function renderOverview(): void {
   if (empty) return;
   const who = v.filter.championId != null ? champName(v.filter.championId) : "tous tes champions";
   $("ov-summary").replaceChildren(h("b", {}, `${o.games} partie${o.games > 1 ? "s" : ""}`), ` · ${who} · `,
-    h("b", {}, `${fmtNum(o.winRate, " %")} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (Émeraude+ : ${fmtNum(o.metaWinRate, " %")})`) : "");
+    h("b", {}, `${fmtNum(o.winRate, " %")} ± ${Math.round(wilsonPm(o.winRate ?? 0, o.games))} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (${refShort} : ${fmtNum(o.metaWinRate, " %")})`) : "");
+  const season = o.refs.season ?? "";
+  const metaRef = o.comparedTo === "champion" ? `joueurs ${refShort} ${season} sur ${who}` : `joueurs ${refShort} ${season} du rôle`;
   $("ov-note").textContent = [
-    o.comparedTo === "champion" ? `Comparé aux joueurs Émeraude+ sur ${who}.` : o.comparedTo === "role" ? "Comparé à tous les joueurs Émeraude+ du rôle." : "Chaque partie comparée aux joueurs Émeraude+ de son rôle.",
-    "Barre : ta position moyenne (à droite = meilleur).",
-    o.oldSeasons ? "Attention : des parties d'anciennes saisons sont comparées à la méta actuelle (le jeu a changé)." : "",
-  ].filter(Boolean).join(" ");
+    o.refs.opponent === 0 ? `Référence : ${metaRef}.`
+      : o.refs.meta === 0 ? `Référence : ton adversaire direct de la même partie (${o.refs.opponent} parties de saisons sans méta) ; la barre donne la part des parties où tu fais mieux que lui.`
+      : `Référence : ${metaRef} pour ${o.refs.meta} parties de ${season} ; ton adversaire direct de la même partie pour ${o.refs.opponent} parties des saisons précédentes (part des parties où tu fais mieux que lui).`,
+    "Barre : à droite = meilleur, 50 % = la référence.",
+  ].join(" ");
   $("ov-metrics").replaceChildren(...o.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median, m.n < o.games ? ` (${m.n})` : "")));
   applyBars();
   const item = (m: (typeof o.metrics)[number]) => h("li", {}, h("b", {}, m.label), ` : ${fmtNum(m.mine, m.unit)}${m.median != null ? ` (méd. ${fmtNum(m.median, m.unit)})` : ""} · mieux que ${Math.round(m.rank ?? 0)} %`);
@@ -601,7 +671,7 @@ function renderOverview(): void {
   renderTable();
 }
 
-/** Radar de la sélection (et d'un champion à comparer), sur la médiane Émeraude+ du rôle. */
+/** Radar de la sélection (et d'un champion à comparer), sur la médiane du rôle au niveau de référence. */
 function renderRadar(): void {
   const v = ov!;
   const sel = $<HTMLSelectElement>("ov-compare");
@@ -613,11 +683,11 @@ function renderRadar(): void {
   if (v.compare?.radar) series.push({ values: v.compare.radar.values, cls: "s-cmp", name: champName(v.compare.championId) });
   const box = $("ov-radar");
   if (!v.radar) { box.replaceChildren(h("p", { class: "small muted" }, "Il faut au moins 5 parties relues pour tracer le profil.")); $("ov-radar-note").textContent = ""; return; }
-  box.replaceChildren(radarSvg(series, { size: 220, labels: true }));
+  box.replaceChildren(radarSvg(series, { size: 220, labels: true, refName: refShort }));
   $("ov-radar-note").replaceChildren(h("span", { class: "lg lg-main" }), ` ${name} (${v.radar.games} parties)`,
     v.compare ? h("span", {}, h("span", { class: "lg lg-cmp" }), ` ${champName(v.compare.championId)}${v.compare.radar ? ` (${v.compare.radar.games} parties)` : " : moins de 5 parties"}`) : "",
-    h("span", {}, h("span", { class: "lg lg-med" }), " médiane Émeraude+ du rôle"),
-    h("br"), "Chaque axe : ta position « mieux que X % » face aux joueurs Émeraude+ du même rôle. Survole un point pour le détail.");
+    h("span", {}, h("span", { class: "lg lg-med" }), ` médiane ${refShort} du rôle (${ov!.reference.games.toLocaleString("fr-FR")} joueurs de méta)`),
+    h("br"), `Chaque axe : ta position « mieux que X % » face aux joueurs ${refShort} du même rôle (parties trouvées par un joueur de ce rang ; le matchmaking mélange des rangs voisins)`, " pour les parties de la saison de la méta, et la part des parties où tu fais mieux que ton adversaire direct pour les saisons précédentes. Survole un point pour le détail.");
 }
 $<HTMLSelectElement>("ov-compare").addEventListener("change", (e) => {
   const v = (e.target as HTMLSelectElement).value;
@@ -636,22 +706,26 @@ function drawHeat(): void {
   canvas.width = size * dpr; canvas.height = size * dpr;
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const pts = (ov?.points ?? []).filter(([, , k, m]) => k !== 2
-    && (heatKinds === "both" || (heatKinds === "kills" ? k === 0 : k === 1))
-    && (heatTime === "all" || (heatTime === "early" ? m < 15 : m >= 15)));
+  const heat = ov?.heat;
+  if (!heat) return;
+  // Le moteur envoie déjà le nombre d'événements par case : on étale chaque case (noyau gaussien).
   const G = 96, R = 3, SIG = 1.6;
-  const kg = new Float32Array(G * G), dg = new Float32Array(G * G);
-  for (const [x, y, k] of pts) {
-    const gx = (x / MAP_SIZE) * G, gy = (1 - y / MAP_SIZE) * G;
-    const grid = k === 0 ? kg : dg;
-    for (let j = Math.floor(gy) - R; j <= Math.floor(gy) + R; j++) {
-      for (let i = Math.floor(gx) - R; i <= Math.floor(gx) + R; i++) {
+  const spread = (flat: number[]) => {
+    const grid = new Float32Array(G * G);
+    for (let n = 0; n < flat.length; n += 2) {
+      const idx = flat[n], count = flat[n + 1];
+      const cx = idx % G, cy = Math.floor(idx / G);
+      for (let j = cy - R; j <= cy + R; j++) for (let i = cx - R; i <= cx + R; i++) {
         if (i < 0 || j < 0 || i >= G || j >= G) continue;
-        const d2 = (i + 0.5 - gx) ** 2 + (j + 0.5 - gy) ** 2;
-        grid[j * G + i] += Math.exp(-d2 / (2 * SIG * SIG));
+        grid[j * G + i] += count * Math.exp(-((i - cx) ** 2 + (j - cy) ** 2) / (2 * SIG * SIG));
       }
     }
-  }
+    return grid;
+  };
+  const pick = (g: { early: number[]; late: number[] }) => (heatTime === "all" ? [...g.early, ...g.late] : g[heatTime]);
+  const kCells = heatKinds === "deaths" ? [] : pick(heat.kills);
+  const dCells = heatKinds === "kills" ? [] : pick(heat.deaths);
+  const kg = spread(kCells), dg = spread(dCells);
   const nz = [...kg, ...dg].filter((v) => v > 0.01).sort((p, q) => p - q);
   const top = nz.length ? nz[Math.floor(nz.length * 0.9)] : 1;
   const small = document.createElement("canvas");
@@ -669,8 +743,8 @@ function drawHeat(): void {
   sctx.putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
-  const kills = pts.filter((p) => p[2] === 0).length, deaths = pts.filter((p) => p[2] === 1).length;
-  $("ov-heat-note").textContent = `${kills} kill(s) en vert, ${deaths} mort(s) en rouge. Plus la couleur est vive, plus il y en a au même endroit.`;
+  const sum = (flat: number[]) => flat.reduce((n, v, i) => (i % 2 ? n + v : n), 0);
+  $("ov-heat-note").textContent = `${sum(kCells)} kill(s) en vert, ${sum(dCells)} mort(s) en rouge. Plus la couleur est vive, plus il y en a au même endroit.`;
 }
 function pressGroup(attr: string, b: HTMLButtonElement): void {
   for (const x of document.querySelectorAll(`[${attr}]`)) x.setAttribute("aria-pressed", String(x === b));
@@ -738,14 +812,19 @@ function renderTable(): void {
     name.addEventListener("click", () => { anFilterSel = { ...anFilterSel, championId: r.championId }; void loadAnalysis(null); });
     return h("tr", {}, h("td", { class: "left" }, name), ...cols.map((c) => {
       const v = c.get(r);
-      const all = rows.map((x) => c.get(x)).filter((x): x is number => x != null);
+      // Meilleur / plus faible : seulement entre champions d'au moins 20 parties (pas de conclusion en dessous).
+      // Comparaison par la position face à la référence de chaque saison (jamais des moyennes brutes qui
+      // mélangeraient des saisons différentes) ; le win rate tel quel.
+      const pos = (x: ChampionRow) => (c.key === "wr" ? x.winRate : x.ranks[c.key] ?? null);
+      const all = rows.filter((x) => x.games >= 20).map(pos).filter((x): x is number => x != null);
+      const p = pos(r);
       let cls = "";
-      if (v != null && all.length >= 2 && c.key !== "games") {
-        const best = c.better === "+" ? Math.max(...all) : Math.min(...all), worst = c.better === "+" ? Math.min(...all) : Math.max(...all);
-        cls = v === best ? "best" : v === worst ? "worst" : "";
+      if (p != null && r.games >= 20 && all.length >= 2 && c.key !== "games") {
+        cls = p === Math.max(...all) ? "best" : p === Math.min(...all) ? "worst" : "";
       }
       const med = r.medians[c.key];
-      return h("td", { class: cls, title: med != null ? `Médiane Émeraude+ sur ${champName(r.championId)} : ${fmtNum(med, c.unit)}` : "" }, fmtNum(v, c.unit));
+      return h("td", { class: cls, title: med != null ? `Médiane ${refShort} sur ${champName(r.championId)} : ${fmtNum(med, c.unit)}` : "" },
+        fmtNum(v, c.unit), c.key === "wr" ? h("span", { class: "small muted" }, ` ±${Math.round(wilsonPm(v ?? 0, r.games))}`) : null);
     }));
   });
   $("ov-table").replaceChildren(h("thead", {}, head), h("tbody", {}, ...body));
@@ -763,7 +842,7 @@ function renderAnalysis(): void {
   if (!v?.analysis) return;
   sel.value = v.selected ?? "";
   const a = v.analysis, g = a.game;
-  $("an-summary").textContent = `${champName(g.championId)} · ${g.win ? "victoire" : "défaite"} en ${mmss(g.durationS * 1000)} · ${g.kills}/${g.deaths}/${g.assists} · ${g.cs} CS · patch ${g.patch}`;
+  $("an-summary").textContent = `${champName(g.championId)} · ${g.win ? "victoire" : "défaite"} en ${mmss(g.durationS * 1000)} · ${g.kills}/${g.deaths}/${g.assists} · ${g.cs} CS · patch ${officialPatch(g.patch)}`;
 
   // Carte : base bleue en bas à gauche ; y inversé pour l'écran.
   const evs = a.events.filter((e) => anFilter === "all" || (anFilter === "early" ? e.t < 900_000 : e.t >= 900_000));
@@ -780,15 +859,18 @@ function renderAnalysis(): void {
   const rs: RadarSeries[] = [];
   if (v.radar?.average) rs.push({ values: v.radar.average.values, cls: "s-avg", name: `Ta moyenne (${v.radar.average.games} parties)` });
   if (v.radar?.game) rs.push({ values: v.radar.game.values, cls: "s-main", name: "Cette partie" });
-  $("an-radar").replaceChildren(radarSvg(rs, { size: 200, labels: true }));
-  $("an-metrics").replaceChildren(...a.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median)));
+  $("an-radar").replaceChildren(radarSvg(rs, { size: 200, labels: true, refName: refShort }));
+  const opp = a.comparedTo === "opponent";
+  $("an-metrics").replaceChildren(...a.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median, "", opp ? "adv." : "méd.")));
   applyBars();
-  $("an-ref").textContent = a.comparedTo === "champion"
-    ? `Comparé à ${a.metaGames.toLocaleString("fr-FR")} parties Émeraude+ sur ${champName(g.championId)} (${ROLE_SHORT[g.role] ?? g.role}). La barre : ta position (à droite = meilleur).`
-    : `Pas encore assez de parties Émeraude+ sur ce champion : comparé à tous les joueurs du rôle (${a.metaGames.toLocaleString("fr-FR")} parties).`;
+  $("an-ref").textContent = opp
+    ? `Partie d'une saison sans méta : comparée à ton adversaire direct (même rôle, même partie). « adv. » : sa valeur ; barre pleine si tu fais mieux que lui, à moitié à égalité.`
+    : a.comparedTo === "champion"
+    ? `Comparé à ${a.metaGames.toLocaleString("fr-FR")} parties ${refShort} sur ${champName(g.championId)} (${ROLE_SHORT[g.role] ?? g.role}). La barre : ta position (à droite = meilleur).`
+    : `Pas encore assez de parties ${refShort} sur ce champion : comparé à tous les joueurs du rôle (${a.metaGames.toLocaleString("fr-FR")} parties).`;
 
   $("an-focus").replaceChildren(...(a.focus.length ? a.focus.map((f) => h("div", { class: "an-focus" }, h("p", { class: "small" }, f.text), sparkline(f.trend, f.median)))
-    : [h("p", { class: "small muted" }, a.focusGames < 3 ? "Pas encore assez de parties récentes pour dégager des tendances." : "Rien de marqué : tu es au niveau ou au-dessus de la médiane Émeraude+ sur tous les points suivis.")]));
+    : [h("p", { class: "small muted" }, a.focusGames < 3 ? "Pas encore assez de parties récentes pour dégager des tendances." : `Rien de marqué : tu es au niveau ou au-dessus de la médiane ${refShort} sur tous les points suivis.`)]));
 }
 
 /** Petite courbe de tes valeurs (de la plus ancienne à la plus récente), avec la médiane Émeraude+ en pointillés. */
@@ -820,6 +902,106 @@ for (const b of document.querySelectorAll<HTMLButtonElement>(".an-game-filter bu
   });
 }
 
+// ---------- Objectifs ----------
+
+type GV = Awaited<ReturnType<typeof window.kayn.getGoals>>;
+const fmtStat = (s: GV["goals"][number]["metrics"][number]["since"], unit: string) =>
+  s.value == null ? "–" : `${fmtNum(s.value, unit)}${s.margin != null ? ` ± ${fmtNum(s.margin, unit === " %" ? "" : "")}` : ""} (${s.n})`;
+
+function goalCard(g: GV["goals"][number]): HTMLElement {
+  const per = g.horizon === "week" ? "semaine" : "mois";
+  return h("div", { class: `goal${g.main ? " main" : ""}` },
+    h("h3", {}, g.main ? "★ " : "", g.label, g.main ? h("span", { class: "small muted" }, " · priorité principale") : null),
+    ...g.metrics.map((m) => {
+      if (m.info) {
+        return h("div", { class: "goal-metric" },
+          h("div", { class: "goal-label" }, m.label, h("span", { class: "small muted" }, ` · pour information${m.note ? ` (${m.note})` : ""}`)),
+          h("div", { class: "goal-vals small" }, h("span", {}, "avant ", h("b", {}, fmtStat(m.before, m.unit))), h("span", {}, " → depuis ", h("b", {}, fmtStat(m.since, m.unit)))));
+      }
+      const status = m.since.n < 20 ? ["muted", `pas de conclusion (${m.since.n}/20 parties)`]
+        : m.reached ? ["ok-text", "cible atteinte"] : ["warn-text", "pas encore"];
+      const delta = m.since.value != null && m.before.value != null ? m.since.value - m.before.value : null;
+      return h("div", { class: "goal-metric" },
+        h("div", { class: "goal-label" }, m.label, h("span", { class: "small muted" }, ` · cible ${m.better === "-" ? "≤" : "≥"} ${fmtNum(m.target, m.unit)}`)),
+        h("div", { class: "goal-vals small" },
+          h("span", {}, "avant ", h("b", {}, fmtStat(m.before, m.unit))),
+          h("span", {}, " → depuis ", h("b", {}, fmtStat(m.since, m.unit))),
+          delta != null ? h("span", { class: m.clear ? "" : "muted" }, ` · ${delta >= 0 ? "+" : ""}${fmtNum(delta, m.unit)}`) : null),
+        h("div", { class: `small ${status[0]}` }, status[1],
+          h("span", { class: "muted" }, m.needed === 0 ? " · assez de parties pour trancher par rapport à la cible"
+            : m.needed == null ? " · trop proche de la cible pour trancher (il faudrait des centaines de parties)"
+            : ` · encore environ ${m.needed} partie${m.needed > 1 ? "s" : ""} pour savoir si tu es à la cible`),
+          m.clear ? h("span", { class: "ok-text" }, " · écart net avec la période d'avant") : null),
+        m.periods.filter((w) => w.stat.value != null).length >= 2 ? periodBars(m, per) : null);
+    }),
+    h("details", { class: "small" }, h("summary", {}, g.horizon === "week" ? "Exercice" : "À quoi ça sert"), h("p", {}, g.exercise)));
+}
+
+function renderGoals(v: GV): void {
+  const start = new Date(v.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const from = new Date(v.baseline.fromMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  $("goals-head").textContent = `Depuis le ${start} : ${v.sinceGames} partie(s). Référence : ${v.baseline.extended ? `tes ${v.baseline.games} dernières parties d'avant (moins de 20 sur les 4 semaines)` : `les 4 semaines d'avant (${v.baseline.games} parties, depuis le ${from})`}. Entre parenthèses : nombre de parties ; ± : marge à 95 %.`;
+  const weekly = v.goals.filter((g) => g.horizon === "week"), monthly = v.goals.filter((g) => g.horizon === "month");
+  $("goals").replaceChildren(
+    h("h3", { class: "goal-section" }, "Objectifs de la semaine", h("span", { class: "small muted" }, " · ce que tu contrôles, tranchable en 20 à 30 parties")),
+    ...weekly.map(goalCard),
+    h("h3", { class: "goal-section" }, "Résultats à long terme", h("span", { class: "small muted" }, " · suivis chaque mois")),
+    ...monthly.map(goalCard));
+}
+
+/** Valeur par période depuis le début du suivi (barres), avec la cible en pointillés. */
+function periodBars(m: GV["goals"][number]["metrics"][number], per: string): Element {
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 260, H = 44, pts = m.periods;
+  const vals = pts.map((w) => w.stat.value ?? 0);
+  const hi = Math.max(m.target, ...vals) * 1.15 || 1;
+  const bw = (W - 10) / pts.length;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "weeks");
+  svg.setAttribute("aria-label", `Valeur par ${per}`);
+  pts.forEach((w, i) => {
+    if (w.stat.value == null) return;
+    const hgt = (w.stat.value / hi) * (H - 12);
+    const r = document.createElementNS(NS, "rect");
+    r.setAttribute("x", String(5 + i * bw + 2)); r.setAttribute("width", String(Math.max(2, bw - 4)));
+    r.setAttribute("y", String(H - 10 - hgt)); r.setAttribute("height", String(hgt));
+    const good = m.better === "-" ? w.stat.value <= m.target : w.stat.value >= m.target;
+    r.setAttribute("class", good ? "wk good" : "wk");
+    const t = document.createElementNS(NS, "title"); t.textContent = `${w.label} : ${fmtNum(w.stat.value, m.unit)} (${w.stat.n} partie(s))${w.stat.n < 20 ? " · moins de 20 parties : indicatif" : ""}`; r.append(t);
+    svg.append(r);
+  });
+  const y = H - 10 - (m.target / hi) * (H - 12);
+  const l = document.createElementNS(NS, "line");
+  l.setAttribute("x1", "0"); l.setAttribute("x2", String(W)); l.setAttribute("y1", String(y)); l.setAttribute("y2", String(y)); l.setAttribute("class", "spark-med");
+  svg.append(l);
+  return svg;
+}
+
+/** Réglages : début du suivi et cibles. */
+function renderGoalSettings(v: GV): void {
+  $("goals-start").textContent = `Suivi depuis le ${new Date(v.startMs).toLocaleDateString("fr-FR")}.`;
+  // Champs créés une seule fois, mis à jour sur place (jamais pendant la saisie).
+  syncTargetInputs($("goals-targets"), v.goals.flatMap((g) => g.metrics.filter((m) => !m.info).map((m) => ({ key: m.key, label: m.label, better: m.better, unit: m.unit, target: m.target }))),
+    (key, value) => void window.kayn.setGoalTarget(key, value).then(applyGoals));
+}
+
+/** Accueil : l'objectif principal en une ligne. */
+function renderHomeGoal(v: GV): void {
+  const g = v.goals.find((x) => x.main);
+  const m = g?.metrics[0];
+  $("home-goal").hidden = !m;
+  if (!m) return;
+  $("home-goal-text").textContent = `★ ${m.label} : ${m.since.n ? `${fmtNum(m.since.value, m.unit)} sur ${m.since.n} partie(s)` : "pas encore de partie"} · cible ${fmtNum(m.target, m.unit)} · avant ${fmtNum(m.before.value, m.unit)}`;
+}
+
+function applyGoals(v: GV): void { renderGoals(v); renderGoalSettings(v); renderHomeGoal(v); }
+async function loadGoals(): Promise<void> { applyGoals(await window.kayn.getGoals()); }
+$("goals-restart").addEventListener("click", async () => applyGoals(await window.kayn.restartGoals()));
+$("home-goal").addEventListener("click", () => selectTab("analysis"));
+void loadGoals();
+window.setInterval(() => void loadGoals(), 120_000);
+
 // ---------- Champions exclus ----------
 
 let excludedNow: string[] = [];
@@ -845,25 +1027,41 @@ $<HTMLInputElement>("excluded-add").addEventListener("change", async (e) => {
 window.kayn.onState(render);
 void window.kayn.getState().then(render);
 
-// ---------- Top 3 ----------
+// ---------- Accueil : pool conseillé et dernière partie ----------
 
-const nf1 = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-/** Les 3 meilleurs champions de ton pool en jungle et au milieu (score de la vue « Champions recommandés »). */
-async function renderTop3(): Promise<void> {
-  const r = await window.kayn.getRecommendations();
+/** Pool conseillé (jungle, puis milieu) : les champions et la raison principale. */
+async function renderHomeAdvice(): Promise<void> {
+  const r = await window.kayn.getRecommendations().catch(() => null);
+  if (!r) return;
   const rows = r.roles.map((role) => {
-    const top = role.pool.slice(0, 3);
+    const a = r.advice[role.role];
     return h("div", { class: "top3-row" },
       h("span", { class: "top3-role" }, role.role === "JUNGLE" ? "Jungle" : "Milieu"),
-      ...(top.length ? top.map((p, i) => {
+      ...(a?.picks.length ? a.picks.map((p) => {
         const ch = champByKey(p.championId);
         const img = h("img", { src: ch?.image ? `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${ch.image}` : "", alt: "", class: "ic" });
-        return h("span", { class: "top3-pick", title: [`Score ${nf1(p.score)} · ${p.games} parties · ${Math.round(p.winRate)} %`, ...p.reasons].join("\n") },
-          `${i + 1}.`, img, ch?.name ?? `#${p.championId}`, p.provisional ? h("span", { class: "muted small" }, " (provisoire)") : null);
-      }) : [h("span", { class: "muted small" }, "pas assez de parties dans ce rôle")]));
+        return h("span", { class: "top3-pick", title: p.why.join(" · ") }, img, ch?.name ?? `#${p.championId}`, p.provisional ? h("span", { class: "muted small" }, " (provisoire)") : null);
+      }) : [h("span", { class: "muted small" }, "pas encore de parties dans ce rôle")]),
+      a?.fromMeta ? h("span", { class: "muted small" }, " · d'après la méta") : null);
   });
-  $("top3").replaceChildren(...rows, h("p", { class: "muted small" }, "Survole un champion pour le détail ; « Champions recommandés » pour le calcul complet."));
+  const j = r.advice.JUNGLE?.coverage;
+  $("home-advice").replaceChildren(...rows, j ? h("p", { class: "muted small" }, `Jungle : ces champions couvrent ${Math.round((j.games / j.total) * 100)} % de tes parties de la saison. Survole un champion pour le détail.`) : "");
 }
-void renderTop3();
-window.setInterval(() => void renderTop3(), 120_000);
+
+/** Dernière partie analysée : résultat, et accès à son analyse. */
+async function renderHomeLast(): Promise<void> {
+  const v = await window.kayn.getAnalysis(null, { championId: null, role: null, period: { kind: "all" }, account: null }).catch(() => null);
+  const g = v?.games[0];
+  if (!g || !v?.analysis) { $("home-last").replaceChildren(h("p", { class: "muted small" }, "Pas encore de partie analysée.")); return; }
+  const open = h("button", { type: "button", class: "link" }, "Voir l'analyse ›");
+  open.addEventListener("click", () => { anViewMode = "game"; anKey = g.key; for (const x of document.querySelectorAll(".an-views button")) x.setAttribute("aria-selected", String((x as HTMLElement).dataset.view === "game")); selectTab("analysis"); });
+  const top = v.analysis.focus[0];
+  $("home-last").replaceChildren(
+    h("p", {}, h("b", {}, champName(g.championId)), ` · ${g.win ? "victoire" : "défaite"} · ${g.kda} · ${new Date(g.startMs).toLocaleDateString("fr-FR")}`),
+    top ? h("p", { class: "small" }, "À travailler : ", top.text) : h("p", { class: "small muted" }, "Rien de marqué sur tes dernières parties."),
+    h("div", { class: "row" }, open));
+}
+
+function renderHome(): void { void renderHomeAdvice(); void renderHomeLast(); }
+renderHome();
+window.setInterval(renderHome, 120_000);

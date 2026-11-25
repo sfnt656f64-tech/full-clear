@@ -1,4 +1,6 @@
-# kayn-sim
+# Full Clear
+
+Appli de bureau pour jungler (anciennement « Kayn Sim ») et simulateur Kayn sur le web.
 
 Simulateur de builds pour Kayn jungle (formes bleue et rouge) : guides par compo adverse, simulateur de draft, benchmark d'items.
 Interface en français, pensée pour le mobile.
@@ -42,7 +44,7 @@ Application Electron (`desktop/`), dans la zone de notification de Windows, qui 
 - Aucune injection ni lecture mémoire ; seulement ce que le joueur voit déjà. Les réponses des API locales sont
   réduites dès réception à des numéros de champions et d'items : aucun pseudo d'autre joueur n'est affiché ni gardé.
 - Seul `RIOT_ID` (et `SITE_URL`) est lu dans le `.env` : celui du projet en développement, puis
-  `%APPDATA%\kayn-sim\.env`. La clé API n'est pas utilisée.
+  `%APPDATA%\full-clear\.env`. La clé API n'est pas utilisée.
 
 ```bash
 npm run desktop        # compile (esbuild → desktop/dist) et lance l'appli

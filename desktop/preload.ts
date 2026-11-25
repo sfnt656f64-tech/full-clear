@@ -1,6 +1,6 @@
 // Pont minimal et typé entre la fenêtre (sans accès à Node) et le processus principal.
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type AppState, type KaynApi } from "./ipc.ts";
+import { IPC, type AppState, type KaynApi, type Navigation } from "./ipc.ts";
 
 const api: KaynApi = {
   getState: () => ipcRenderer.invoke(IPC.getState),
@@ -14,7 +14,11 @@ const api: KaynApi = {
   getMeta: (scope) => ipcRenderer.invoke(IPC.getMeta, scope),
   openRecoWindow: () => ipcRenderer.invoke(IPC.openRecoWindow),
   getAnalysis: (key, filter) => ipcRenderer.invoke(IPC.getAnalysis, key, filter),
+  setRefTier: (tier) => ipcRenderer.invoke(IPC.setRefTier, tier),
   getOverview: (filter, compare) => ipcRenderer.invoke(IPC.getOverview, filter, compare),
+  getGoals: () => ipcRenderer.invoke(IPC.getGoals),
+  restartGoals: () => ipcRenderer.invoke(IPC.restartGoals),
+  setGoalTarget: (key, value) => ipcRenderer.invoke(IPC.setGoalTarget, key, value),
   importRunes: () => ipcRenderer.invoke(IPC.importRunes),
   getRecommendations: () => ipcRenderer.invoke(IPC.getRecommendations),
   setExcludedChampions: (ids) => ipcRenderer.invoke(IPC.setExcludedChampions, ids),
@@ -26,6 +30,7 @@ const api: KaynApi = {
   setShortcut: (name, acc) => ipcRenderer.invoke(IPC.setShortcut, name, acc),
   setCapturing: (on) => ipcRenderer.invoke(IPC.setCapturing, on),
   onState: (cb) => { ipcRenderer.on(IPC.state, (_e, s: AppState) => cb(s)); },
+  onNavigate: (cb) => { ipcRenderer.on(IPC.navigate, (_e, n: Navigation) => cb(n)); },
 };
 
 contextBridge.exposeInMainWorld("kayn", api);

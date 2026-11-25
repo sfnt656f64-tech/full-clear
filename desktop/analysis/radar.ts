@@ -1,8 +1,10 @@
-// Radar à 6 axes (Farm, Early, Teamfight, Objectifs, Survie, Or) : chaque axe est ta position « mieux que
-// X % » face aux joueurs Émeraude+ du même rôle, calculée partie par partie puis moyennée. La médiane
-// Émeraude+ vaut 50 sur chaque axe (hexagone régulier). Fonctions pures.
+// Radar à 6 axes (Farm, Early, Teamfight, Objectifs, Survie, Or), calculé partie par partie puis moyenné :
+// - partie de la saison de la méta : position « mieux que X % » face aux joueurs Émeraude+ du même rôle ;
+// - partie d'une saison précédente : face à ton adversaire direct de la même partie (part des parties où tu fais
+//   mieux que lui).
+// 50 = la référence sur chaque axe (hexagone régulier). Fonctions pures.
 import { METRICS, type AnalysisGame } from "./analysis.ts";
-import { percentile, type MetaRef } from "./overview.ts";
+import { gameRank, type MetaRef } from "./overview.ts";
 
 export interface RadarAxis {
   key: string;
@@ -12,13 +14,25 @@ export interface RadarAxis {
   hint: string;
 }
 
+// Définitions vérifiées sur tes parties (stabilité, lien avec la victoire, comparaison au jungler adverse) :
+// - Early : la participation aux kills seule ne disait rien (aucun lien avec la victoire, très bruitée) ; on y ajoute
+//   l'écart d'XP à 10 min et le first blood. Pas l'écart d'or à 10 min : il recoupait l'axe Or (corrélation 0,75
+//   entre les deux axes, partie par partie), l'avance en or aurait compté deux fois dans le score.
+// - Objectifs : la participation aux objectifs (≈ 95 % pour tout le monde) ne distinguait personne ; on mesure, avant
+//   15 min, la part des objectifs neutres pris par ton équipe et la part de ceux cédés sans contrepartie, avec la même
+//   règle que l'objectif de la semaine (à 15 min, l'axe est aussi stable qu'à 20 min : écart-type par partie 24,9
+//   contre 26,4). Mesure d'équipe : dépend aussi de tes coéquipiers et de l'avance de la partie.
+// - Survie : les morts par 10 min sur toute la partie suivaient l'issue (on meurt plus dans une partie perdue) ; on garde
+//   les morts avant 15 min et on ajoute les morts en 1 contre 1 avant 15 min.
+// - Or : l'or brut dépend du rythme de la partie ; l'écart d'or avec ton adversaire direct à 15 min, non.
+// - Teamfight : mesuré sur toute la partie, il suit en partie l'issue (signalé dans l'aide).
 export const AXES: RadarAxis[] = [
   { key: "farm", label: "Farm", metrics: ["cs10", "cs15"], hint: "CS à 10 et 15 min" },
-  { key: "early", label: "Early", metrics: ["kp15"], hint: "participation aux kills avant 15 min" },
-  { key: "teamfight", label: "Teamfight", metrics: ["kpLate", "dmgShare"], hint: "participation aux kills après 15 min, part des dégâts" },
-  { key: "objectives", label: "Objectifs", metrics: ["obj"], hint: "participation aux objectifs" },
-  { key: "survival", label: "Survie", metrics: ["deaths15", "deathsPer10"], hint: "morts avant 15 min et par 10 min" },
-  { key: "gold", label: "Or", metrics: ["gold15"], hint: "or à 15 min" },
+  { key: "early", label: "Early", metrics: ["kp15", "xd10", "fb"], hint: "participation aux kills avant 15 min, écart d'XP à 10 min, first blood" },
+  { key: "teamfight", label: "Teamfight", metrics: ["kpLate", "dmgShare"], hint: "participation aux kills après 15 min, part des dégâts (toute la partie : suit en partie l'issue)" },
+  { key: "objectives", label: "Objectifs", metrics: ["obj15", "unc15"], hint: "avant 15 min : part des objectifs neutres pris par ton équipe, et part des objectifs cédés sans contrepartie (même règle que l'objectif de la semaine ; mesure d'équipe)" },
+  { key: "survival", label: "Survie", metrics: ["deaths15", "solo15"], hint: "morts avant 15 min, dont en 1 contre 1" },
+  { key: "gold", label: "Or", metrics: ["gd15"], hint: "écart d'or avec ton adversaire direct à 15 min" },
 ];
 
 /** Parties relues minimales pour tracer un radar. */
@@ -31,6 +45,8 @@ export interface Radar {
   games: number;
   /** Moyenne des axes connus (50 = médiane) : les « stats de jeu ». */
   score: number | null;
+  /** Marge d'erreur à 95 % du score (écart-type du score partie par partie / √parties), null sous 2 parties. */
+  margin: number | null;
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : null);
@@ -39,22 +55,23 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.l
 export function radarOf(games: AnalysisGame[], ref: MetaRef, minGames = MIN_RADAR_GAMES): Radar | null {
   if (games.length < minGames) return null;
   const byKey = new Map(METRICS.map((m) => [m.key, m]));
-  const values = AXES.map((axis) => {
-    const perGame: number[] = [];
-    for (const g of games) {
-      const ranks = axis.metrics.flatMap((k) => {
-        const m = byKey.get(k)!;
-        const v = m.value(g);
-        const r = v == null ? null : percentile(v, ref.sorted(m, g.role, null), m.better);
-        return r == null ? [] : [r];
-      });
-      const r = mean(ranks);
-      if (r != null) perGame.push(r);
-    }
-    return mean(perGame);
-  });
+  // Position de chaque partie sur chaque axe. Même saison que la méta : parmi les joueurs Émeraude+ ; sinon : face à
+  // ton adversaire direct.
+  const grid = games.map((g) => AXES.map((axis) => mean(axis.metrics.flatMap((k) => {
+    const r = gameRank(byKey.get(k)!, g, ref, null).rank;
+    return r == null ? [] : [r];
+  }))));
+  const values = AXES.map((_, i) => mean(grid.flatMap((row) => (row[i] == null ? [] : [row[i]!]))));
   const known = values.filter((v): v is number => v != null);
-  return { values, games: games.length, score: known.length >= 3 ? mean(known) : null };
+  // Score de chaque partie (moyenne de ses axes connus) : sert à la marge d'erreur du score.
+  const perGame = grid.flatMap((row) => { const v = row.filter((x): x is number => x != null); return v.length >= 3 ? [mean(v)!] : []; });
+  let margin: number | null = null;
+  if (perGame.length >= 2) {
+    const m = mean(perGame)!;
+    const sd = Math.sqrt(perGame.reduce((s, v) => s + (v - m) ** 2, 0) / (perGame.length - 1));
+    margin = (1.96 * sd) / Math.sqrt(perGame.length);
+  }
+  return { values, games: games.length, score: known.length >= 3 ? mean(known) : null, margin };
 }
 
 /** Axes au-dessus de `hi` et en dessous de `lo` (pour les phrases d'explication). */

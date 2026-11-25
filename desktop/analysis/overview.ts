@@ -1,6 +1,7 @@
 // Vue d'ensemble de l'onglet « Analyse » : tes parties filtrées (champion, rôle, période, compte), comparées à
 // la méta Émeraude+ (même rôle, et même champion quand il y en a un), avec points forts / faibles, évolution
 // et tableau de tes champions. Fonctions pures.
+import { officialPatch } from "../../src/data/version";
 import { METRICS, type AnalysisGame, type MetaMetricRow, type Metric } from "./analysis.ts";
 
 export type Period = { kind: "season"; season: number } | { kind: "30d" } | { kind: "patch" } | { kind: "all" };
@@ -41,7 +42,12 @@ export function filterGames(games: AnalysisGame[], f: OverviewFilter, now = Date
 export class MetaRef {
   private readonly cache = new Map<string, number[]>();
   private readonly rows: Map<string, MetaMetricRow[]>;
-  constructor(byRole: Map<string, MetaMetricRow[]>) { this.rows = byRole; }
+  /**
+   * Saison de la méta (ex. 2026). Les parties d'une autre saison ne sont jamais comparées à cette méta (le jeu
+   * change entre les saisons) : elles le sont à ton adversaire direct de la même partie. null : toujours la méta.
+   */
+  readonly season: number | null;
+  constructor(byRole: Map<string, MetaMetricRow[]>, season: number | null = null) { this.rows = byRole; this.season = season; }
 
   /** Lignes de comparaison : le champion s'il a assez de parties, sinon tout le rôle. */
   rowsFor(role: string, championId: number | null): { rows: MetaMetricRow[]; champion: boolean } {
@@ -59,10 +65,41 @@ export class MetaRef {
     let xs = this.cache.get(key);
     if (!xs) {
       xs = rows.map((r) => m.value(r)).filter((x): x is number => x != null).sort((a, b) => a - b);
+      // Mesure tirée des chronologies (une partie de méta sur 40 environ) : trop peu de valeurs pour le champion,
+      // on se compare à tout le rôle.
+      if (champion && xs.length < MIN_META_CHAMP) xs = this.sorted(m, role, null);
       this.cache.set(key, xs);
     }
     return xs;
   }
+
+  /** Valeurs de méta du champion lui-même (assez de parties), sinon null : pas de « médiane du champion » prise sur tout le rôle. */
+  championSorted(m: Metric, role: string, championId: number): number[] | null {
+    const { rows, champion } = this.rowsFor(role, championId);
+    if (!champion) return null;
+    const xs = rows.map((r) => m.value(r)).filter((x): x is number => x != null);
+    return xs.length >= MIN_META_CHAMP ? xs.sort((a, b) => a - b) : null;
+  }
+}
+
+export type RefKind = "meta" | "opponent";
+
+/** La partie est-elle comparable à la méta (même saison) ? */
+export const sameSeason = (g: AnalysisGame, ref: MetaRef) => ref.season == null || g.season == null || g.season === ref.season;
+
+/**
+ * Position d'une partie sur une mesure (0–100, 50 = référence) :
+ * - même saison que la méta : « mieux que X % des joueurs Émeraude+ » ;
+ * - autre saison : ton adversaire direct de la même partie (100 si tu fais mieux, 50 à égalité, 0 sinon) ;
+ *   moyennée sur plusieurs parties, c'est la part des parties où tu fais mieux que lui.
+ */
+export function gameRank(m: Metric, g: AnalysisGame, ref: MetaRef, championId: number | null): { rank: number | null; kind: RefKind | null } {
+  const v = m.value(g);
+  if (v == null) return { rank: null, kind: null };
+  if (sameSeason(g, ref)) return { rank: percentile(v, ref.sorted(m, g.role, championId), m.better), kind: "meta" };
+  const o = g.opp ? m.value(g.opp) : null;
+  if (o == null) return { rank: null, kind: null };
+  return { rank: v === o ? 50 : (m.better === "+" ? v > o : v < o) ? 100 : 0, kind: "opponent" };
 }
 
 /** Part des valeurs de méta que `v` dépasse (100 = meilleur), dans le sens du « mieux » ; égalités comptées à moitié. */
@@ -93,6 +130,8 @@ export interface OverviewMetric {
 }
 
 export interface Overview {
+  /** Références utilisées : parties comparées à la méta de leur saison, et à l'adversaire direct (autres saisons). */
+  refs: { meta: number; opponent: number; season: number | null };
   games: number;
   wins: number;
   winRate: number | null;
@@ -110,31 +149,35 @@ export interface Overview {
 export function overview(games: AnalysisGame[], ref: MetaRef, f: OverviewFilter, currentSeason: number | null): Overview {
   const roles = [...new Set(games.map((g) => g.role))];
   const single = roles.length === 1 ? roles[0] : null;
+  const allMeta = games.every((g) => sameSeason(g, ref));
   const metrics: OverviewMetric[] = METRICS.map((m) => {
     const vals: number[] = [], ranks: number[] = [];
     for (const g of games) {
       const v = m.value(g);
       if (v == null) continue;
       vals.push(v);
-      const r = percentile(v, ref.sorted(m, g.role, f.championId), m.better);
+      const r = gameRank(m, g, ref, f.championId).rank;
       if (r != null) ranks.push(r);
     }
     return {
       key: m.key, label: m.label, unit: m.unit, better: m.better, mine: mean(vals), n: vals.length,
-      median: single ? median(ref.sorted(m, single, f.championId)) : null,
+      // Médiane Émeraude+ seulement si toute la sélection est de la saison de la méta.
+      median: single && allMeta ? median(ref.sorted(m, single, f.championId)) : null,
       rank: ranks.length ? mean(ranks) : null,
     };
   });
+  const metaGames = games.filter((g) => sameSeason(g, ref)).length;
   const wins = games.filter((g) => g.win).length;
   let metaWinRate: number | null = null;
   let comparedTo: Overview["comparedTo"] = "mixed";
-  if (single) {
+  if (single && metaGames) {
     const { rows, champion } = ref.rowsFor(single, f.championId);
     metaWinRate = rows.length ? (rows.filter((r) => r.win).length / rows.length) * 100 : null;
     comparedTo = champion ? "champion" : "role";
   }
   const ranked = metrics.filter((m) => m.rank != null && m.n >= 3);
   return {
+    refs: { meta: metaGames, opponent: games.length - metaGames, season: ref.season },
     games: games.length,
     wins,
     winRate: games.length ? (wins / games.length) * 100 : null,
@@ -143,7 +186,7 @@ export function overview(games: AnalysisGame[], ref: MetaRef, f: OverviewFilter,
     strengths: ranked.filter((m) => m.rank! >= 60).sort((a, b) => b.rank! - a.rank!).slice(0, 3),
     weaknesses: ranked.filter((m) => m.rank! <= 40).sort((a, b) => a.rank! - b.rank!).slice(0, 3),
     comparedTo,
-    oldSeasons: currentSeason != null && games.some((g) => g.season != null && g.season < currentSeason),
+    oldSeasons: currentSeason != null && games.some((g) => g.season != null && g.season < currentSeason) && ref.season == null,
   };
 }
 
@@ -168,7 +211,7 @@ export function evolution(games: AnalysisGame[]): { by: "month" | "patch"; point
       const gs = groups.get(k)!;
       const values: Record<string, number | null> = {};
       for (const m of METRICS) values[m.key] = mean(gs.map((g) => m.value(g)).filter((x): x is number => x != null));
-      return { label: by === "month" ? monthLabel(k) : k, games: gs.length, winRate: (gs.filter((g) => g.win).length / gs.length) * 100, values };
+      return { label: by === "month" ? monthLabel(k) : officialPatch(k), games: gs.length, winRate: (gs.filter((g) => g.win).length / gs.length) * 100, values };
     }),
   };
 }
@@ -199,9 +242,10 @@ export function championTable(games: AnalysisGame[], ref: MetaRef): ChampionRow[
     for (const m of METRICS) {
       const vals = gs.map((g) => m.value(g)).filter((x): x is number => x != null);
       values[m.key] = mean(vals);
-      const rs = gs.flatMap((g) => { const v = m.value(g); const r = v == null ? null : percentile(v, ref.sorted(m, g.role, championId), m.better); return r == null ? [] : [r]; });
+      const rs = gs.flatMap((g) => { const r = gameRank(m, g, ref, championId).rank; return r == null ? [] : [r]; });
       ranks[m.key] = mean(rs);
-      medians[m.key] = ref.rowsFor(role, championId).champion ? median(ref.sorted(m, role, championId)) : null;
+      const own = gs.every((g) => sameSeason(g, ref)) ? ref.championSorted(m, role, championId) : null;
+      medians[m.key] = own ? median(own) : null;
     }
     rows.push({ championId, games: gs.length, winRate: (gs.filter((g) => g.win).length / gs.length) * 100, values, ranks, medians });
   }

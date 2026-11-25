@@ -1,4 +1,5 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
+import type { RefInfo, RefTier } from "./analysis/ref-tier.ts";
 import type { DraftView } from "./draft-view.ts";
 import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
@@ -8,19 +9,28 @@ import type { Recommendations } from "./reco/recommend.ts";
 import type { GameAnalysis } from "./analysis/analysis.ts";
 import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./analysis/overview.ts";
 import type { Radar } from "./analysis/radar.ts";
+import type { Heat } from "./data/engine.ts";
 import type { PotentialGroups } from "./reco/potential.ts";
+import type { PoolAdvice } from "./reco/pool-advice.ts";
+
+/** Tendance d'un champion entre les deux derniers patchs (méta Émeraude+). */
+export interface MetaTrend { delta: number; latest: { patch: string; winRate: number; games: number }; previous: { patch: string; winRate: number; games: number } }
+import type { GoalsView } from "./analysis/goals.ts";
+export type { GoalsView };
 
 /** Vue d'ensemble de l'onglet « Analyse ». */
 export interface OverviewView {
   filter: OverviewFilter;
+  /** Référence des positions, médianes et radars. */
+  reference: RefInfo;
   /** Choix des filtres : tes champions (parties dans le rôle, la période et le compte choisis), saisons, comptes. */
   options: { champions: { id: number; games: number }[]; seasons: number[]; accounts: string[] };
   overview: Overview;
   evolution: { by: "month" | "patch"; points: EvolutionPoint[] };
   /** « Tous les champions » : tes champions comparés entre eux. */
   table: ChampionRow[] | null;
-  /** Carte de chaleur : [x, y, 0 kill | 1 mort | 2 assist, minute]. */
-  points: [number, number, number, number][];
+  /** Carte de chaleur, déjà regroupée par case (au lieu de milliers de points). */
+  heat: Heat;
   /** Radar de la sélection, et d'un champion à comparer (mêmes filtres). */
   radar: Radar | null;
   compare: { championId: number; radar: Radar | null } | null;
@@ -35,13 +45,21 @@ export interface AnalysisView {
   games: { key: string; championId: number; win: boolean; kda: string; startMs: number; role: string }[];
   selected: string | null;
   analysis: GameAnalysis | null;
+  /** Référence des positions et du radar (absente sans partie). */
+  reference?: RefInfo;
 }
 
 /** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
 export interface RecoView extends Recommendations {
   patches: string[];
+  /** Référence des radars et du classement. */
+  reference: RefInfo;
   /** Classement par potentiel et radars de tes champions, par rôle. */
   potential: Record<string, PotentialGroups>;
+  /** Pool conseillé, par rôle. */
+  advice: Record<string, PoolAdvice>;
+  /** Tendance entre les deux derniers patchs, par rôle puis par champion. */
+  trends: Record<string, Record<number, MetaTrend>>;
 }
 
 /** Méta calculée pour la fenêtre « Méta ». */
@@ -104,6 +122,10 @@ export interface AppState {
   collectorPaused: boolean;
   /** Champions exclus de tes stats (identifiants Data Dragon). */
   excludedChampions: string[];
+  /** Niveau de référence choisi. */
+  refTier: RefTier;
+  /** Dossier de données, et reprise de l'ancien dossier « kayn-sim » (changement de nom). */
+  data: { dir: string; migratedFrom: string | null; legacyKept: string | null; error: string | null; /** Ancien dossier modifié après la reprise (date de la reprise). */ changedAfter: string | null };
   problems: string[];
   openAtLogin: boolean;
   /** Vrai en développement (npm run desktop) : le démarrage automatique pointe alors vers Electron + le dépôt. */
@@ -125,7 +147,16 @@ export interface KaynApi {
   openRecoWindow(): Promise<void>;
   /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
   getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
+  /** Navigation demandée par le processus principal (menu de l'icône, simulateur). */
+  onNavigate(cb: (nav: Navigation) => void): void;
+  /** Niveau de référence des comparaisons (Analyse, Champions). */
+  setRefTier(tier: RefTier): Promise<AppState>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
+  /** Suivi de tes objectifs (jungle). */
+  getGoals(): Promise<GoalsView>;
+  /** Recommence le suivi aujourd'hui (comparaison avec les 4 semaines d'avant). */
+  restartGoals(): Promise<GoalsView>;
+  setGoalTarget(key: string, value: number | null): Promise<GoalsView>;
   /** Importe la page de runes recommandée de la draft en cours dans le client. */
   importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;
@@ -154,7 +185,12 @@ export const IPC = {
   getMeta: "kayn:get-meta",
   openRecoWindow: "kayn:open-reco-window",
   getAnalysis: "kayn:get-analysis",
+  setRefTier: "kayn:set-ref-tier",
+  navigate: "kayn:navigate",
   getOverview: "kayn:get-overview",
+  getGoals: "kayn:get-goals",
+  restartGoals: "kayn:restart-goals",
+  setGoalTarget: "kayn:set-goal-target",
   importRunes: "kayn:import-runes",
   getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",
@@ -181,3 +217,6 @@ export const OVERLAY_IPC = {
   moving: "overlay:moving",
   height: "overlay:height",
 } as const;
+
+/** Vue de la fenêtre unique : onglet, sous-vue de Champions, ancre du simulateur (draft). */
+export interface Navigation { tab: "home" | "draft" | "analysis" | "champions" | "settings"; sub?: "reco" | "stats" | "meta" | "sim"; hash?: string }

@@ -69,7 +69,7 @@ export class CollectorHost {
 
   private spawn(): void {
     this.state = { kind: "starting" };
-    const child = utilityProcess.fork(join(this.dir, "collector.cjs"), [this.dbFile], { serviceName: "Kayn Sim · collecte", stdio: "ignore" });
+    const child = utilityProcess.fork(join(this.dir, "collector.cjs"), [this.dbFile], { serviceName: "Full Clear · collecte", stdio: "ignore" });
     this.child = child;
     child.on("message", (m: FromCollector) => {
       if (m.type === "status") { this.state = { kind: "on", status: m.status }; this.restarts = 0; }

@@ -1,4 +1,5 @@
-// Réglages de l'appli (%APPDATA%\kayn-sim\settings.json). Aucune donnée de partie ni d'autre joueur.
+// Réglages de l'appli (%APPDATA%\full-clear\settings.json). Aucune donnée de partie ni d'autre joueur.
+import { DEFAULT_REF_TIER, isRefTier, type RefTier } from "./analysis/ref-tier.ts";
 import { readFileSync, writeFileSync } from "node:fs";
 import type { Form } from "../src/data/types";
 import { DEFAULT_SHORTCUTS, isValidAccelerator, type Shortcuts } from "./shortcuts.ts";
@@ -22,11 +23,15 @@ export interface Settings {
    * parties jouées par quelqu'un d'autre sur tes comptes. Ils restent comptés dans les données de méta.
    */
   excludedChampions: string[];
+  /** Suivi des objectifs : début du suivi (ms) et cibles modifiées (clé de mesure → cible). */
+  goals: { startMs: number | null; targets: Record<string, number> };
+  /** Niveau de référence des comparaisons. */
+  refTier: RefTier;
 }
 
 export const DEFAULT_EXCLUDED = ["Jax", "Fiora", "Camille"];
 
-export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED] };
+export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED], goals: { startMs: null, targets: {} }, refTier: DEFAULT_REF_TIER };
 
 export function parseSettings(text: string | null): Settings {
   try {
@@ -45,6 +50,11 @@ export function parseSettings(text: string | null): Settings {
       excludedChampions: Array.isArray(raw.excludedChampions)
         ? [...new Set(raw.excludedChampions.filter((x): x is string => typeof x === "string" && /^[A-Za-z]{1,30}$/.test(x)))]
         : [...DEFAULT_EXCLUDED],
+      goals: {
+        startMs: int(raw.goals?.startMs) ?? null,
+        targets: Object.fromEntries(Object.entries(raw.goals?.targets ?? {}).filter(([k, v]) => /^[A-Za-z0-9]{1,30}$/.test(k) && typeof v === "number" && Number.isFinite(v))),
+      },
+      refTier: isRefTier(raw.refTier) ? raw.refTier : DEFAULT_REF_TIER,
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

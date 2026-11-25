@@ -126,7 +126,15 @@ export interface TryPick {
   provisional: boolean;
 }
 
-export interface RoleReco { role: string; profile: PlayProfile; pool: PoolPick[]; tryList: TryPick[] }
+export interface RoleReco {
+  role: string;
+  /** Profil servant au style (« early » ou « scaling ») : la saison en cours, ou les deux dernières s'il y a trop peu de parties. */
+  profile: PlayProfile;
+  /** Profils affichables, saison par saison (la saison en cours d'abord) : jamais de valeurs brutes de plusieurs saisons mélangées. */
+  profiles: { key: string; label: string; profile: PlayProfile }[];
+  pool: PoolPick[];
+  tryList: TryPick[];
+}
 
 export interface RecoInput {
   myGames: MyGameRow[];
@@ -228,7 +236,8 @@ export function playProfile(games: MyGameRow[], role: string, baseline: { kp15: 
   // ta participation et ton or à 15 min comparés à la moyenne Émeraude+ du rôle.
   const signals: number[] = [];
   const sl = short.games + long.games;
-  if (sl >= 10) {
+  // Au moins 20 parties courtes et 20 longues : sinon, pas de conclusion sur ton style.
+  if (short.games >= 20 && long.games >= 20) {
     const s = shrink((short.winRate * short.games) / 100, short.games, 50, 20);
     const l = shrink((long.winRate * long.games) / 100, long.games, 50, 20);
     // Confiance selon le nombre de parties : 17 parties ne suffisent pas à définir un style.
@@ -250,26 +259,32 @@ export function playProfile(games: MyGameRow[], role: string, baseline: { kp15: 
     short,
     long,
     tilt,
-    style: tilt > 0.3 ? "early" : tilt < -0.3 ? "scaling" : "balanced",
+    // Moins de 20 parties : pas de conclusion sur le style.
+    style: rows.length < 20 ? "balanced" : tilt > 0.3 ? "early" : tilt < -0.3 ? "scaling" : "balanced",
   };
 }
 
 // ---------- Difficulté de prise en main ----------
 
 /** Parties nécessaires (environ) avant de jouer au niveau des joueurs qui maîtrisent le champion. */
+/** Parties minimales dans une tranche de maîtrise pour en tenir compte (et pour citer le win rate des débutants). */
+export const LEARN_MIN = 15;
+
 export function learning(rows: MetaMasteryRow[]): Learning {
   const novice = rate(rows.filter((r) => r.points < MASTERY_STEPS[0].max));
   const expert = rate(rows.filter((r) => r.points >= MASTERY_STEPS[2].max));
   if (rows.length < 40 || expert.games < 15) return { games: null, novice: novice.games ? novice : null, expert: expert.games ? expert : null };
-  // Plateau : niveau des joueurs à plus de 100 000 points, lissé vers 50 %.
-  const plateau = shrink((expert.winRate * expert.games) / 100, expert.games, 50, 20);
+  // Chaque tranche est lissée vers le win rate moyen du champion (et non vers le plateau : une petite tranche
+  // de débutants qui perdent ne doit pas sembler « au niveau »).
+  const overall = rate(rows).winRate;
+  const plateau = shrink((expert.winRate * expert.games) / 100, expert.games, overall, 20);
   let lo = 0;
   for (const step of MASTERY_STEPS) {
     const r = rate(rows.filter((x) => x.points >= lo && x.points < step.max));
     lo = step.max;
-    if (r.games < 10) continue;
-    // Atteint quand le win rate de la tranche est à moins de 2 points du plateau (en tenant compte du petit échantillon).
-    if (shrink((r.winRate * r.games) / 100, r.games, plateau, 10) >= plateau - 2) {
+    if (r.games < LEARN_MIN) continue;
+    // Atteint quand le win rate de la tranche est à moins de 2 points du plateau.
+    if (shrink((r.winRate * r.games) / 100, r.games, overall, 20) >= plateau - 2) {
       return { games: Number.isFinite(step.games) ? step.games : 150, novice, expert };
     }
   }
@@ -377,9 +392,15 @@ export function recommend(input: RecoInput): Recommendations {
   const played = new Set([...pools.values()].flat().map((p) => p.championId));
 
   const roles = RECO_ROLES.map((role): RoleReco => {
-    // Profil : saison en cours et précédente (ton jeu actuel).
-    const recent = games.filter((g) => current == null || g.season >= current - 1);
-    const profile = playProfile(recent, role, roleBaseline(input.metaParts, role));
+    // Profil par saison (le jeu change d'une saison à l'autre : or, CS… ne se comparent pas entre saisons).
+    const baseline = roleBaseline(input.metaParts, role);
+    const profiles = seasons.slice(0, 2).map((season, i) => ({
+      key: String(season), label: i === 0 ? `Saison ${season} (en cours)` : `Saison ${season}`,
+      profile: playProfile(games.filter((g) => g.season === season), role, i === 0 ? baseline : { kp15: null, gold15: null }),
+    }));
+    // Style : la saison en cours, ou les deux dernières si elle compte moins de 20 parties dans le rôle.
+    // Style : la saison en cours seulement (jamais deux saisons mélangées), à partir de 20 parties dans le rôle.
+    const profile = profiles[0] && profiles[0].profile.games >= 20 ? profiles[0].profile : playProfile([], role, baseline);
     const pool = pools.get(role)!;
 
     // ----- À essayer -----
@@ -421,7 +442,7 @@ export function recommend(input: RecoInput): Recommendations {
       tryList.push(pick);
     }
     tryList.sort((x, y) => y.score - x.score || y.meta.games - x.meta.games);
-    return { role, profile, pool, tryList: tryList.slice(0, TRY_COUNT) };
+    return { role, profile, profiles, pool, tryList: tryList.slice(0, TRY_COUNT) };
   });
   return { roles, metaMatches: input.metaMatches, provisional, season: current };
 }
@@ -453,17 +474,25 @@ function tryReasons(p: TryPick, c: Champion, near: Champion | undefined, sim: nu
   const r: { w: number; text: string }[] = [];
   if (near && sim >= SIMILAR) r.push({ w: sim * 10, text: `Proche de ${near.name}, un de tes meilleurs champions : ${describe(c)}.` });
   if (metaAdj >= 51) r.push({ w: (metaAdj - 50) * 2.5, text: `${nf(p.meta.winRate, 1)} % de victoires en Émeraude+ (${nf(p.meta.games)} parties).` });
-  if (l.games != null && l.games <= 30) {
-    r.push({ w: l.games <= 10 ? 6 : 4, text: l.novice && l.novice.games >= 10
-      ? `Rapide à prendre en main : ceux qui le découvrent gagnent déjà ${nf(l.novice.winRate)} %.`
-      : `Rapide à prendre en main (${learningLabel(l)}).` });
+  // Prise en main : « rapide » seulement si les débutants (assez nombreux) gagnent presque autant que ceux qui le
+  // maîtrisent ; nettement moins → « difficile », chiffres à l'appui.
+  const nov = l.novice && l.novice.games >= LEARN_MIN ? l.novice : null;
+  const exp = l.expert && l.expert.games >= LEARN_MIN ? l.expert : null;
+  if (nov && exp && nov.winRate <= exp.winRate - 8) {
+    r.push({ w: 5, text: `Prise en main difficile : ceux qui le découvrent gagnent ${nf(nov.winRate)} % (${nov.games} parties), contre ${nf(exp.winRate)} % pour ceux qui le maîtrisent.` });
+  } else if (nov && exp && l.games != null && l.games <= 30 && nov.winRate >= exp.winRate - 3) {
+    // Pas assez de débutants mesurés (moins de LEARN_MIN parties) : aucune affirmation sur la prise en main.
+    r.push({ w: l.games <= 10 ? 6 : 4, text: `Rapide à prendre en main : ceux qui le découvrent gagnent déjà ${nf(nov.winRate)} % (${nov.games} parties), contre ${nf(exp.winRate)} % pour ceux qui le maîtrisent.` });
   }
   if (p.tried) r.push({ w: 9, text: `Tu l'as déjà joué ${p.tried.games} fois (${p.tried.wins} victoire${p.tried.wins > 1 ? "s" : ""}) : pas encore assez pour ton pool.` });
   if (l.games != null && l.games > 100) r.push({ w: 3, text: "Long à maîtriser : prévois de nombreuses parties avant d'être à l'aise." });
   if (st && fit > 0.3) {
-    r.push({ w: fit * 7, text: profile.style === "early"
-      ? `Champion d'early game, comme ton style${profile.kp15 != null ? ` (tu participes à ${nf(profile.kp15)} % des kills avant 15 min)` : ""}.`
-      : "Champion qui monte en puissance, comme ton style (tu gagnes plus souvent les parties longues)." });
+    // Le texte cite les chiffres de ton profil (saison en cours) qui fondent ce style.
+    const facts = [
+      profile.kp15 != null && profile.metaKp15 != null ? `participation aux kills avant 15 min ${nf(profile.kp15)} % contre ${nf(profile.metaKp15)} % en Émeraude+` : "",
+      profile.short.games >= 20 && profile.long.games >= 20 ? `${nf(profile.short.winRate)} % de victoires en parties courtes contre ${nf(profile.long.winRate)} % en parties longues` : "",
+    ].filter(Boolean).join(", ");
+    r.push({ w: fit * 7, text: `${profile.style === "early" ? "Champion d'early game" : "Champion qui monte en puissance"}, comme ton profil de la saison${facts ? ` (${facts})` : ""}.` });
   }
   const out = top(r);
   return out.length ? out : [`${describe(c)[0].toUpperCase()}${describe(c).slice(1)}.`];
