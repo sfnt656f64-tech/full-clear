@@ -63,7 +63,7 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -262,6 +262,19 @@ export class CollectorStore {
         primary key (match_id, participant_id)
       );
       pragma user_version = 8;`));
+    // v9 : maîtrise des deux junglers de chaque partie de méta, lue à la collecte (courbes d'apprentissage).
+    // Aucun identifiant de joueur : partie, participant, champion, victoire, points, et délai de lecture après la partie.
+    if (v < 9) this.tx(() => this.db.exec(`
+      create table if not exists meta_jungle_mastery (
+        match_id text not null,
+        participant_id integer not null,
+        champion_id integer not null,
+        win integer not null,
+        points integer not null,
+        read_after_ms integer not null,
+        primary key (match_id, participant_id)
+      );
+      pragma user_version = 9;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -295,6 +308,9 @@ export class CollectorStore {
       toTimeline: this.db.prepare(`select match_id from (select match_id, timeline_v6, remake, start_ms from my_games where account = ? order by start_ms desc limit ?)
         where timeline_v6 = 0 and remake = 0 order by start_ms desc`),
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
+      putJungleMastery: this.db.prepare("insert or replace into meta_jungle_mastery (match_id, participant_id, champion_id, win, points, read_after_ms) values (?, ?, ?, ?, ?, ?)"),
+      hasJungleMastery: this.db.prepare("select 1 from meta_jungle_mastery where match_id = ?"),
+      recentMetaWithoutJungleMastery: this.db.prepare("select g.match_id from meta_games g where g.remake = 0 and g.start_ms > ? and not exists (select 1 from meta_jungle_mastery j where j.match_id = g.match_id)"),
       metaCount: this.db.prepare("select count(*) n, max(patch) p from meta_games"),
       // Parties utilisables (remakes exclus), comme dans la fenêtre Méta.
       metaPatches: this.db.prepare("select patch, sum(remake = 0) n from meta_games group by patch"),
@@ -492,6 +508,16 @@ export class CollectorStore {
     this.st.putMastery.run(matchId, championId, role, win ? 1 : 0, points);
   }
 
+  /** Maîtrise d'un jungler d'une partie de méta (lue à la collecte ; aucun identifiant gardé). */
+  putJungleMastery(matchId: string, participantId: number, championId: number, win: boolean, points: number, readAfterMs: number): void {
+    this.st.putJungleMastery.run(matchId, participantId, championId, win ? 1 : 0, points, Math.max(0, Math.round(readAfterMs)));
+  }
+  hasJungleMastery(matchId: string): boolean { return !!this.st.hasJungleMastery.get(matchId); }
+  /** Parties de méta récentes (après `sinceMs`) dont la maîtrise des junglers n'a pas encore été lue. */
+  recentMetaWithoutJungleMastery(sinceMs: number): string[] {
+    return (this.st.recentMetaWithoutJungleMastery.all(sinceMs) as { match_id: string }[]).map((r) => r.match_id);
+  }
+
   /** Parties de méta par patch, du plus récent au plus ancien. */
   metaPatches(): { patch: string; games: number }[] {
     const cmp = (a: string, b: string) => { const [a1, a2] = a.split(".").map(Number); const [b1, b2] = b.split(".").map(Number); return b1 - a1 || b2 - a2; };
@@ -504,7 +530,7 @@ export class CollectorStore {
     const marks = keep.map(() => "?").join(",");
     return this.tx(() => {
       const old = `select match_id from meta_games where patch not in (${marks})`;
-      for (const t of ["meta_parts", "meta_builds", "meta_mastery", "meta_early_kills", "meta_jungle_curve", "meta_detail"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
+      for (const t of ["meta_parts", "meta_builds", "meta_mastery", "meta_jungle_mastery", "meta_early_kills", "meta_jungle_curve", "meta_detail"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
       return Number(this.db.prepare(`delete from meta_games where patch not in (${marks})`).run(...keep).changes);
     });
   }

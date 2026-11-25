@@ -17,7 +17,7 @@ import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
 import type { CollectorStore } from "./store.ts";
 import { damageOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
 import { cleanDetail, packDetail } from "./detail.ts";
-import { META_LABELS, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
+import { META_LABELS, metaJungleMastery, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
 
 export const QUEUE_SOLO_DUO = 420;
 const PAGE = 100;
@@ -190,7 +190,7 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
 
 export const HANDLERS: Record<string, Handler> = {
   account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage, myDetail: myMatch,
-  metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
+  metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler, metaJungleMastery: metaJungleMastery as Handler,
 };
 
 /** Libellés pour l'affichage. */

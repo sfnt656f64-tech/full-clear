@@ -42,6 +42,11 @@ export const MAX_PAGES = 15;
 /** Parties récentes demandées par joueur, sur cette fenêtre. */
 const MATCHES_PER_PLAYER = 10;
 const WINDOW_MS = 14 * 86_400_000;
+/**
+ * Rattrapage de la maîtrise des junglers : seulement pour les parties de moins de 14 jours (au-delà, les points
+ * lus aujourd'hui comptent trop de parties jouées depuis, ce qui brouille surtout les débutants).
+ */
+export const JUNGLE_MASTERY_BACKFILL_MS = 14 * 86_400_000;
 /** Patchs gardés en base (les plus récents). */
 export const KEEP_PATCHES = 3;
 
@@ -50,10 +55,12 @@ export const KEEP_PATCHES = 3;
  * entre 0 et 1), et enfin les pages suivantes. Les pages passent par euw1 : si elles passaient toutes avant les
  * joueurs, le quota europe (parties) resterait inutilisé pendant plusieurs minutes.
  */
-const RANK = { timeline: -2, match: -1, league: 0, nextPage: 2 } as const;
+// Rattrapage (0,5) : après les nouvelles parties, au milieu des joueurs (rang aléatoire 0–1) : il avance en parallèle
+// de la collecte au lieu d'attendre une file vide (les parties auraient alors dépassé 14 jours).
+const RANK = { timeline: -2, match: -1, league: 0, backfill: 0.5, nextPage: 2 } as const;
 
 /** Les travaux dont le contenu (PUUID) est effacé une fois terminés. */
-export const FORGET_KINDS = new Set(["metaPlayer", "metaMatch"]);
+export const FORGET_KINDS = new Set(["metaPlayer", "metaMatch", "metaJungleMastery"]);
 
 export const hashId = (s: string): string => createHash("sha256").update(s).digest("hex").slice(0, 20);
 const week = (now: number): number => Math.floor(now / (7 * 86_400_000));
@@ -63,6 +70,12 @@ interface LeagueEntry { puuid?: string; wins: number; losses: number; inactive?:
 /** Pages de league-v4 de la semaine (sans effet si déjà en file). */
 export function scheduleMeta(ctx: JobContext): void {
   const w = week(ctx.now());
+  // Maîtrise des junglers des parties récentes déjà collectées (après les nouvelles parties dans la file).
+  ctx.store.tx(() => {
+    for (const matchId of ctx.store.recentMetaWithoutJungleMastery(ctx.now() - JUNGLE_MASTERY_BACKFILL_MS)) {
+      ctx.store.enqueue("metaJungleMastery", `metaJungleMastery:${matchId}`, PRIORITY.meta, { matchId }, RANK.backfill);
+    }
+  });
   for (const tier of DIVISION_TIERS) {
     for (const division of DIVISIONS) ctx.store.enqueue("metaLeague", `metaLeague:${tier}:${division}:1:${w}`, PRIORITY.meta, { tier, division, page: 1, week: w }, RANK.league);
   }
@@ -119,11 +132,16 @@ export async function metaMatch(ctx: JobContext, p: { matchId: string; puuid: st
 
   // Maîtrise du joueur source sur le champion joué (difficulté de prise en main).
   const src = m.info.participants.find((x) => x.puuid === p.puuid);
+  let lastSourcePoints = 0;
   if (src) {
     const mastery = await ctx.api.get<{ championPoints: number }>("euw1",
       `/lol/champion-mastery/v4/champion-masteries/by-puuid/${encodeURIComponent(p.puuid)}/by-champion/${src.championId}`, PRIORITY.meta, { allow404: true });
-    ctx.store.putMastery(g.matchId, src.championId, src.teamPosition ?? "", src.win, mastery?.championPoints ?? 0);
+    lastSourcePoints = mastery?.championPoints ?? 0;
+    ctx.store.putMastery(g.matchId, src.championId, src.teamPosition ?? "", src.win, lastSourcePoints);
   }
+
+  // Maîtrise des deux junglers, lue maintenant (même délai que pour le joueur suivi) ; identifiants non gardés.
+  await readJungleMastery(ctx, m, g.matchId, src && src.teamPosition === "JUNGLE" ? { participantId: src.participantId, points: lastSourcePoints } : null);
 
   // Ordre d'achat : seulement pour les champions de ton pool (1 requête de plus).
   const pool = ctx.pool();
@@ -134,6 +152,31 @@ export async function metaMatch(ctx: JobContext, p: { matchId: string; puuid: st
     sinceLastPurge = 0;
     ctx.store.purgeMeta(ctx.store.metaPatches().slice(0, KEEP_PATCHES).map((x) => x.patch));
   }
+}
+
+type JunglePart = { puuid: string; participantId: number; championId: number; teamPosition?: string; win: boolean };
+
+/** Points de maîtrise des junglers de la partie sur leur champion ; `known` : celui du joueur suivi, déjà lu. */
+async function readJungleMastery(ctx: JobContext, m: MetaMatchV5, matchId: string, known: { participantId: number; points: number } | null): Promise<void> {
+  const end = (m.info as { gameEndTimestamp?: number }).gameEndTimestamp ?? m.info.gameCreation + m.info.gameDuration * 1000;
+  for (const x of (m.info.participants as unknown as JunglePart[]).filter((p) => p.teamPosition === "JUNGLE")) {
+    let points = known && known.participantId === x.participantId ? known.points : null;
+    if (points == null) {
+      const r = await ctx.api.get<{ championPoints: number }>("euw1",
+        `/lol/champion-mastery/v4/champion-masteries/by-puuid/${encodeURIComponent(x.puuid)}/by-champion/${x.championId}`, PRIORITY.meta, { allow404: true });
+      points = r?.championPoints ?? 0;
+    }
+    ctx.store.putJungleMastery(matchId, x.participantId, x.championId, x.win, points, ctx.now() - end);
+  }
+}
+
+/** Rattrapage : maîtrise des junglers d'une partie récente déjà collectée (la partie est relue pour les identifiants). */
+export async function metaJungleMastery(ctx: JobContext, p: { matchId: string }): Promise<void> {
+  if (ctx.store.hasJungleMastery(p.matchId)) return;
+  const m = await ctx.api.get<MetaMatchV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}`, PRIORITY.meta, { allow404: true });
+  if (!m) return;
+  if (ctx.now() - m.info.gameCreation > JUNGLE_MASTERY_BACKFILL_MS) return;
+  await readJungleMastery(ctx, m, p.matchId, null);
 }
 
 export async function metaTimeline(ctx: JobContext, p: { matchId: string; parts: { pid: number; championId: number; role: string; win: boolean }[] }): Promise<void> {
@@ -160,4 +203,5 @@ export const META_LABELS: Record<string, string> = {
   metaPlayer: "Méta : joueurs",
   metaMatch: "Méta : parties",
   metaTimeline: "Méta : ordres d'achat",
+  metaJungleMastery: "Méta : maîtrise des junglers (parties récentes)",
 };
