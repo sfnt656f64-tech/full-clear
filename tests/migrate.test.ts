@@ -24,7 +24,8 @@ describe("reprise du dossier de données (Kayn Sim → Full Clear)", () => {
   it("copie tout, base comprise, et garde l'ancien dossier", () => {
     const appData = legacyDir();
     const r = migrateUserData(appData);
-    expect(r.status).toBe("migrated");
+    // En cas d'échec, le message (avec le code d'erreur : EPERM, EBUSY…) s'affiche dans le rapport du test.
+    expect(r, r.status === "failed" ? `reprise échouée : ${r.error}` : "").toMatchObject({ status: "migrated" });
     const nu = join(appData, "full-clear");
     expect(readFileSync(join(nu, ".env"), "utf8")).toBe("RIOT_ID=Pseudo#TAG\n");
     expect(readFileSync(join(nu, "settings.json"), "utf8")).toContain("DIAMOND");

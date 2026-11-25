@@ -39,5 +39,7 @@ une décision qui lui revient.
 
 ## Commits
 
+- À chaque nouvel installateur, augmenter le numéro de version (`package.json`, ex. 0.2.0 → 0.3.0) : un installateur
+  n'en écrase jamais un précédent, et on sait quelle version tourne.
 - Commiter chaque étape validée, pousser la branche, et donner le lien pour ouvrir la PR.
 - Ne jamais commiter de données personnelles (Riot ID, clé API, `.env`, base `riot.db`) : le dépôt est public.

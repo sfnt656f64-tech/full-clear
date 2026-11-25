@@ -50,13 +50,14 @@ export function legacyChangedSince(appData: string, from = LEGACY_DIR, to = DATA
 
 /**
  * Renommage du dossier copié, réessayé : sous Windows, un antivirus ou l'indexeur peut tenir un instant un fichier
- * qui vient d'être écrit (EPERM / EBUSY). Au-delà de ~2 s, l'erreur remonte (l'appli reste sur l'ancien dossier).
+ * qui vient d'être écrit (EPERM / EBUSY : verrouillage). Toute autre erreur remonte tout de suite ; au-delà de ~2 s,
+ * le verrouillage aussi (l'appli reste alors sur l'ancien dossier).
  */
 function renameWithRetry(from: string, to: string): void {
   for (let i = 0; ; i++) {
     try { renameSync(from, to); return; } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
-      if (i >= 10 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw e;
+      if (i >= 10 || (code !== "EPERM" && code !== "EBUSY")) throw e;
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
     }
   }
@@ -106,6 +107,9 @@ export function migrateUserData(appData: string, from = LEGACY_DIR, to = DATA_DI
     return { status: "migrated", from: legacy, files: after.size, bytes };
   } catch (e) {
     rmSync(tmp, { recursive: true, force: true });
-    return { status: "failed", from: legacy, error: e instanceof Error ? e.message : String(e) };
+    // Code d'erreur en tête (EPERM, EBUSY, ENOENT…) : il dit si c'est un verrouillage ou autre chose.
+    const code = (e as NodeJS.ErrnoException)?.code;
+    const msg = e instanceof Error ? e.message : String(e);
+    return { status: "failed", from: legacy, error: code && !msg.startsWith(code) ? `${code} : ${msg}` : msg };
   }
 }
