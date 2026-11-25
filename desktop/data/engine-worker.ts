@@ -6,10 +6,10 @@ import { Engine } from "./engine.ts";
 const engine = new Engine((workerData as { dbFile: string }).dbFile);
 type Fn = keyof typeof calls;
 const calls = {
-  overview: (filter: Parameters<Engine["overview"]>[0], compare: number | null, excluded: number[]) => engine.overview(filter, compare, excluded),
-  analysis: (key: string | null, filter: Parameters<Engine["analysis"]>[1], excluded: number[]) => engine.analysis(key, filter, excluded),
+  overview: (...a: Parameters<Engine["overview"]>) => engine.overview(...a),
+  analysis: (...a: Parameters<Engine["analysis"]>) => engine.analysis(...a),
   goals: (startMs: number, targets: Record<string, number>, excluded: number[]) => engine.goals(startMs, targets, excluded),
-  reco: (excluded: number[]) => engine.reco(excluded),
+  reco: (...a: Parameters<Engine["reco"]>) => engine.reco(...a),
   metaView: (scope: number) => engine.metaView(scope),
   myGames: () => engine.myGames(),
   draftExtras: (...a: Parameters<Engine["draftExtras"]>) => engine.draftExtras(...a),

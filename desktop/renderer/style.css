@@ -223,6 +223,7 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .radar-shape.s-avg { fill: rgba(154,151,171,.15); stroke: var(--muted); }
 .radar-dot.s-main { fill: var(--blue); } .radar-dot.s-cmp { fill: var(--warn); } .radar-dot.s-avg { fill: var(--muted); }
 .radar-label { fill: var(--text); font-size: 11px; }
+.radar-ref { fill: var(--muted); font-size: 10px; }
 .radar.mini .radar-shape { stroke-width: 1.5; }
 .lg { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin: 0 2px 0 8px; }
 .lg-main { background: var(--blue); } .lg-cmp { background: var(--warn); } .lg-avg { background: var(--muted); } .lg-game { background: var(--blue); }

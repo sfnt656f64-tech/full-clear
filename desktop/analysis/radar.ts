@@ -16,7 +16,8 @@ export interface RadarAxis {
 
 // Définitions vérifiées sur tes parties (stabilité, lien avec la victoire, comparaison au jungler adverse) :
 // - Early : la participation aux kills seule ne disait rien (aucun lien avec la victoire, très bruitée) ; on y ajoute
-//   les écarts d'or et d'XP à 10 min et le first blood.
+//   l'écart d'XP à 10 min et le first blood. Pas l'écart d'or à 10 min : il recoupait l'axe Or (corrélation 0,75
+//   entre les deux axes, partie par partie), l'avance en or aurait compté deux fois dans le score.
 // - Objectifs : la participation aux objectifs (≈ 95 % pour tout le monde) ne distinguait personne ; on mesure la part
 //   des objectifs neutres pris par ton équipe avant 20 min et ceux cédés sans contrepartie. Mesure d'équipe : dépend
 //   aussi de tes coéquipiers et de l'avance de la partie.
@@ -26,7 +27,7 @@ export interface RadarAxis {
 // - Teamfight : mesuré sur toute la partie, il suit en partie l'issue (signalé dans l'aide).
 export const AXES: RadarAxis[] = [
   { key: "farm", label: "Farm", metrics: ["cs10", "cs15"], hint: "CS à 10 et 15 min" },
-  { key: "early", label: "Early", metrics: ["kp15", "gd10", "xd10", "fb"], hint: "participation aux kills avant 15 min, écarts d'or et d'XP à 10 min, first blood" },
+  { key: "early", label: "Early", metrics: ["kp15", "xd10", "fb"], hint: "participation aux kills avant 15 min, écart d'XP à 10 min, first blood" },
   { key: "teamfight", label: "Teamfight", metrics: ["kpLate", "dmgShare"], hint: "participation aux kills après 15 min, part des dégâts (toute la partie : suit en partie l'issue)" },
   { key: "objectives", label: "Objectifs", metrics: ["obj20", "conc20"], hint: "objectifs neutres avant 20 min pris par ton équipe, cédés sans contrepartie (mesure d'équipe)" },
   { key: "survival", label: "Survie", metrics: ["deaths15", "solo15"], hint: "morts avant 15 min, dont en 1 contre 1" },

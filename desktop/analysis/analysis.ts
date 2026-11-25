@@ -139,7 +139,7 @@ const median = (xs: number[]): number | null => {
 const mean = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
 const fmt = (n: number, unit: string) => `${n.toLocaleString("fr-FR", { maximumFractionDigits: unit === " %" || n >= 100 ? 0 : 1 })}${unit}`;
 
-export function analyseGame(game: AnalysisGame, events: MyEventRow[], recent: AnalysisGame[], ref: MetaRef): GameAnalysis {
+export function analyseGame(game: AnalysisGame, events: MyEventRow[], recent: AnalysisGame[], ref: MetaRef, refName = "Émeraude"): GameAnalysis {
   const current = sameSeason(game, ref);
   const { rows, champion } = ref.rowsFor(game.role, game.championId);
 
@@ -173,7 +173,7 @@ export function analyseGame(game: AnalysisGame, events: MyEventRow[], recent: An
     focus.push({
       key: m.key, label: m.label, unit: m.unit, mine, median: med, rank, trend: vals, progress,
       text: poolMeta
-        ? `${m.label} : ${fmt(mine, m.unit)} en moyenne, contre ${fmt(med, m.unit)} en Émeraude+ (mieux que ${Math.round(rank)} % des joueurs).${trendText}`
+        ? `${m.label} : ${fmt(mine, m.unit)} en moyenne, contre ${fmt(med, m.unit)} en ${refName} (mieux que ${Math.round(rank)} % des joueurs).${trendText}`
         : `${m.label} : ${fmt(mine, m.unit)} en moyenne, contre ${fmt(med, m.unit)} pour ton adversaire direct (mieux que lui dans ${Math.round(rank)} % des parties).${trendText}`,
     });
   }

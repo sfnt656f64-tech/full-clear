@@ -14,6 +14,7 @@ const api: KaynApi = {
   getMeta: (scope) => ipcRenderer.invoke(IPC.getMeta, scope),
   openRecoWindow: () => ipcRenderer.invoke(IPC.openRecoWindow),
   getAnalysis: (key, filter) => ipcRenderer.invoke(IPC.getAnalysis, key, filter),
+  setRefTier: (tier) => ipcRenderer.invoke(IPC.setRefTier, tier),
   getOverview: (filter, compare) => ipcRenderer.invoke(IPC.getOverview, filter, compare),
   getGoals: () => ipcRenderer.invoke(IPC.getGoals),
   restartGoals: () => ipcRenderer.invoke(IPC.restartGoals),

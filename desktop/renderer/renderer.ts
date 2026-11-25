@@ -436,6 +436,8 @@ $("col-pause").addEventListener("click", async () => {
 });
 
 function render(s: AppState): void {
+  const ref = $<HTMLSelectElement>("af-ref");
+  if (document.activeElement !== ref) ref.value = s.refTier;
   renderClient(s);
   renderCollector(s);
   renderLive(s);
@@ -501,6 +503,8 @@ let anKey: string | null = null;
 let anFilter: "all" | "early" | "late" = "all";
 let anView: Awaited<ReturnType<typeof window.kayn.getAnalysis>> | null = null;
 let ov: Awaited<ReturnType<typeof window.kayn.getOverview>> | null = null;
+/** Niveau de référence des données affichées (« Émeraude » ou « Diamant »). */
+let refShort = "Émeraude";
 let heatKinds: "both" | "kills" | "deaths" = "both";
 let heatTime: "all" | "early" | "late" = "all";
 let tableSort = { key: "games", asc: false };
@@ -526,6 +530,7 @@ async function loadAnalysis(key: string | null): Promise<void> {
       const v = await window.kayn.getOverview(anFilterSel, compareId);
       if (req !== anRequest) return; // une demande plus récente est partie entre-temps
       ov = v;
+      refShort = v.reference.short;
       renderFilters();
       renderOverview();
     } else {
@@ -533,6 +538,7 @@ async function loadAnalysis(key: string | null): Promise<void> {
       if (req !== anRequest) return;
       if (!ov) { ov = o; renderFilters(); }
       anView = a;
+      if (a.reference) refShort = a.reference.short;
       anKey = anView.selected;
       renderAnalysis();
     }
@@ -569,6 +575,11 @@ function readFilters(): void {
   };
 }
 for (const id of ["af-champ", "af-role", "af-period", "af-account"]) $(id).addEventListener("change", () => { readFilters(); anKey = null; void loadAnalysis(null); });
+// Niveau de référence : mémorisé dans les réglages (partagé avec Champions recommandés), puis tout est recalculé.
+$<HTMLSelectElement>("af-ref").addEventListener("change", (e) => {
+  const tier = (e.target as HTMLSelectElement).value as AppState["refTier"];
+  void window.kayn.setRefTier(tier).then(() => { ov = null; void loadAnalysis(anKey); });
+});
 for (const b of document.querySelectorAll<HTMLButtonElement>(".an-views button")) {
   b.addEventListener("click", () => {
     anViewMode = b.dataset.view as typeof anViewMode;
@@ -584,7 +595,7 @@ function metricRow(label: string, mine: number | null, unit: string, rank: numbe
   return h("div", { class: `an-metric${cls}` },
     h("span", { class: "an-label" }, label, extra ? h("span", { class: "small muted" }, extra) : null),
     h("span", { class: "an-val" }, fmtNum(mine, unit)),
-    h("span", { class: "an-bar", title: rank == null ? "" : `Mieux que ${Math.round(rank)} % des joueurs Émeraude+` }, fill),
+    h("span", { class: "an-bar", title: rank == null ? "" : `Mieux que ${Math.round(rank)} % des joueurs ${refShort}` }, fill),
     h("span", { class: "an-med small muted" }, med == null ? "" : `${medLabel} ${fmtNum(med, unit)}`));
 }
 const applyBars = () => { for (const f of document.querySelectorAll<HTMLElement>(".an-fill")) f.style.width = `${f.dataset.pct}%`; };
@@ -599,9 +610,9 @@ function renderOverview(): void {
   if (empty) return;
   const who = v.filter.championId != null ? champName(v.filter.championId) : "tous tes champions";
   $("ov-summary").replaceChildren(h("b", {}, `${o.games} partie${o.games > 1 ? "s" : ""}`), ` · ${who} · `,
-    h("b", {}, `${fmtNum(o.winRate, " %")} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (Émeraude+ : ${fmtNum(o.metaWinRate, " %")})`) : "");
+    h("b", {}, `${fmtNum(o.winRate, " %")} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (${refShort} : ${fmtNum(o.metaWinRate, " %")})`) : "");
   const season = o.refs.season ?? "";
-  const metaRef = o.comparedTo === "champion" ? `joueurs Émeraude+ ${season} sur ${who}` : `joueurs Émeraude+ ${season} du rôle`;
+  const metaRef = o.comparedTo === "champion" ? `joueurs ${refShort} ${season} sur ${who}` : `joueurs ${refShort} ${season} du rôle`;
   $("ov-note").textContent = [
     o.refs.opponent === 0 ? `Référence : ${metaRef}.`
       : o.refs.meta === 0 ? `Référence : ton adversaire direct de la même partie (${o.refs.opponent} parties de saisons sans méta) ; la barre donne la part des parties où tu fais mieux que lui.`
@@ -619,7 +630,7 @@ function renderOverview(): void {
   renderTable();
 }
 
-/** Radar de la sélection (et d'un champion à comparer), sur la médiane Émeraude+ du rôle. */
+/** Radar de la sélection (et d'un champion à comparer), sur la médiane du rôle au niveau de référence. */
 function renderRadar(): void {
   const v = ov!;
   const sel = $<HTMLSelectElement>("ov-compare");
@@ -631,11 +642,11 @@ function renderRadar(): void {
   if (v.compare?.radar) series.push({ values: v.compare.radar.values, cls: "s-cmp", name: champName(v.compare.championId) });
   const box = $("ov-radar");
   if (!v.radar) { box.replaceChildren(h("p", { class: "small muted" }, "Il faut au moins 5 parties relues pour tracer le profil.")); $("ov-radar-note").textContent = ""; return; }
-  box.replaceChildren(radarSvg(series, { size: 220, labels: true }));
+  box.replaceChildren(radarSvg(series, { size: 220, labels: true, refName: refShort }));
   $("ov-radar-note").replaceChildren(h("span", { class: "lg lg-main" }), ` ${name} (${v.radar.games} parties)`,
     v.compare ? h("span", {}, h("span", { class: "lg lg-cmp" }), ` ${champName(v.compare.championId)}${v.compare.radar ? ` (${v.compare.radar.games} parties)` : " : moins de 5 parties"}`) : "",
-    h("span", {}, h("span", { class: "lg lg-med" }), " médiane Émeraude+ du rôle"),
-    h("br"), "Chaque axe : ta position « mieux que X % » face aux joueurs Émeraude+ du même rôle pour les parties de la saison de la méta, et la part des parties où tu fais mieux que ton adversaire direct pour les saisons précédentes. Survole un point pour le détail.");
+    h("span", {}, h("span", { class: "lg lg-med" }), ` médiane ${refShort} du rôle (${ov!.reference.games.toLocaleString("fr-FR")} joueurs de méta)`),
+    h("br"), `Chaque axe : ta position « mieux que X % » face aux joueurs ${refShort} du même rôle (parties trouvées par un joueur de ce rang ; le matchmaking mélange des rangs voisins)`, " pour les parties de la saison de la méta, et la part des parties où tu fais mieux que ton adversaire direct pour les saisons précédentes. Survole un point pour le détail.");
 }
 $<HTMLSelectElement>("ov-compare").addEventListener("change", (e) => {
   const v = (e.target as HTMLSelectElement).value;
@@ -802,18 +813,18 @@ function renderAnalysis(): void {
   const rs: RadarSeries[] = [];
   if (v.radar?.average) rs.push({ values: v.radar.average.values, cls: "s-avg", name: `Ta moyenne (${v.radar.average.games} parties)` });
   if (v.radar?.game) rs.push({ values: v.radar.game.values, cls: "s-main", name: "Cette partie" });
-  $("an-radar").replaceChildren(radarSvg(rs, { size: 200, labels: true }));
+  $("an-radar").replaceChildren(radarSvg(rs, { size: 200, labels: true, refName: refShort }));
   const opp = a.comparedTo === "opponent";
   $("an-metrics").replaceChildren(...a.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median, "", opp ? "adv." : "méd.")));
   applyBars();
   $("an-ref").textContent = opp
     ? `Partie d'une saison sans méta : comparée à ton adversaire direct (même rôle, même partie). « adv. » : sa valeur ; barre pleine si tu fais mieux que lui, à moitié à égalité.`
     : a.comparedTo === "champion"
-    ? `Comparé à ${a.metaGames.toLocaleString("fr-FR")} parties Émeraude+ sur ${champName(g.championId)} (${ROLE_SHORT[g.role] ?? g.role}). La barre : ta position (à droite = meilleur).`
-    : `Pas encore assez de parties Émeraude+ sur ce champion : comparé à tous les joueurs du rôle (${a.metaGames.toLocaleString("fr-FR")} parties).`;
+    ? `Comparé à ${a.metaGames.toLocaleString("fr-FR")} parties ${refShort} sur ${champName(g.championId)} (${ROLE_SHORT[g.role] ?? g.role}). La barre : ta position (à droite = meilleur).`
+    : `Pas encore assez de parties ${refShort} sur ce champion : comparé à tous les joueurs du rôle (${a.metaGames.toLocaleString("fr-FR")} parties).`;
 
   $("an-focus").replaceChildren(...(a.focus.length ? a.focus.map((f) => h("div", { class: "an-focus" }, h("p", { class: "small" }, f.text), sparkline(f.trend, f.median)))
-    : [h("p", { class: "small muted" }, a.focusGames < 3 ? "Pas encore assez de parties récentes pour dégager des tendances." : "Rien de marqué : tu es au niveau ou au-dessus de la médiane Émeraude+ sur tous les points suivis.")]));
+    : [h("p", { class: "small muted" }, a.focusGames < 3 ? "Pas encore assez de parties récentes pour dégager des tendances." : `Rien de marqué : tu es au niveau ou au-dessus de la médiane ${refShort} sur tous les points suivis.`)]));
 }
 
 /** Petite courbe de tes valeurs (de la plus ancienne à la plus récente), avec la médiane Émeraude+ en pointillés. */

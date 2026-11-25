@@ -84,8 +84,9 @@ function potentialCard(e: PotentialEntry, pick: PoolPick | undefined): HTMLEleme
     ? `${pick.games} parties · ${wrPm(pick.winRate, pick.games)} (lissé ${nf(pick.adjustedWinRate, 1)} %) · KDA ${nf(pick.kda, 1)}${pick.masteryPoints ? ` · ${nf(Math.round(pick.masteryPoints / 1000))} k pts` : ""}`
     : `${e.games} parties · ${wrPm(e.winRate ?? 0, e.games)} de victoires`;
   const radar = e.radar
-    ? el("div", { class: "mini-radar", title: `Stats de jeu : ${nf(e.radar.score ?? 0)} (50 = médiane Émeraude+), sur ${e.radar.games} parties` },
-      radarSvg([{ values: e.radar.values, cls: "s-main", name: champName(e.championId) }], { size: 58, labels: false }))
+    ? el("div", { class: "mini-radar", title: `Stats de jeu : ${nf(e.radar.score ?? 0, 1)}${e.radar.margin != null ? ` ± ${nf(e.radar.margin, 1)}` : ""} (50 = médiane ${refName()}), sur ${e.radar.games} parties` },
+      radarSvg([{ values: e.radar.values, cls: "s-main", name: champName(e.championId) }], { size: 58, labels: false, refName: refName() }),
+      el("div", { class: "mini-ref" }, `réf. ${refName()}`))
     : el("div", { class: "mini-radar none", title: "Moins de 5 parties relues : pas encore de radar" }, "–");
   return el("li", { class: "card pcard" },
     portrait(e.championId),
@@ -159,14 +160,23 @@ async function reload(): Promise<void> {
   const v = await window.kayn.getRecommendations().catch((e) => { console.error(e); return null; });
   if (!v) return;
   view = v;
+  $<HTMLSelectElement>("ref-tier").value = view.reference.tier;
   $("summary").textContent = view.patches.length
-    ? `Méta : ${nf(view.metaMatches)} partie(s) Émeraude+ en ${view.patches.join(" et ")}`
+    ? `Méta : ${nf(view.metaMatches)} partie(s) Émeraude+ en ${view.patches.join(" et ")} · radars comparés au niveau ${view.reference.short} (${nf(view.reference.games)} joueurs de méta en jungle et au milieu)`
     : "Pas encore de méta";
   const warn = $("warn");
   warn.hidden = !view.provisional;
   warn.textContent = "Moins de 1 000 parties de méta : recommandations provisoires, elles s'affineront avec la collecte.";
   render();
 }
+
+/** Niveau de référence des radars et du classement. */
+function refName(): string { return view?.reference.short ?? "Émeraude"; }
+$<HTMLSelectElement>("ref-tier").addEventListener("change", (e) => {
+  const tier = (e.target as HTMLSelectElement).value as RecoView["reference"]["tier"];
+  $("summary").textContent = "Recalcul avec la nouvelle référence…";
+  void window.kayn.setRefTier(tier).then(() => reload());
+});
 
 void reload();
 setInterval(() => void reload(), 60_000);

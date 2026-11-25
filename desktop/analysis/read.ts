@@ -65,13 +65,13 @@ export function readAllMyEvents(dbFile: string): Map<string, MyEventRow[]> {
 }
 
 /** Méta : mesures de duel tirées des chronologies gardées (meta_detail), par « partie|participant ». */
-export function readMetaDuels(dbFile: string, patches: string[], role: string): Map<string, DuelValues> {
+export function readMetaDuels(dbFile: string, patches: string[], role: string, tier: string): Map<string, DuelValues> {
   const out = new Map<string, DuelValues>();
   if (!patches.length) return out;
   return withDb(dbFile, out, (db) => {
     const marks = patches.map(() => "?").join(",");
     const parts = db.prepare("select participant_id, team, role from meta_parts where match_id = ?");
-    for (const r of db.prepare(`select d.match_id, d.data from meta_detail d join meta_games g on g.match_id = d.match_id where g.remake = 0 and g.patch in (${marks})`).all(...patches) as { match_id: string; data: Uint8Array }[]) {
+    for (const r of db.prepare(`select d.match_id, d.data from meta_detail d join meta_games g on g.match_id = d.match_id where g.remake = 0 and g.tier = ? and g.patch in (${marks})`).all(tier, ...patches) as { match_id: string; data: Uint8Array }[]) {
       const timeline = (unpackDetail(r.data) as unknown as { timeline: Detail["timeline"] }).timeline;
       if (!timeline) continue;
       const ps = (parts.all(r.match_id) as { participant_id: number; team: number; role: string }[]).map((p) => ({ participantId: p.participant_id, teamId: p.team, teamPosition: p.role }));
@@ -82,7 +82,7 @@ export function readMetaDuels(dbFile: string, patches: string[], role: string): 
 }
 
 /** Méta (chronologies lues) : un rôle, et le détail par champion. */
-export function readMetaMetrics(dbFile: string, patches: string[], role: string): MetaMetricRow[] {
+export function readMetaMetrics(dbFile: string, patches: string[], role: string, tier: string): MetaMetricRow[] {
   if (!patches.length) return [];
   return withDb(dbFile, [], (db) => {
     const marks = patches.map(() => "?").join(",");
@@ -92,7 +92,7 @@ export function readMetaMetrics(dbFile: string, patches: string[], role: string)
         (select sum(q.damage) from meta_parts q where q.match_id = p.match_id and q.team = p.team) team_damage,
         p.gold15 - (select q.gold15 from meta_parts q where q.match_id = p.match_id and q.team <> p.team and q.role = p.role) gd15
       from meta_parts p join meta_games g on g.match_id = p.match_id
-      where g.remake = 0 and g.patch in (${marks}) and p.role = ? and p.cs10 is not null`).all(...patches, role) as Record<string, number | null>[])
+      where g.remake = 0 and g.tier = ? and g.patch in (${marks}) and p.role = ? and p.cs10 is not null`).all(tier, ...patches, role) as Record<string, number | null>[])
       .map((r) => ({
         championId: Number(r.champion_id), win: !!r.win, cs10: r.cs10, cs15: r.cs15, gold15: r.gold15, deaths15: r.deaths15,
         kills15: r.kills15, assists15: r.assists15, teamKills15: r.team_kills15, objTeam: r.obj_team, objMine: r.obj_mine,

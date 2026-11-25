@@ -60,8 +60,9 @@ describe("classement par potentiel", () => {
     expect(classifyPool(pool(40, 48), radar(62)).group).toBe("potential");
     expect(classifyPool(pool(12, 48), radar(62))).toMatchObject({ group: "potential", provisional: true });
     expect(classifyPool(pool(12, 48), radar(62)).text).toContain("potentiel à développer");
-    // Bon win rate lissé : « À garder », à confirmer sous 20 parties.
-    expect(classifyPool(pool(12, 56), radar(62))).toMatchObject({ group: "keep", provisional: true });
+    // Bon win rate lissé mais moins de 15 parties : pas encore « À garder ».
+    expect(classifyPool(pool(12, 56), radar(62))).toMatchObject({ group: "potential", provisional: true });
+    expect(classifyPool(pool(16, 56), radar(62))).toMatchObject({ group: "keep", provisional: true });
   });
   it("à mettre de côté : beaucoup de parties, stats et win rate sous la médiane", () => {
     const e = classifyPool(pool(30, 46), radar(42));
@@ -102,7 +103,7 @@ describe("marge d'erreur des stats", () => {
   it("au-dessus de la médiane seulement si toute la marge est au-dessus de 50", () => {
     expect(classifyPool(pool(30, 49), radar(53, 2)).group).toBe("potential");
     expect(classifyPool(pool(30, 49), radar(53, 5))).toMatchObject({ group: "neutral" });
-    expect(classifyPool(pool(30, 49), radar(53, 5)).text).toContain("stats 53,0 ± 5,0");
+    expect(classifyPool(pool(30, 49), radar(53, 5)).text).toContain("stats 53,0 ± 5,0 (50 = médiane Émeraude)");
   });
   it("sous la médiane seulement si toute la marge est sous 50", () => {
     expect(classifyPool(pool(30, 46), radar(46, 3)).group).toBe("shelve");
@@ -112,6 +113,21 @@ describe("marge d'erreur des stats", () => {
     const r = radarOf(Array.from({ length: 10 }, (_, i) => game({ cs10: i % 2 ? 70 : 50, cs15: i % 2 ? 110 : 90 })), ref)!;
     expect(r.margin).not.toBeNull();
     expect(r.margin!).toBeGreaterThan(0);
+  });
+});
+
+describe("seuil de 15 parties pour « À garder »", () => {
+  const radar = (score: number, margin: number) => ({ values: [score, score, score, score, score, score], games: 10, score, margin });
+  it("Sylas (10 parties, 52,4 % lissé, stats 41,8 ± 12,8) : pas « À garder », et le texte dit pourquoi", () => {
+    const e = classifyPool(pool(10, 52.4), radar(41.8, 12.8));
+    expect(e.group).toBe("potential");
+    expect(e.provisional).toBe(true);
+    expect(e.text).toContain("moins de 15 parties : pas encore « À garder »");
+  });
+  it("15 parties et win rate lissé ≥ 51 % : À garder", () => {
+    expect(classifyPool(pool(15, 52), radar(48, 5)).group).toBe("keep");
+    expect(classifyPool(pool(14, 52), radar(42, 3)).group).toBe("neutral");
+    expect(classifyPool(pool(14, 52), null).group).toBe("neutral");
   });
 });
 

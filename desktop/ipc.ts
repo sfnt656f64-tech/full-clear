@@ -1,4 +1,5 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
+import type { RefInfo, RefTier } from "./analysis/ref-tier.ts";
 import type { DraftView } from "./draft-view.ts";
 import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
@@ -20,6 +21,8 @@ export type { GoalsView };
 /** Vue d'ensemble de l'onglet « Analyse ». */
 export interface OverviewView {
   filter: OverviewFilter;
+  /** Référence des positions, médianes et radars. */
+  reference: RefInfo;
   /** Choix des filtres : tes champions (parties dans le rôle, la période et le compte choisis), saisons, comptes. */
   options: { champions: { id: number; games: number }[]; seasons: number[]; accounts: string[] };
   overview: Overview;
@@ -42,11 +45,15 @@ export interface AnalysisView {
   games: { key: string; championId: number; win: boolean; kda: string; startMs: number; role: string }[];
   selected: string | null;
   analysis: GameAnalysis | null;
+  /** Référence des positions et du radar (absente sans partie). */
+  reference?: RefInfo;
 }
 
 /** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
 export interface RecoView extends Recommendations {
   patches: string[];
+  /** Référence des radars et du classement. */
+  reference: RefInfo;
   /** Classement par potentiel et radars de tes champions, par rôle. */
   potential: Record<string, PotentialGroups>;
   /** Pool conseillé, par rôle. */
@@ -115,6 +122,8 @@ export interface AppState {
   collectorPaused: boolean;
   /** Champions exclus de tes stats (identifiants Data Dragon). */
   excludedChampions: string[];
+  /** Niveau de référence choisi. */
+  refTier: RefTier;
   problems: string[];
   openAtLogin: boolean;
   /** Vrai en développement (npm run desktop) : le démarrage automatique pointe alors vers Electron + le dépôt. */
@@ -136,6 +145,8 @@ export interface KaynApi {
   openRecoWindow(): Promise<void>;
   /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
   getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
+  /** Niveau de référence des comparaisons (Analyse, Champions). */
+  setRefTier(tier: RefTier): Promise<AppState>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Suivi de tes objectifs (jungle). */
   getGoals(): Promise<GoalsView>;
@@ -170,6 +181,7 @@ export const IPC = {
   getMeta: "kayn:get-meta",
   openRecoWindow: "kayn:open-reco-window",
   getAnalysis: "kayn:get-analysis",
+  setRefTier: "kayn:set-ref-tier",
   getOverview: "kayn:get-overview",
   getGoals: "kayn:get-goals",
   restartGoals: "kayn:restart-goals",

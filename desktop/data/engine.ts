@@ -8,6 +8,7 @@
 // - la méta : relue au plus toutes les 10 minutes (elle grossit en continu pendant la collecte, sans changer
 //   les résultats d'une minute à l'autre) ;
 // - les vues : gardées tant que ni la base ni les paramètres ne changent.
+import { DEFAULT_REF_TIER, REF_TIERS, type RefInfo, type RefTier } from "../analysis/ref-tier.ts";
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import { champByKey, findChamp } from "../../src/data/champions";
@@ -101,14 +102,14 @@ export class Engine {
   private pairs(): PairIndex { return this.cached("pairs", META_TTL, () => pairIndex(readMeta(this.dbFile, this.patches(3)).parts)); }
   private shares(): RoleShares { return this.cached("shares", META_TTL, () => roleShares(this.recentMeta().parts)); }
   private ganks() { return this.cached("ganks", META_TTL, () => readGankData(this.dbFile, this.patches(3))); }
-  private metaRows(role: string): MetaMetricRow[] {
-    return this.cached(`metaRows:${role}`, META_TTL, () => {
-      const duels = readMetaDuels(this.dbFile, this.patches(3), role);
-      return readMetaMetrics(this.dbFile, this.patches(3), role).map((r) => ({ ...duels.get(`${r.matchId}|${r.participantId}`), ...r, gd15: r.gd15 }));
+  private metaRows(role: string, tier: RefTier): MetaMetricRow[] {
+    return this.cached(`metaRows:${role}:${tier}`, META_TTL, () => {
+      const duels = readMetaDuels(this.dbFile, this.patches(3), role, tier);
+      return readMetaMetrics(this.dbFile, this.patches(3), role, tier).map((r) => ({ ...duels.get(`${r.matchId}|${r.participantId}`), ...r, gd15: r.gd15 }));
     });
   }
-  private metaRef(roles: string[]): MetaRef {
-    const byRole = new Map(roles.map((r) => [r, this.metaRows(r)]));
+  private metaRef(roles: string[], tier: RefTier): MetaRef {
+    const byRole = new Map(roles.map((r) => [r, this.metaRows(r, tier)]));
     const p = this.patches(1)[0];
     // Saison de la méta (16.x → 2026) : les parties d'une autre saison sont comparées à l'adversaire direct.
     return new MetaRef(byRole, p ? 2010 + Number(p.split(".")[0]) : null);
@@ -189,11 +190,17 @@ export class Engine {
 
   // ---------- Onglet Analyse ----------
 
-  overview(filter: OverviewFilter, compare: number | null, excluded: number[]): OverviewView {
-    return this.memo(`overview:${JSON.stringify([filter, compare, excluded])}`, () => {
+/** Référence affichée : niveau choisi et parties de méta (joueurs) du rôle. */
+  private refInfo(roles: string[], tier: RefTier): RefInfo {
+    return { tier, label: REF_TIERS[tier].label, short: REF_TIERS[tier].short, games: roles.reduce((s, r) => s + this.metaRows(r, tier).length, 0) };
+  }
+
+  overview(filter: OverviewFilter, compare: number | null, excluded: number[], tier: RefTier = DEFAULT_REF_TIER): OverviewView {
+    return this.memo(`overview:${JSON.stringify([filter, compare, excluded, tier])}`, () => {
       const all = this.analysisGames(excluded);
       const games = filterGames(all, filter);
-      const ref = this.metaRef([...new Set(games.map((g) => g.role))]);
+      const roles = [...new Set(games.map((g) => g.role))];
+      const ref = this.metaRef(roles, tier);
       // Champions proposés : ceux joués avec les autres filtres (rôle, période, compte).
       const forChamps = filterGames(all, { ...filter, championId: null });
       const counts = new Map<number, number>();
@@ -208,7 +215,8 @@ export class Engine {
         table: filter.championId == null ? championTable(games, ref) : null,
         heat: this.heat(games),
         radar: radarOf(games, ref),
-        compare: cmp ? { championId: compare!, radar: radarOf(cmp, this.metaRef([...new Set(cmp.map((g) => g.role))])) } : null,
+        compare: cmp ? { championId: compare!, radar: radarOf(cmp, this.metaRef([...new Set(cmp.map((g) => g.role))], tier)) } : null,
+        reference: this.refInfo(roles, tier),
         compareOptions: [...counts.entries()].filter(([, n]) => n >= 5).sort((a, b) => b[1] - a[1]).map(([id]) => id),
       };
     });
@@ -236,17 +244,17 @@ export class Engine {
     };
   }
 
-  analysis(key: string | null, filter: OverviewFilter, excluded: number[]): AnalysisView {
-    return this.memo(`analysis:${JSON.stringify([key, filter, excluded])}`, () => {
+  analysis(key: string | null, filter: OverviewFilter, excluded: number[], tier: RefTier = DEFAULT_REF_TIER): AnalysisView {
+    return this.memo(`analysis:${JSON.stringify([key, filter, excluded, tier])}`, () => {
       const all = this.analysisGames(excluded);
       const games = filterGames(all, filter).slice(0, 30);
       const list = games.map((g) => ({ key: `${g.matchId}|${g.account}`, championId: g.championId, win: g.win, kda: `${g.kills}/${g.deaths}/${g.assists}`, startMs: g.startMs, role: g.role }));
       const game = games.find((g) => `${g.matchId}|${g.account}` === key) ?? games[0];
       if (!game) return { games: list, selected: null, analysis: null };
-      const ref = this.metaRef([game.role]);
-      const analysis = analyseGame(game, readMyEvents(this.dbFile, game.matchId, game.account), games, ref);
+      const ref = this.metaRef([game.role], tier);
+      const analysis = analyseGame(game, readMyEvents(this.dbFile, game.matchId, game.account), games, ref, REF_TIERS[tier].short);
       const same = all.filter((g) => g.championId === game.championId && g.role === game.role);
-      return { games: list, selected: `${game.matchId}|${game.account}`, analysis, radar: { game: radarOf([game], ref, 1), average: radarOf(same, ref) } };
+      return { games: list, selected: `${game.matchId}|${game.account}`, analysis, radar: { game: radarOf([game], ref, 1), average: radarOf(same, ref) }, reference: this.refInfo([game.role], tier) };
     });
   }
 
@@ -262,12 +270,12 @@ export class Engine {
 
   // ---------- Recommandations ----------
 
-  reco(excluded: number[]): RecoView {
-    return this.memo(`reco:${excluded.join(",")}`, () => {
+  reco(excluded: number[], tier: RefTier = DEFAULT_REF_TIER): RecoView {
+    return this.memo(`reco:${excluded.join(",")}:${tier}`, () => {
       const patches = this.patches(RECO_PATCHES);
       const input = this.recentMeta();
       const reco = recommend({ myGames: readMyGames(this.dbFile), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(this.dbFile), metaMatches: input.matches, excluded, myMastery: readMyMastery(this.dbFile) });
-      const potential = this.potential(reco, excluded);
+      const potential = this.potential(reco, excluded, tier);
       const styles = metaStyles(input.parts);
       const all = this.analysisGames(excluded);
       const season = Math.max(0, ...all.map((g) => g.season ?? 0));
@@ -283,7 +291,7 @@ export class Engine {
         });
         trends[r.role] = this.trends(r.role);
       }
-      return { ...reco, patches, potential, advice, trends };
+      return { ...reco, patches, potential, advice, trends, reference: this.refInfo(reco.roles.map((r) => r.role), tier) };
     });
   }
 
@@ -305,20 +313,20 @@ export class Engine {
   }
 
   /** Classement par potentiel : radar de chaque champion (saison en cours et précédente, dans le rôle) et groupes. */
-  private potential(reco: ReturnType<typeof recommend>, excluded: number[]): Record<string, PotentialGroups> {
+  private potential(reco: ReturnType<typeof recommend>, excluded: number[], tier: RefTier): Record<string, PotentialGroups> {
     const all = this.analysisGames(excluded);
     const season = Math.max(0, ...all.map((g) => g.season ?? 0));
     const recent = all.filter((g) => (g.season ?? 0) >= season - 1);
     const out: Record<string, PotentialGroups> = {};
     for (const role of reco.roles) {
       const inRole = recent.filter((g) => g.role === role.role);
-      const ref = this.metaRef([role.role]);
+      const ref = this.metaRef([role.role], tier);
       const byChamp = new Map<number, typeof inRole>();
       for (const g of inRole) (byChamp.get(g.championId) ?? byChamp.set(g.championId, []).get(g.championId)!).push(g);
       const radars = new Map([...byChamp].map(([id, gs]) => [id, radarOf(gs, ref)]));
       const inPool = new Set(role.pool.map((p) => p.championId));
       const tried = [...byChamp].filter(([id, gs]) => !inPool.has(id) && gs.length >= 5).map(([id, gs]) => ({ championId: id, games: gs.length, wins: gs.filter((g) => g.win).length }));
-      out[role.role] = potentialGroups(role.pool, tried, radars);
+      out[role.role] = potentialGroups(role.pool, tried, radars, REF_TIERS[tier].short);
     }
     return out;
   }

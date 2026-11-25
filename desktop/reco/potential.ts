@@ -8,15 +8,19 @@ import type { PoolPick } from "./recommend.ts";
  * marge est au-dessus de 50 (stats − m > 50), « sous la médiane » si toute la marge est en dessous (stats + m < 50),
  * « autour de la médiane » sinon. Les groupes couvrent tous les cas, sans trou :
  *
- *   win rate lissé ≥ 51 %                        → À garder (stats sous la médiane : « à consolider », axes cités)
- *   win rate lissé < 51 %, stats au-dessus        → Potentiel à développer
- *   win rate lissé < 51 %, stats autour           → Neutre, pas prioritaire (moins de 20 parties : Potentiel, à confirmer)
- *   win rate lissé 50 à 51 %, stats sous          → Neutre, pas prioritaire
- *   win rate lissé < 50 %, stats sous             → À mettre de côté
+ *   au moins 15 parties, win rate lissé ≥ 51 %   → À garder (stats sous la médiane : « à consolider », axes cités)
+ *   sinon, stats au-dessus                        → Potentiel à développer
+ *   sinon, stats autour                           → Neutre, pas prioritaire (moins de 20 parties : Potentiel, à confirmer)
+ *   sinon (stats sous), win rate lissé ≥ 50 %     → Neutre, pas prioritaire
+ *   sinon (stats sous), win rate lissé < 50 %     → À mettre de côté
+ *
+ * « Sinon » couvre aussi les champions qui gagnent (≥ 51 %) mais ont moins de 15 parties : le texte le précise.
  *
  * Moins de 20 parties : le classement est marqué « à confirmer ». Sans radar (moins de 5 parties relues) : classement
  * provisoire sur le win rate seul.
  */
+/** Parties minimales pour « À garder » (le pool commence à 10 parties). */
+export const KEEP_GAMES = 15;
 export const KEEP_WR = 51;
 export const POTENTIAL_STATS = 55;
 export const MEDIAN_STATS = 50;
@@ -64,59 +68,62 @@ export function statsLevel(r: Radar): StatsLevel | null {
   const m = r.margin ?? 0;
   return r.score - m > MEDIAN_STATS ? "above" : r.score + m < MEDIAN_STATS ? "below" : "around";
 }
-const statsText = (r: Radar) => `stats ${nf1(r.score!)}${r.margin != null ? ` ± ${nf1(r.margin)}` : ""} (50 = médiane)`;
+const statsText = (r: Radar, ref: string) => `stats ${nf1(r.score!)}${r.margin != null ? ` ± ${nf1(r.margin)}` : ""} (50 = médiane ${ref})`;
 
 /** Classe un champion du pool (au moins 10 parties dans le rôle). */
-export function classifyPool(p: PoolPick, radar: Radar | null): PotentialEntry {
+export function classifyPool(p: PoolPick, radar: Radar | null, ref = "Émeraude"): PotentialEntry {
   const wr = p.adjustedWinRate, g = p.games, s = radar?.score ?? null;
   const few = g < CONFIRM_GAMES;
   const wrText = `${nf1(wr)} % de victoires (lissé) sur ${g} parties`;
   const base = { championId: p.championId, games: g, winRate: wr, radar, score: p.score, provisional: few };
   const confirm = few ? ` À confirmer : moins de ${CONFIRM_GAMES} parties.` : "";
+  const keepOk = wr >= KEEP_WR && g >= KEEP_GAMES;
+  // Gagne, mais trop peu de parties pour « À garder » : dit pourquoi.
+  const notYet = wr >= KEEP_WR && !keepOk ? ` Win rate lissé ≥ ${KEEP_WR} %, mais moins de ${KEEP_GAMES} parties : pas encore « À garder ».` : "";
 
   if (s == null || !radar) {
-    const group: PotentialGroup = wr >= KEEP_WR ? "keep" : wr < SHELVE_WR ? "shelve" : "neutral";
+    const group: PotentialGroup = keepOk ? "keep" : wr < SHELVE_WR ? "shelve" : "neutral";
     return { ...base, group, provisional: true, text: `${wrText}. Stats de jeu pas encore disponibles (moins de 5 parties relues) : classement provisoire, sur le win rate seul.` };
   }
   const { strong, weak } = axesText(radar);
-  const stats = statsText(radar);
+  const stats = statsText(radar, ref);
   const level = statsLevel(radar)!;
-  if (wr >= KEEP_WR && level !== "below") {
+  if (keepOk && level !== "below") {
     return { ...base, group: "keep", text: `${wrText}, ${stats}, ${level === "above" ? "au-dessus de la médiane" : "autour de la médiane (marge comprise)"}${strong ? `, points forts : ${strong}` : ""} : à garder.${confirm}` };
   }
-  if (wr >= KEEP_WR) {
+  if (keepOk) {
     return { ...base, group: "keep", text: `Tu gagnes (${wrText}), mais ${stats}, sous la médiane : à consolider sur ${weak || "l'ensemble des axes"}.${confirm}` };
   }
   if (level === "above") {
-    return { ...base, group: "potential", text: `${stats}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, mais ${wrText} : potentiel à développer.${confirm}` };
+    return { ...base, group: "potential", text: `${stats}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, mais ${wrText} : potentiel à développer.${confirm}${notYet}` };
   }
   if (level === "around") {
     return few
-      ? { ...base, group: "potential", text: `${stats}, autour de la médiane, et ${wrText} : potentiel à confirmer (moins de ${CONFIRM_GAMES} parties).` }
+      ? { ...base, group: "potential", text: `${stats}, autour de la médiane, et ${wrText} : potentiel à confirmer (moins de ${CONFIRM_GAMES} parties).${notYet}` }
       : { ...base, group: "neutral", text: `${stats}, autour de la médiane, et ${wrText} : neutre, pas prioritaire.` };
   }
   if (wr >= SHELVE_WR) {
-    return { ...base, group: "neutral", text: `${wrText}, mais ${stats}, sous la médiane sur ${weak || "plusieurs axes"} : neutre, pas prioritaire.${confirm}` };
+    return { ...base, group: "neutral", text: `${wrText}, mais ${stats}, sous la médiane sur ${weak || "plusieurs axes"} : neutre, pas prioritaire.${confirm}${notYet}` };
   }
   return { ...base, group: "shelve", text: `${stats}, sous la médiane sur ${weak || "plusieurs axes"}, et ${wrText} : à mettre de côté.${confirm}` };
 }
 
 /** Champion joué 5 à 9 fois (hors pool) : « Potentiel à développer » seulement avec des stats au-dessus de la médiane, marge comprise. */
-export function classifyTried(t: TriedChampion, radar: Radar | null): PotentialEntry | null {
+export function classifyTried(t: TriedChampion, radar: Radar | null, ref = "Émeraude"): PotentialEntry | null {
   if (!radar?.score || statsLevel(radar) !== "above") return null;
   const { strong } = axesText(radar);
   return {
     championId: t.championId, group: "potential", games: t.games, winRate: (t.wins / t.games) * 100, radar, score: null, provisional: true,
-    text: `${statsText(radar)}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, sur seulement ${t.games} parties (${t.wins} victoire${t.wins > 1 ? "s" : ""}) : potentiel à développer. À confirmer : moins de ${CONFIRM_GAMES} parties.`,
+    text: `${statsText(radar, ref)}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, sur seulement ${t.games} parties (${t.wins} victoire${t.wins > 1 ? "s" : ""}) : potentiel à développer. À confirmer : moins de ${CONFIRM_GAMES} parties.`,
   };
 }
 
 export interface PotentialGroups { keep: PotentialEntry[]; potential: PotentialEntry[]; neutral: PotentialEntry[]; shelve: PotentialEntry[] }
 
-export function potentialGroups(pool: PoolPick[], tried: TriedChampion[], radars: Map<number, Radar | null>): PotentialGroups {
+export function potentialGroups(pool: PoolPick[], tried: TriedChampion[], radars: Map<number, Radar | null>, ref = "Émeraude"): PotentialGroups {
   const entries = [
-    ...pool.map((p) => classifyPool(p, radars.get(p.championId) ?? null)),
-    ...tried.flatMap((t) => { const e = classifyTried(t, radars.get(t.championId) ?? null); return e ? [e] : []; }),
+    ...pool.map((p) => classifyPool(p, radars.get(p.championId) ?? null, ref)),
+    ...tried.flatMap((t) => { const e = classifyTried(t, radars.get(t.championId) ?? null, ref); return e ? [e] : []; }),
   ];
   const by = (g: PotentialGroup) => entries.filter((e) => e.group === g)
     .sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity) || (b.radar?.score ?? 0) - (a.radar?.score ?? 0));

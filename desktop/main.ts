@@ -1,5 +1,6 @@
 // Processus principal de l'application de bureau : icône dans la zone de notification, fenêtre d'état,
 // lancement au démarrage. Aucune console : en version installée, rien ne s'affiche hors de nos fenêtres.
+import { DEFAULT_REF_TIER, isRefTier } from "./analysis/ref-tier.ts";
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -257,6 +258,7 @@ function state(): AppState {
     collector: collector?.state ?? { kind: "off", reason: "no-key" },
     collectorPaused: settings?.collectorPaused ?? false,
     excludedChampions: settings?.excludedChampions ?? [],
+    refTier: settings?.refTier ?? DEFAULT_REF_TIER,
     problems: config.problems,
     openAtLogin: openAtLogin(),
     dev,
@@ -445,8 +447,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
   ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => engine.call("metaView", Number(scope)));
   ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
-  ipcMain.handle(IPC.getAnalysis, (_e, key: unknown, filter: unknown) => engine.call("analysis", typeof key === "string" ? key : null, filter ? cleanFilter(filter) : ANY_FILTER, excludedKeys()));
-  ipcMain.handle(IPC.getOverview, (_e, filter: unknown, compare: unknown) => engine.call("overview", cleanFilter(filter), typeof compare === "number" ? compare : null, excludedKeys()));
+  ipcMain.handle(IPC.getAnalysis, (_e, key: unknown, filter: unknown) => engine.call("analysis", typeof key === "string" ? key : null, filter ? cleanFilter(filter) : ANY_FILTER, excludedKeys(), settings.refTier));
+  ipcMain.handle(IPC.setRefTier, (_e, tier: unknown) => {
+    if (isRefTier(tier)) { settings.refTier = tier; saveSettings(settingsFile, settings); }
+    pushState();
+    return state();
+  });
+  ipcMain.handle(IPC.getOverview, (_e, filter: unknown, compare: unknown) => engine.call("overview", cleanFilter(filter), typeof compare === "number" ? compare : null, excludedKeys(), settings.refTier));
   ipcMain.handle(IPC.getGoals, () => getGoalsView());
   ipcMain.handle(IPC.restartGoals, () => {
     const d = new Date(); d.setHours(0, 0, 0, 0);
@@ -473,7 +480,7 @@ function registerIpc(): void {
       return { ok: false, message: `Le client a refusé l'import (${e instanceof Error ? e.message : String(e)}).` };
     }
   });
-  ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys()));
+  ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier));
   ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
     // Seulement des champions qui existent (identifiants Data Dragon).
     settings.excludedChampions = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string" && !!findChamp(x)?.id))] : settings.excludedChampions;

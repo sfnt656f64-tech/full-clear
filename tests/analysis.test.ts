@@ -47,7 +47,7 @@ describe("analyse d'après-partie", () => {
     const cs = a.focus.find((f) => f.key === "cs10")!;
     expect(cs.trend).toEqual([43, 44, 45, 46, 47, 48, 49, 50, 51, 52]); // de la plus ancienne à la plus récente
     expect(cs.progress).toBeGreaterThan(0);
-    expect(cs.text).toMatch(/CS à 10 min : 47,5 en moyenne, contre 60 en Émeraude\+.*En progrès/);
+    expect(cs.text).toMatch(/CS à 10 min : 47,5 en moyenne, contre 60 en Émeraude \(mieux.*En progrès/);
     expect(a.focusGames).toBe(10);
   });
 });
