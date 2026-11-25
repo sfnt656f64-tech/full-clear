@@ -2,24 +2,27 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://ddragon.leagueoflegends.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: https://ddragon.leagueoflegends.com; frame-src 'self'">
   <title>Kayn Sim</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header>
-    <img src="../icon.png" alt="" width="28" height="28">
-    <h1>Kayn Sim</h1>
-    <span id="version" class="muted"></span>
-  </header>
+<body class="app">
+  <aside class="side">
+    <div class="brand">
+      <img src="../icon.png" alt="" width="28" height="28">
+      <div><h1>Kayn Sim</h1><span id="version" class="muted small"></span></div>
+    </div>
+    <nav class="side-nav" role="tablist" aria-orientation="vertical">
+      <button type="button" role="tab" data-tab="home" aria-selected="true">Accueil</button>
+      <button type="button" role="tab" data-tab="draft">Draft<span id="draft-dot" class="dot" hidden></span></button>
+      <button type="button" role="tab" data-tab="analysis">Progresser</button>
+      <button type="button" role="tab" data-tab="champions">Champions</button>
+      <span class="side-gap"></span>
+      <button type="button" role="tab" data-tab="settings">Réglages</button>
+    </nav>
+  </aside>
 
-  <nav class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="home" aria-selected="true">Accueil</button>
-    <button type="button" role="tab" data-tab="draft">Draft<span id="draft-dot" class="dot" hidden></span></button>
-    <button type="button" role="tab" data-tab="analysis">Analyse</button>
-    <button type="button" role="tab" data-tab="collect">Collecte</button>
-    <button type="button" role="tab" data-tab="settings">Réglages</button>
-  </nav>
+  <div class="content">
 
   <!-- ===================== Accueil ===================== -->
   <main id="tab-home" class="tab" role="tabpanel">
@@ -31,15 +34,17 @@
 
     <button id="home-goal" type="button" class="summary-line" hidden><span id="home-goal-text"></span><span class="muted small">Objectifs ›</span></button>
 
-    <section>
-      <h2>Ton top 3</h2>
-      <div id="top3"><p class="muted small">Calcul…</p></div>
-      <div class="row">
-        <button id="col-reco" type="button">Champions recommandés</button>
-        <button id="col-stats" type="button">Mes stats</button>
-        <button id="col-meta" type="button">Méta</button>
-      </div>
-    </section>
+    <div class="home-grid">
+      <section>
+        <h2>Pool conseillé</h2>
+        <div id="home-advice"><p class="muted small">Calcul…</p></div>
+        <div class="row"><button id="home-reco" type="button" class="link">Champions recommandés ›</button></div>
+      </section>
+      <section>
+        <h2>Dernière partie analysée</h2>
+        <div id="home-last"><p class="muted small">Calcul…</p></div>
+      </section>
+    </div>
 
     <section>
       <h2>En jeu</h2>
@@ -125,7 +130,7 @@
         <div class="table-scroll"><table id="ov-table" class="ov-table"></table></div>
         <p class="small muted">Couleurs : par rapport à tes autres champions d'au moins 20 parties, sur leur position face à la référence de chaque saison (vert = ton meilleur, rouge = ton plus faible ; rien en dessous de 20 parties). Survol : médiane du champion au niveau de référence, quand la méta en a assez. Clic sur un nom : le choisir dans le filtre.</p>
       </section>
-      <p id="ov-empty" class="muted" hidden>Aucune partie analysée pour ces filtres. La collecte relit tes parties (onglet Collecte).</p>
+      <p id="ov-empty" class="muted" hidden>Aucune partie analysée pour ces filtres. La collecte relit tes parties (Réglages › Collecte).</p>
     </div>
 
     <!-- Partie par partie -->
@@ -135,7 +140,7 @@
           <select id="an-game" aria-label="Partie analysée"></select>
         </div>
         <p id="an-summary" class="small muted"></p>
-        <p id="an-empty" class="muted" hidden>Pas de partie analysée pour ces filtres : la collecte relit tes parties (onglet Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
+        <p id="an-empty" class="muted" hidden>Pas de partie analysée pour ces filtres : la collecte relit tes parties (Réglages › Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
       </section>
       <section id="an-map-sec">
         <h2>Carte de tes kills et de tes morts</h2>
@@ -164,8 +169,22 @@
     </div>
   </main>
 
-  <!-- ===================== Collecte ===================== -->
-  <main id="tab-collect" class="tab" role="tabpanel" hidden>
+  <!-- ===================== Champions ===================== -->
+  <main id="tab-champions" class="tab tab-frames" role="tabpanel" hidden>
+    <nav class="subnav" role="tablist">
+      <button type="button" role="tab" data-sub="reco" aria-selected="true">Recommandés et pool conseillé</button>
+      <button type="button" role="tab" data-sub="stats">Mes stats</button>
+      <button type="button" role="tab" data-sub="meta">Méta</button>
+      <button type="button" role="tab" data-sub="sim">Simulateur Kayn</button>
+    </nav>
+    <iframe id="frame-reco" class="frame" title="Champions recommandés" data-src="../reco-window/index.html"></iframe>
+    <iframe id="frame-stats" class="frame" title="Mes stats" data-src="../stats-window/index.html" hidden></iframe>
+    <iframe id="frame-meta" class="frame" title="Méta" data-src="../meta-window/index.html" hidden></iframe>
+    <iframe id="frame-sim" class="frame" title="Simulateur Kayn" data-src="../site/index.html" hidden></iframe>
+  </main>
+
+  <!-- ===================== Réglages ===================== -->
+  <main id="tab-settings" class="tab" role="tabpanel" hidden>
     <section>
       <h2>Collecte (API Riot)</h2>
       <p id="col-status" class="status idle"></p>
@@ -177,10 +196,7 @@
       </details>
       <p class="muted small">Tourne seulement quand l'appli est ouverte, en arrière-plan et en priorité basse ; en pause du chargement à la fin de chaque partie. Reprend où elle s'était arrêtée.</p>
     </section>
-  </main>
 
-  <!-- ===================== Réglages ===================== -->
-  <main id="tab-settings" class="tab" role="tabpanel" hidden>
     <section>
       <h2>Démarrage</h2>
       <label class="check"><input id="login" type="checkbox"> Lancer au démarrage de Windows (discret, dans la zone de notification)</label>
@@ -250,6 +266,7 @@
   </main>
 
   <footer class="muted small">Fermer cette fenêtre la cache : l'appli reste dans la zone de notification. Pour quitter : clic droit sur l'icône → Quitter.</footer>
+  </div>
   <script src="renderer.js"></script>
 </body>
 </html>

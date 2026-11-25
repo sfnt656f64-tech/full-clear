@@ -55,3 +55,7 @@
 .advice-ic { width: 36px; height: 36px; border-radius: 6px; }
 
 .mini-ref { font-size: 9px; color: var(--muted); text-align: center; }
+
+/* Intégrée dans la fenêtre unique : onglets Jungle / Milieu et choix de la référence sur une ligne. */
+.filters { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.filters .tabs { margin: 0; padding: 0; position: static; }

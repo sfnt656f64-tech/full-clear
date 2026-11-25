@@ -434,9 +434,6 @@ function renderCollector(s: AppState): void {
   $("accounts").textContent = s.riotIds.length > 1 ? `Comptes suivis : ${s.riotIds.join(", ")}` : s.riotIds.length ? `Compte suivi : ${s.riotIds[0]} (ajoute RIOT_ID_2 pour un 2ᵉ compte)` : "";
 }
 
-$("col-stats").addEventListener("click", () => void window.kayn.openStatsWindow());
-$("col-meta").addEventListener("click", () => void window.kayn.openMetaWindow());
-$("col-reco").addEventListener("click", () => void window.kayn.openRecoWindow());
 $("col-pause").addEventListener("click", async () => {
   const s = await window.kayn.getState();
   render(await window.kayn.setCollectorPaused(!s.collectorPaused));
@@ -475,8 +472,8 @@ $("open-dir").addEventListener("click", () => void window.kayn.openUserDataDir()
 $<HTMLInputElement>("login").addEventListener("change", async (e) => render(await window.kayn.setOpenAtLogin((e.target as HTMLInputElement).checked)));
 // ---------- Onglets ----------
 
-type Tab = "home" | "draft" | "analysis" | "collect" | "settings";
-const TABS: Tab[] = ["home", "draft", "analysis", "collect", "settings"];
+type Tab = "home" | "draft" | "analysis" | "champions" | "settings";
+const TABS: Tab[] = ["home", "draft", "analysis", "champions", "settings"];
 
 function selectTab(tab: Tab): void {
   for (const t of TABS) {
@@ -486,9 +483,35 @@ function selectTab(tab: Tab): void {
   try { localStorage.setItem("tab", tab); } catch { /* stockage indisponible */ }
   // Après l'initialisation du script (l'onglet peut être restauré au démarrage).
   if (tab === "analysis") queueMicrotask(() => void loadAnalysis(anKey));
+  if (tab === "champions") selectSub(currentSub);
 }
+
+// ---------- Champions : vues intégrées (chargées à la première ouverture) ----------
+
+type Sub = "reco" | "stats" | "meta" | "sim";
+const SUBS: Sub[] = ["reco", "stats", "meta", "sim"];
+let currentSub: Sub = "reco";
+function selectSub(sub: Sub, hash?: string): void {
+  currentSub = sub;
+  for (const x of SUBS) {
+    const fr = $<HTMLIFrameElement>(`frame-${x}`);
+    fr.hidden = x !== sub;
+    document.querySelector(`[data-sub="${x}"]`)!.setAttribute("aria-selected", String(x === sub));
+    if (x === sub && (!fr.src || hash)) fr.src = fr.dataset.src! + (hash ? `#${hash}` : "");
+  }
+  try { localStorage.setItem("sub", sub); } catch { /* stockage indisponible */ }
+}
+for (const x of SUBS) document.querySelector(`[data-sub="${x}"]`)!.addEventListener("click", () => selectSub(x));
+try { const x = localStorage.getItem("sub") as Sub | null; if (x && SUBS.includes(x)) currentSub = x; } catch { /* idem */ }
+// Menu de l'icône, simulateur avec la draft : le processus principal demande une vue.
+window.kayn.onNavigate((n) => {
+  if (n.sub) currentSub = n.sub;
+  selectTab(n.tab);
+  if (n.tab === "champions" && n.sub) selectSub(n.sub, n.hash);
+});
 for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
-$("home-col").addEventListener("click", () => selectTab("collect"));
+$("home-col").addEventListener("click", () => selectTab("settings"));
+$("home-reco").addEventListener("click", () => { selectTab("champions"); selectSub("reco"); });
 try { const t = localStorage.getItem("tab") as Tab | null; if (t && TABS.includes(t) && t !== "draft") selectTab(t); } catch { /* idem */ }
 
 /** Onglet Draft ouvert tout seul au début de la sélection, Accueil à la fin (seulement aux changements). */
@@ -993,26 +1016,41 @@ $<HTMLInputElement>("excluded-add").addEventListener("change", async (e) => {
 window.kayn.onState(render);
 void window.kayn.getState().then(render);
 
-// ---------- Top 3 ----------
+// ---------- Accueil : pool conseillé et dernière partie ----------
 
-const nf1 = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-/** Les 3 meilleurs champions de ton pool en jungle et au milieu (score de la vue « Champions recommandés »). */
-async function renderTop3(): Promise<void> {
+/** Pool conseillé (jungle, puis milieu) : les champions et la raison principale. */
+async function renderHomeAdvice(): Promise<void> {
   const r = await window.kayn.getRecommendations().catch(() => null);
   if (!r) return;
   const rows = r.roles.map((role) => {
-    const top = role.pool.slice(0, 3);
+    const a = r.advice[role.role];
     return h("div", { class: "top3-row" },
       h("span", { class: "top3-role" }, role.role === "JUNGLE" ? "Jungle" : "Milieu"),
-      ...(top.length ? top.map((p, i) => {
+      ...(a?.picks.length ? a.picks.map((p) => {
         const ch = champByKey(p.championId);
         const img = h("img", { src: ch?.image ? `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${ch.image}` : "", alt: "", class: "ic" });
-        return h("span", { class: "top3-pick", title: [`Score ${nf1(p.score)} · ${p.games} parties · ${Math.round(p.winRate)} %`, ...p.reasons].join("\n") },
-          `${i + 1}.`, img, ch?.name ?? `#${p.championId}`, p.provisional ? h("span", { class: "muted small" }, " (provisoire)") : null);
-      }) : [h("span", { class: "muted small" }, "pas assez de parties dans ce rôle")]));
+        return h("span", { class: "top3-pick", title: p.why.join(" · ") }, img, ch?.name ?? `#${p.championId}`, p.provisional ? h("span", { class: "muted small" }, " (provisoire)") : null);
+      }) : [h("span", { class: "muted small" }, "pas encore de parties dans ce rôle")]),
+      a?.fromMeta ? h("span", { class: "muted small" }, " · d'après la méta") : null);
   });
-  $("top3").replaceChildren(...rows, h("p", { class: "muted small" }, "Survole un champion pour le détail ; « Champions recommandés » pour le calcul complet."));
+  const j = r.advice.JUNGLE?.coverage;
+  $("home-advice").replaceChildren(...rows, j ? h("p", { class: "muted small" }, `Jungle : ces champions couvrent ${Math.round((j.games / j.total) * 100)} % de tes parties de la saison. Survole un champion pour le détail.`) : "");
 }
-void renderTop3();
-window.setInterval(() => void renderTop3(), 120_000);
+
+/** Dernière partie analysée : résultat, et accès à son analyse. */
+async function renderHomeLast(): Promise<void> {
+  const v = await window.kayn.getAnalysis(null, { championId: null, role: null, period: { kind: "all" }, account: null }).catch(() => null);
+  const g = v?.games[0];
+  if (!g || !v?.analysis) { $("home-last").replaceChildren(h("p", { class: "muted small" }, "Pas encore de partie analysée.")); return; }
+  const open = h("button", { type: "button", class: "link" }, "Voir l'analyse ›");
+  open.addEventListener("click", () => { anViewMode = "game"; anKey = g.key; for (const x of document.querySelectorAll(".an-views button")) x.setAttribute("aria-selected", String((x as HTMLElement).dataset.view === "game")); selectTab("analysis"); });
+  const top = v.analysis.focus[0];
+  $("home-last").replaceChildren(
+    h("p", {}, h("b", {}, champName(g.championId)), ` · ${g.win ? "victoire" : "défaite"} · ${g.kda} · ${new Date(g.startMs).toLocaleDateString("fr-FR")}`),
+    top ? h("p", { class: "small" }, "À travailler : ", top.text) : h("p", { class: "small muted" }, "Rien de marqué sur tes dernières parties."),
+    h("div", { class: "row" }, open));
+}
+
+function renderHome(): void { void renderHomeAdvice(); void renderHomeLast(); }
+renderHome();
+window.setInterval(renderHome, 120_000);

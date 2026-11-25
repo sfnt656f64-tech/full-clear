@@ -145,6 +145,8 @@ export interface KaynApi {
   openRecoWindow(): Promise<void>;
   /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
   getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
+  /** Navigation demandée par le processus principal (menu de l'icône, simulateur). */
+  onNavigate(cb: (nav: Navigation) => void): void;
   /** Niveau de référence des comparaisons (Analyse, Champions). */
   setRefTier(tier: RefTier): Promise<AppState>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
@@ -182,6 +184,7 @@ export const IPC = {
   openRecoWindow: "kayn:open-reco-window",
   getAnalysis: "kayn:get-analysis",
   setRefTier: "kayn:set-ref-tier",
+  navigate: "kayn:navigate",
   getOverview: "kayn:get-overview",
   getGoals: "kayn:get-goals",
   restartGoals: "kayn:restart-goals",
@@ -212,3 +215,6 @@ export const OVERLAY_IPC = {
   moving: "overlay:moving",
   height: "overlay:height",
 } as const;
+
+/** Vue de la fenêtre unique : onglet, sous-vue de Champions, ancre du simulateur (draft). */
+export interface Navigation { tab: "home" | "draft" | "analysis" | "champions" | "settings"; sub?: "reco" | "stats" | "meta" | "sim"; hash?: string }

@@ -16,7 +16,7 @@ import { DEFAULT_GOALS, type GoalsView } from "./analysis/goals.ts";
 import type { StatBuild } from "./coach/stat-build.ts";
 import { EngineClient } from "./data/engine-client.ts";
 import { findChamp } from "../src/data/champions";
-import { IPC, type AppState } from "./ipc.ts";
+import { IPC, type AppState, type Navigation } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildOverlayView, type OverlayView } from "./next-item.ts";
 import { pregameTips, tipsAt } from "./coach/pregame.ts";
@@ -266,55 +266,23 @@ function state(): AppState {
 }
 
 function pushState(): void {
-  if (!win && !statsWin) return;
+  if (!win) return;
   const s = state();
-  win?.webContents.send(IPC.state, s);
-  statsWin?.webContents.send(IPC.state, s);
-}
-
-let statsWin: BrowserWindow | null = null;
-let metaWin: BrowserWindow | null = null;
-let recoWin: BrowserWindow | null = null;
-
-/** Fenêtre d'outil (« Mes stats », « Méta ») : une seule de chaque, ré-affichée si déjà ouverte. */
-function toolWindow(existing: BrowserWindow | null, title: string, page: string, width: number, onClosed: () => void): BrowserWindow {
-  if (existing) {
-    if (existing.isMinimized()) existing.restore();
-    existing.focus();
-    return existing;
+  // Fenêtre unique : la page principale et ses vues intégrées (Mes stats, Méta, Champions recommandés).
+  for (const f of win.webContents.mainFrame.framesInSubtree) {
+    try { f.send(IPC.state, s); } catch { /* cadre en cours de chargement */ }
   }
-  const w = new BrowserWindow({
-    width,
-    height: 720,
-    minWidth: 640,
-    minHeight: 400,
-    title,
-    icon: join(here, "icon.png"),
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: "#14141c",
-    webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
-  });
-  w.removeMenu();
-  w.on("closed", onClosed);
-  w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  w.webContents.on("will-navigate", (e) => e.preventDefault());
-  void w.loadFile(join(here, page));
-  w.once("ready-to-show", () => w.show());
-  return w;
 }
 
-function showStatsWindow(): void {
-  statsWin = toolWindow(statsWin, "Kayn Sim · Mes stats", "stats-window/index.html", 1080, () => { statsWin = null; });
+/** Affiche la fenêtre et ouvre une vue (onglet, sous-vue, ancre du simulateur). */
+function navigate(nav: Navigation): void {
+  showWindow();
+  const send = () => win?.webContents.send(IPC.navigate, nav);
+  if (win?.webContents.isLoading()) win.webContents.once("did-finish-load", send); else send();
 }
-
-function showMetaWindow(): void {
-  metaWin = toolWindow(metaWin, "Kayn Sim · Méta", "meta-window/index.html", 1240, () => { metaWin = null; });
-}
-
-function showRecoWindow(): void {
-  recoWin = toolWindow(recoWin, "Kayn Sim · Champions recommandés", "reco-window/index.html", 1180, () => { recoWin = null; });
-}
+const showStatsWindow = () => navigate({ tab: "champions", sub: "stats" });
+const showMetaWindow = () => navigate({ tab: "champions", sub: "meta" });
+const showRecoWindow = () => navigate({ tab: "champions", sub: "reco" });
 
 const ANY_FILTER: OverviewFilter = { championId: null, role: null, period: { kind: "all" }, account: null };
 
@@ -345,16 +313,17 @@ function getGoalsView(): Promise<GoalsView> {
 function showWindow(focus = true): void {
   if (!win) {
     win = new BrowserWindow({
-      width: 460,
-      height: 720,
-      minWidth: 380,
-      minHeight: 420,
+      width: 1240,
+      height: 820,
+      minWidth: 900,
+      minHeight: 560,
       title: "Kayn Sim",
       icon: join(here, "icon.png"),
       show: false,
       autoHideMenuBar: true,
       backgroundColor: "#14141c",
-      webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+      // Vues intégrées (Champions) : le pont de preload y est aussi exposé (pages locales de l'appli seulement).
+      webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, nodeIntegrationInSubFrames: true },
     });
     win.removeMenu();
     // Fermer la fenêtre la cache seulement : l'appli reste dans la zone de notification.
@@ -377,9 +346,9 @@ function refreshTrayMenu(): void {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Ouvrir Kayn Sim", click: () => showWindow() },
+    { label: "Champions recommandés", click: () => showRecoWindow() },
     { label: "Mes stats", click: () => showStatsWindow() },
     { label: "Méta", click: () => showMetaWindow() },
-    { label: "Champions recommandés", click: () => showRecoWindow() },
     { type: "separator" },
     {
       label: `Masquer / afficher l'overlay (${displayAccelerator(settings.shortcuts.toggle)})`,
@@ -497,7 +466,8 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.openUserDataDir, async () => { await shell.openPath(app.getPath("userData")); });
   ipcMain.handle(IPC.openDraftInSimulator, async () => {
-    if (draft) await shell.openExternal(`${config.siteUrl.replace(/#.*$/, "")}#${draft.link}`);
+    // Simulateur intégré (Champions › Simulateur Kayn), avec la draft en cours.
+    if (draft) navigate({ tab: "champions", sub: "sim", hash: draft.link });
   });
 }
 

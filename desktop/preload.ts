@@ -1,6 +1,6 @@
 // Pont minimal et typé entre la fenêtre (sans accès à Node) et le processus principal.
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type AppState, type KaynApi } from "./ipc.ts";
+import { IPC, type AppState, type KaynApi, type Navigation } from "./ipc.ts";
 
 const api: KaynApi = {
   getState: () => ipcRenderer.invoke(IPC.getState),
@@ -30,6 +30,7 @@ const api: KaynApi = {
   setShortcut: (name, acc) => ipcRenderer.invoke(IPC.setShortcut, name, acc),
   setCapturing: (on) => ipcRenderer.invoke(IPC.setCapturing, on),
   onState: (cb) => { ipcRenderer.on(IPC.state, (_e, s: AppState) => cb(s)); },
+  onNavigate: (cb) => { ipcRenderer.on(IPC.navigate, (_e, n: Navigation) => cb(n)); },
 };
 
 contextBridge.exposeInMainWorld("kayn", api);
