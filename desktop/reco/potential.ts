@@ -4,13 +4,15 @@ import { AXES, type Radar } from "../analysis/radar.ts";
 import type { PoolPick } from "./recommend.ts";
 
 /**
- * Seuils (réglables). Les groupes couvrent tous les cas, sans trou :
+ * Seuils (réglables). Les stats ont une marge d'erreur (± m) : elles sont « au-dessus de la médiane » si toute la
+ * marge est au-dessus de 50 (stats − m > 50), « sous la médiane » si toute la marge est en dessous (stats + m < 50),
+ * « autour de la médiane » sinon. Les groupes couvrent tous les cas, sans trou :
  *
- *   win rate lissé ≥ 51 %                  → À garder (stats < 50 : « à consolider », axes cités)
- *   win rate lissé < 51 %, stats ≥ 55       → Potentiel à développer
- *   win rate lissé < 51 %, stats 50 à 55    → Neutre, pas prioritaire (moins de 20 parties : Potentiel, à confirmer)
- *   win rate lissé 50 à 51 %, stats < 50    → Neutre, pas prioritaire
- *   win rate lissé < 50 %, stats < 50       → À mettre de côté
+ *   win rate lissé ≥ 51 %                        → À garder (stats sous la médiane : « à consolider », axes cités)
+ *   win rate lissé < 51 %, stats au-dessus        → Potentiel à développer
+ *   win rate lissé < 51 %, stats autour           → Neutre, pas prioritaire (moins de 20 parties : Potentiel, à confirmer)
+ *   win rate lissé 50 à 51 %, stats sous          → Neutre, pas prioritaire
+ *   win rate lissé < 50 %, stats sous             → À mettre de côté
  *
  * Moins de 20 parties : le classement est marqué « à confirmer ». Sans radar (moins de 5 parties relues) : classement
  * provisoire sur le win rate seul.
@@ -55,6 +57,15 @@ export function axesText(r: Radar): { strong: string; weak: string } {
   };
 }
 
+export type StatsLevel = "above" | "around" | "below";
+/** Position des stats par rapport à la médiane, marge d'erreur comprise. */
+export function statsLevel(r: Radar): StatsLevel | null {
+  if (r.score == null) return null;
+  const m = r.margin ?? 0;
+  return r.score - m > MEDIAN_STATS ? "above" : r.score + m < MEDIAN_STATS ? "below" : "around";
+}
+const statsText = (r: Radar) => `stats ${nf1(r.score!)}${r.margin != null ? ` ± ${nf1(r.margin)}` : ""} (50 = médiane)`;
+
 /** Classe un champion du pool (au moins 10 parties dans le rôle). */
 export function classifyPool(p: PoolPick, radar: Radar | null): PotentialEntry {
   const wr = p.adjustedWinRate, g = p.games, s = radar?.score ?? null;
@@ -68,17 +79,18 @@ export function classifyPool(p: PoolPick, radar: Radar | null): PotentialEntry {
     return { ...base, group, provisional: true, text: `${wrText}. Stats de jeu pas encore disponibles (moins de 5 parties relues) : classement provisoire, sur le win rate seul.` };
   }
   const { strong, weak } = axesText(radar);
-  const stats = `stats ${nf1(s)} (50 = médiane)`;
-  if (wr >= KEEP_WR && s >= MEDIAN_STATS) {
-    return { ...base, group: "keep", text: `${wrText}, ${stats}${strong ? `, points forts : ${strong}` : ""} : à garder.${confirm}` };
+  const stats = statsText(radar);
+  const level = statsLevel(radar)!;
+  if (wr >= KEEP_WR && level !== "below") {
+    return { ...base, group: "keep", text: `${wrText}, ${stats}, ${level === "above" ? "au-dessus de la médiane" : "autour de la médiane (marge comprise)"}${strong ? `, points forts : ${strong}` : ""} : à garder.${confirm}` };
   }
   if (wr >= KEEP_WR) {
-    return { ...base, group: "keep", text: `Tu gagnes (${wrText}), mais ${stats} : à consolider sur ${weak || "l'ensemble des axes"}.${confirm}` };
+    return { ...base, group: "keep", text: `Tu gagnes (${wrText}), mais ${stats}, sous la médiane : à consolider sur ${weak || "l'ensemble des axes"}.${confirm}` };
   }
-  if (s >= POTENTIAL_STATS) {
-    return { ...base, group: "potential", text: `${stats}${strong ? `, points forts : ${strong}` : ""}, mais ${wrText} : potentiel à développer.${confirm}` };
+  if (level === "above") {
+    return { ...base, group: "potential", text: `${stats}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, mais ${wrText} : potentiel à développer.${confirm}` };
   }
-  if (s >= MEDIAN_STATS) {
+  if (level === "around") {
     return few
       ? { ...base, group: "potential", text: `${stats}, autour de la médiane, et ${wrText} : potentiel à confirmer (moins de ${CONFIRM_GAMES} parties).` }
       : { ...base, group: "neutral", text: `${stats}, autour de la médiane, et ${wrText} : neutre, pas prioritaire.` };
@@ -89,13 +101,13 @@ export function classifyPool(p: PoolPick, radar: Radar | null): PotentialEntry {
   return { ...base, group: "shelve", text: `${stats}, sous la médiane sur ${weak || "plusieurs axes"}, et ${wrText} : à mettre de côté.${confirm}` };
 }
 
-/** Champion joué 5 à 9 fois (hors pool) : « Potentiel à développer » seulement avec des stats ≥ 55. */
+/** Champion joué 5 à 9 fois (hors pool) : « Potentiel à développer » seulement avec des stats au-dessus de la médiane, marge comprise. */
 export function classifyTried(t: TriedChampion, radar: Radar | null): PotentialEntry | null {
-  if (!radar?.score || radar.score < POTENTIAL_STATS) return null;
+  if (!radar?.score || statsLevel(radar) !== "above") return null;
   const { strong } = axesText(radar);
   return {
     championId: t.championId, group: "potential", games: t.games, winRate: (t.wins / t.games) * 100, radar, score: null, provisional: true,
-    text: `stats ${nf1(radar.score)} (50 = médiane)${strong ? `, points forts : ${strong}` : ""}, sur seulement ${t.games} parties (${t.wins} victoire${t.wins > 1 ? "s" : ""}) : potentiel à développer. À confirmer : moins de ${CONFIRM_GAMES} parties.`,
+    text: `${statsText(radar)}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, sur seulement ${t.games} parties (${t.wins} victoire${t.wins > 1 ? "s" : ""}) : potentiel à développer. À confirmer : moins de ${CONFIRM_GAMES} parties.`,
   };
 }
 

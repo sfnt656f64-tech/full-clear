@@ -99,8 +99,9 @@ export function poolAdvice(input: AdviceInput): PoolAdvice {
     // Base : le score du pool (« À garder » avant « Potentiel ») ; bonus de complémentarité avec les champions déjà choisis.
     // Complémentarité : des dégâts différents valent environ 5 points de score (un champion de plus du même type
     // apporte peu à la draft) ; un style différent ou une compo couverte en plus, 2 points.
-    // Moins de 20 parties : fortement pénalisé (on se concentre sur ce qui est établi) ; les stats comptent un peu.
-    const base = (e: PotentialEntry) => (e.score ?? 50) + (e.group === "keep" ? 1 : 0) + 0.2 * ((e.radar?.score ?? 50) - 50) + (e.provisional ? -6 : 0);
+    // On se concentre sur ce qui est établi : moins de 20 parties fortement pénalisé, bonus aux parties jouées
+    // (jusqu'à 4,5 points à 150 parties). Les stats comptent un peu.
+    const base = (e: PotentialEntry) => (e.score ?? 50) + (e.group === "keep" ? 1 : 0) + 0.2 * ((e.radar?.score ?? 50) - 50) + (e.provisional ? -6 : 0) + 0.03 * Math.min(e.games, 150);
     const left = [...candidates];
     while (chosen.length < 3 && left.length) {
       const scored = left.map((e) => {

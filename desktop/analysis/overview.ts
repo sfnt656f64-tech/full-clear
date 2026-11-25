@@ -64,6 +64,9 @@ export class MetaRef {
     let xs = this.cache.get(key);
     if (!xs) {
       xs = rows.map((r) => m.value(r)).filter((x): x is number => x != null).sort((a, b) => a - b);
+      // Mesure tirée des chronologies (une partie de méta sur 40 environ) : trop peu de valeurs pour le champion,
+      // on se compare à tout le rôle.
+      if (champion && xs.length < MIN_META_CHAMP) xs = this.sorted(m, role, null);
       this.cache.set(key, xs);
     }
     return xs;

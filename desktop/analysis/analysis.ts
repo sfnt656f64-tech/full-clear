@@ -15,8 +15,11 @@ export interface AnalysisGame {
   /** Mesures de ton adversaire direct (même rôle, même partie) : référence des saisons sans méta. */
   opp?: Values | null;
 }
+export interface AnalysisGame extends DuelValues {}
 export interface MyEventRow { t: number; kind: "kill" | "death" | "assist"; x: number; y: number; otherChamp: number }
-export interface MetaMetricRow {
+export interface MetaMetricRow extends DuelValues {
+  /** Partie et participant (jointure avec les chronologies de méta). */
+  matchId?: string; participantId?: number;
   championId: number; win: boolean; cs10: number | null; cs15: number | null; gold15: number | null; deaths15: number | null;
   kills15: number | null; assists15: number | null; teamKills15: number | null; objTeam: number | null; objMine: number | null;
   /** Toute la partie (participation après 15 min, morts par 10 min, part des dégâts). */
@@ -24,7 +27,19 @@ export interface MetaMetricRow {
   deaths?: number; durationS?: number; damage?: number | null; teamDamage?: number | null;
 }
 
-export type Values = Pick<AnalysisGame, "cs10" | "cs15" | "gold15" | "kills15" | "assists15" | "teamKills15" | "objTeam" | "objMine"> & {
+/** Mesures tirées de la chronologie, face au jungler (ou adversaire direct) de l'autre équipe. */
+export interface DuelValues {
+  /** Écarts d'or et d'XP avec ton adversaire direct à 10 min, d'or à 15 min. */
+  gd10?: number | null; xd10?: number | null; gd15?: number | null;
+  /** Participation au first blood (1 oui, 0 non). */
+  fb?: number | null;
+  /** Morts sans aucun allié adverse en assistance (1 contre 1) avant 15 min. */
+  solo15?: number | null;
+  /** Objectifs neutres avant 20 min (dragons, larves, héraut) : part prise par ton équipe (%), et nombre cédés sans contrepartie. */
+  obj20?: number | null; conc20?: number | null;
+}
+
+export type Values = Pick<AnalysisGame, "cs10" | "cs15" | "gold15" | "kills15" | "assists15" | "teamKills15" | "objTeam" | "objMine"> & DuelValues & {
   deaths15: number | null; kills?: number; assists?: number; teamKills?: number | null;
   deaths?: number; durationS?: number; damage?: number | null; teamDamage?: number | null;
 };
@@ -59,6 +74,13 @@ export const METRICS: Metric[] = [
     value: (v) => (v.deaths != null && v.durationS ? (v.deaths / v.durationS) * 600 : null) },
   { key: "dmgShare", label: "Part des dégâts de l'équipe", better: "+", group: null, unit: " %",
     value: (v) => (v.damage != null && v.teamDamage ? (v.damage / v.teamDamage) * 100 : null) },
+  { key: "gd10", label: "Écart d'or à 10 min", better: "+", group: null, unit: "", value: (v) => v.gd10 ?? null },
+  { key: "xd10", label: "Écart d'XP à 10 min", better: "+", group: null, unit: "", value: (v) => v.xd10 ?? null },
+  { key: "fb", label: "Participation au first blood", better: "+", group: null, unit: " %", value: (v) => (v.fb == null ? null : v.fb * 100) },
+  { key: "gd15", label: "Écart d'or à 15 min", better: "+", group: null, unit: "", value: (v) => v.gd15 ?? null },
+  { key: "solo15", label: "Morts en 1 contre 1 avant 15 min", better: "-", group: null, unit: "", value: (v) => v.solo15 ?? null },
+  { key: "obj20", label: "Objectifs neutres avant 20 min pris par ton équipe", better: "+", group: null, unit: " %", value: (v) => v.obj20 ?? null },
+  { key: "conc20", label: "Objectifs cédés sans contrepartie avant 20 min", better: "-", group: null, unit: "", value: (v) => v.conc20 ?? null },
 ];
 
 /** Parties de méta minimales sur ton champion pour s'y comparer (sinon : tout le rôle). */

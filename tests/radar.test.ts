@@ -9,14 +9,15 @@ let n = 0;
 const game = (over: Partial<AnalysisGame> = {}): AnalysisGame => ({
   matchId: `G${n++}`, account: "A#1", startMs: 1, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE", win: true,
   kills: 6, deaths: 3, assists: 8, cs: 200, gold15: 6000, cs15: 100, cs10: 60, teamKills: 30, kills15: 2, assists15: 3, teamKills15: 10,
-  objTeam: 4, objMine: 2, deaths15: 1, damage: 20000, teamDamage: 100000, ...over,
+  objTeam: 4, objMine: 2, deaths15: 1, damage: 20000, teamDamage: 100000, gd10: 0, xd10: 0, fb: 0.5, gd15: 0, solo15: 0.5, obj20: 50, conc20: 1, ...over,
 });
 /** Méta : valeurs réparties autour des mêmes médianes que `game()` par défaut. */
 const meta: MetaMetricRow[] = Array.from({ length: 200 }, (_, i) => {
   const d = (i % 21) - 10; // −10 … +10
   return { championId: 1, win: i % 2 === 0, cs10: 60 + d, cs15: 100 + d, gold15: 6000 + d * 50, deaths15: 1 + Math.sign(d) * (Math.abs(d) > 5 ? 1 : 0),
     kills15: 2, assists15: 3 + Math.round(d / 4), teamKills15: 10, objTeam: 4, objMine: 2 + Math.round(d / 5), kills: 6, assists: 8 + Math.round(d / 3), teamKills: 30,
-    deaths: 3 + Math.round(d / 4), durationS: 1800, damage: 20000 + d * 1000, teamDamage: 100000 };
+    deaths: 3 + Math.round(d / 4), durationS: 1800, damage: 20000 + d * 1000, teamDamage: 100000,
+    gd10: d * 40, xd10: d * 30, fb: i % 2, gd15: d * 60, solo15: Math.abs(d) > 5 ? 1 : 0, obj20: 50 + d * 4, conc20: 1 + Math.sign(d) };
 });
 const ref = new MetaRef(new Map([["JUNGLE", meta]]));
 const pool = (games: number, wr: number): PoolPick => ({
@@ -45,7 +46,7 @@ describe("radar", () => {
 });
 
 describe("classement par potentiel", () => {
-  const radar = (score: number) => ({ values: [score, score, score, score, score, score], games: 20, score });
+  const radar = (score: number, margin = 2) => ({ values: [score, score, score, score, score, score], games: 20, score, margin });
 
   it("à garder : assez de parties, bon win rate lissé, bonnes stats", () => {
     expect(classifyPool(pool(40, 55), radar(60)).group).toBe("keep");
@@ -82,7 +83,7 @@ describe("classement par potentiel", () => {
 });
 
 describe("groupe neutre", () => {
-  const radar = (score: number) => ({ values: [score, score, score, score, score, score], games: 20, score });
+  const radar = (score: number, margin = 2) => ({ values: [score, score, score, score, score, score], games: 20, score, margin });
   it("au moins 20 parties, stats 50–55, win rate lissé sous 50 % : neutre, pas prioritaire", () => {
     expect(classifyPool(pool(63, 48), radar(50)).group).toBe("neutral"); // Jarvan IV
     expect(classifyPool(pool(25, 36), radar(52)).group).toBe("neutral"); // Bel'Veth
@@ -96,9 +97,27 @@ describe("groupe neutre", () => {
   });
 });
 
+describe("marge d'erreur des stats", () => {
+  const radar = (score: number, margin: number) => ({ values: [score, score, score, score, score, score], games: 30, score, margin });
+  it("au-dessus de la médiane seulement si toute la marge est au-dessus de 50", () => {
+    expect(classifyPool(pool(30, 49), radar(53, 2)).group).toBe("potential");
+    expect(classifyPool(pool(30, 49), radar(53, 5))).toMatchObject({ group: "neutral" });
+    expect(classifyPool(pool(30, 49), radar(53, 5)).text).toContain("stats 53,0 ± 5,0");
+  });
+  it("sous la médiane seulement si toute la marge est sous 50", () => {
+    expect(classifyPool(pool(30, 46), radar(46, 3)).group).toBe("shelve");
+    expect(classifyPool(pool(30, 46), radar(46, 6)).group).toBe("neutral");
+  });
+  it("le radar calcule la marge à partir des parties", () => {
+    const r = radarOf(Array.from({ length: 10 }, (_, i) => game({ cs10: i % 2 ? 70 : 50, cs15: i % 2 ? 110 : 90 })), ref)!;
+    expect(r.margin).not.toBeNull();
+    expect(r.margin!).toBeGreaterThan(0);
+  });
+});
+
 describe("règles sans trou", () => {
-  const radar = (score: number) => ({ values: [score, score, score, score, score, score], games: 20, score });
-  const axes = (v: number[]) => ({ values: v, games: 20, score: v.reduce((a, b) => a + b) / v.length });
+  const radar = (score: number, margin = 2) => ({ values: [score, score, score, score, score, score], games: 20, score, margin });
+  const axes = (v: number[], margin = 0.5) => ({ values: v, games: 20, score: v.reduce((a, b) => a + b) / v.length, margin });
   it("Volibear (28 parties, 50,4 % lissé, stats 47) : neutre, avec les axes faibles cités", () => {
     const e = classifyPool(pool(28, 50.4), axes([40, 52, 45, 44, 55, 49]));
     expect(e.group).toBe("neutral");

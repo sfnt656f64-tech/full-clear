@@ -25,13 +25,13 @@ import { guidePage, metaPage, type RecommendedPage } from "../runes/rune-page.ts
 import { gamePlan, type GamePlan } from "../coach/game-plan.ts";
 import { statBuild, type StatBuild } from "../coach/stat-build.ts";
 import { readEnemyItems, SHOP } from "../next-item.ts";
-import { readAllMyEvents, readAnalysisGames, readMetaMetrics, readMyEvents } from "../analysis/read.ts";
-import { analyseGame, type AnalysisGame, type MetaMetricRow, type Values } from "../analysis/analysis.ts";
+import { readAllMyEvents, readAnalysisGames, readMetaDuels, readMetaMetrics, readMyEvents } from "../analysis/read.ts";
+import { analyseGame, type AnalysisGame, type DuelValues, type MetaMetricRow, type Values } from "../analysis/analysis.ts";
 import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "../analysis/overview.ts";
 import { radarOf } from "../analysis/radar.ts";
 import { DEFAULT_GOALS, gameMetrics, goalsView, type GameMetrics, type GoalsView } from "../analysis/goals.ts";
 import { unpackDetail } from "../collector/detail.ts";
-import { opponentValues } from "../analysis/opponent.ts";
+import { myDuelValues, opponentValues } from "../analysis/opponent.ts";
 import type { DraftSnapshot } from "../champ-select.ts";
 import type { ChampLite, DraftView } from "../draft-view.ts";
 import type { LiveSnapshot } from "../live-client.ts";
@@ -101,7 +101,12 @@ export class Engine {
   private pairs(): PairIndex { return this.cached("pairs", META_TTL, () => pairIndex(readMeta(this.dbFile, this.patches(3)).parts)); }
   private shares(): RoleShares { return this.cached("shares", META_TTL, () => roleShares(this.recentMeta().parts)); }
   private ganks() { return this.cached("ganks", META_TTL, () => readGankData(this.dbFile, this.patches(3))); }
-  private metaRows(role: string): MetaMetricRow[] { return this.cached(`metaRows:${role}`, META_TTL, () => readMetaMetrics(this.dbFile, this.patches(3), role)); }
+  private metaRows(role: string): MetaMetricRow[] {
+    return this.cached(`metaRows:${role}`, META_TTL, () => {
+      const duels = readMetaDuels(this.dbFile, this.patches(3), role);
+      return readMetaMetrics(this.dbFile, this.patches(3), role).map((r) => ({ ...duels.get(`${r.matchId}|${r.participantId}`), ...r, gd15: r.gd15 }));
+    });
+  }
   private metaRef(roles: string[]): MetaRef {
     const byRole = new Map(roles.map((r) => [r, this.metaRows(r)]));
     const p = this.patches(1)[0];
@@ -121,9 +126,9 @@ export class Engine {
 
   // ---------- Tes parties (détail : décodage incrémental) ----------
 
-  private detail = new Map<string, { rowid: number; metrics: GameMetrics | null; opp: Values | null }>();
+  private detail = new Map<string, { rowid: number; metrics: GameMetrics | null; opp: Values | null; mine: DuelValues }>();
   private detailVersion = "";
-  private details(): Map<string, { rowid: number; metrics: GameMetrics | null; opp: Values | null }> {
+  private details(): Map<string, { rowid: number; metrics: GameMetrics | null; opp: Values | null; mine: DuelValues }> {
     const v = this.myVersion();
     if (v === this.detailVersion) return this.detail;
     let db: DatabaseSync | null = null;
@@ -139,7 +144,7 @@ export class Engine {
         const known = this.detail.get(key);
         if (known && known.rowid === r.rowid) continue; // déjà décodée
         const d = unpackDetail((get.get(r.rowid) as { data: Uint8Array }).data);
-        this.detail.set(key, { rowid: r.rowid, metrics: gameMetrics(d), opp: opponentValues(d) });
+        this.detail.set(key, { rowid: r.rowid, metrics: gameMetrics(d), opp: opponentValues(d), mine: myDuelValues(d) });
       }
       for (const k of [...this.detail.keys()]) if (!keep.has(k)) this.detail.delete(k);
       this.detailVersion = v;
@@ -157,7 +162,7 @@ export class Engine {
     const v = this.myVersion();
     if (this.gamesMemo?.v !== v) {
       const det = this.details();
-      this.gamesMemo = { v, games: readAnalysisGames(this.dbFile, -1, []).map((g) => ({ ...g, opp: det.get(`${g.matchId}|${g.account}`)?.opp ?? null })) };
+      this.gamesMemo = { v, games: readAnalysisGames(this.dbFile, -1, []).map((g) => { const x = det.get(`${g.matchId}|${g.account}`); return { ...x?.mine, ...g, opp: x?.opp ?? null }; }) };
     }
     const ex = new Set(excluded);
     return this.gamesMemo.games.filter((g) => !ex.has(g.championId));
