@@ -25,9 +25,9 @@ export function chooseStarter(x: Analysis): StarterChoice[] {
     o.push(["mosstomper", `early agressif en face (${names(early)}) : invades probables, le bouclier sécurise ton début de jungle`]);
   if (setup.length >= STARTER_GANK_ALLIES)
     o.push(["gustwalker", `${setup.length} alliés avec du CC pour suivre tes ganks (${names(setup)}) : vitesse de déplacement dans les hautes herbes pour enchaîner les ganks`]);
-  const def: StarterChoice = ["scorchclaw", "par défaut : le départ le plus joué sur Kayn (brûlure et ralentissement pour les ganks et les duels)"];
-  if (!o.length) o.push(def);
-  else o.push([def[0], "alternative : " + def[1]]);
+  // Recommandation par défaut, ou alternative quand un autre familier passe devant (sans répéter « par défaut »).
+  const why = "le départ le plus joué sur Kayn (brûlure et ralentissement pour les ganks et les duels)";
+  o.push(["scorchclaw", o.length ? `alternative : ${why}` : `par défaut : ${why}`]);
   return o;
 }
 
@@ -43,11 +43,12 @@ export function chooseBoots(x: Analysis, f: Form): BootChoice[] {
     o.push(["steelcaps", `${Math.round(x.adShare * 100)} % de dégâts physiques dont ${x.aa} auto-attaqueurs`]);
   if (x.slows >= 3 && x.ranged >= 3)
     o.push(["swiftness", `${x.slows} sources de ralentissement et ${x.ranged} champions à distance : Swiftness réduit les ralentissements`]);
-  const def: BootChoice = f === "blue"
-    ? ["lucidity", "par défaut en bleu : haste sur E/R et sur les sorts d'invocateur"]
-    : ["steelcaps", "par défaut en rouge (rester en bottes de base jusqu'aux 2 items)"];
-  if (!o.length) o.push(def);
-  else if (!o.find((b) => b[0] === def[0])) o.push([def[0], "alternative : " + def[1]]);
+  const [key, why]: BootChoice = f === "blue"
+    ? ["lucidity", "haste sur E/R et sur les sorts d'invocateur"]
+    : ["steelcaps", "rester en bottes de base jusqu'aux 2 items"];
+  const form = f === "blue" ? "en bleu" : "en rouge";
+  if (!o.length) o.push([key, `par défaut ${form} : ${why}`]);
+  else if (!o.find((b) => b[0] === key)) o.push([key, `alternative, le choix habituel ${form} : ${why}`]);
   return o;
 }
 

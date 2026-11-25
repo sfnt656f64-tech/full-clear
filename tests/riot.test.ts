@@ -162,7 +162,7 @@ describe("configuration (.env)", () => {
   it("valeurs par défaut EUW et site publié", () => {
     const cfg = loadConfig({ RIOT_API_KEY: FAKE_KEY, RIOT_ID: "Test#EUW" }, "/inexistant/.env");
     expect(cfg).toMatchObject({ gameName: "Test", tagLine: "EUW", region: "europe", platform: "euw1" });
-    expect(cfg.siteUrl).toMatch(/^https:\/\/.+\/kayn-sim\/$/);
+    expect(cfg.siteUrl).toMatch(/^https:\/\/.+\/full-clear\/$/);
   });
 
   it("message clair si la configuration manque, sans afficher la clé", () => {
@@ -218,8 +218,8 @@ describe("npm run live", () => {
   });
 
   it("le lien ne contient que des identifiants de champions, dans le fragment", () => {
-    const url = draftUrl("https://exemple.github.io/kayn-sim/", buildLiveDraft(game(), "moi", champions));
-    expect(url).toBe("https://exemple.github.io/kayn-sim/#draft=en-Gnar.Viego.Ahri.Jinx.Lulu~al-Ornn.Syndra.Kaisa.Nautilus~src-live");
+    const url = draftUrl("https://exemple.github.io/full-clear/", buildLiveDraft(game(), "moi", champions));
+    expect(url).toBe("https://exemple.github.io/full-clear/#draft=en-Gnar.Viego.Ahri.Jinx.Lulu~al-Ornn.Syndra.Kaisa.Nautilus~src-live");
     expect(url).not.toMatch(/RGAPI|moi|puuid/);
     // Caractères sûrs pour la ligne de commande Windows (pas d'espace, &, ;, ", %, ^).
     expect(url).not.toMatch(/[\s&;"%^]/);
