@@ -48,6 +48,20 @@ export function legacyChangedSince(appData: string, from = LEGACY_DIR, to = DATA
   } catch { return null; }
 }
 
+/**
+ * Renommage du dossier copié, réessayé : sous Windows, un antivirus ou l'indexeur peut tenir un instant un fichier
+ * qui vient d'être écrit (EPERM / EBUSY). Au-delà de ~2 s, l'erreur remonte (l'appli reste sur l'ancien dossier).
+ */
+function renameWithRetry(from: string, to: string): void {
+  for (let i = 0; ; i++) {
+    try { renameSync(from, to); return; } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (i >= 10 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200);
+    }
+  }
+}
+
 const isDb = (rel: string) => /^riot\.db(-wal|-shm|-journal)?$/i.test(rel);
 
 /**
@@ -88,7 +102,7 @@ export function migrateUserData(appData: string, from = LEGACY_DIR, to = DATA_DI
     for (const s of after.values()) bytes += s;
     writeFileSync(join(tmp, MARKER), JSON.stringify({ from: legacy, at: new Date().toISOString(), files: after.size, bytes }, null, 2));
     if (existsSync(target)) rmSync(target, { recursive: true, force: true }); // dossier vide
-    renameSync(tmp, target);
+    renameWithRetry(tmp, target);
     return { status: "migrated", from: legacy, files: after.size, bytes };
   } catch (e) {
     rmSync(tmp, { recursive: true, force: true });
