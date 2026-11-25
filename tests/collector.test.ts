@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Collector, type CollectorStatus } from "../desktop/collector/collector";
-import { accountKey, historyKey, idsKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { accountKey, HANDLERS, historyKey, idsKey, masteryKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { readMyMastery } from "../desktop/stats/read";
 import { at15, patchOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "../desktop/collector/my-games";
 import { KeyRefusedError, PRIORITY, RiotScheduler } from "../desktop/collector/scheduler";
 import { CollectorStore } from "../desktop/collector/store";
@@ -129,7 +130,7 @@ const ME = "puuid-me";
 function match(id: string, over: Partial<MatchV5["info"]["participants"][number]> = {}, durationS = 1800): MatchV5 {
   const base = {
     participantId: 1, championId: 141, teamPosition: "JUNGLE", win: true, kills: 8, deaths: 2, assists: 6,
-    totalMinionsKilled: 40, neutralMinionsKilled: 150, visionScore: 31,
+    totalMinionsKilled: 40, neutralMinionsKilled: 150, visionScore: 31, totalDamageDealtToChampions: 15000,
     item0: 6699, item1: 6697, item2: 0, item3: 3158, item4: 0, item5: 0, item6: 3364,
     perks: { statPerks: { offense: 5008, flex: 5008, defense: 5011 }, styles: [{ style: 8100, selections: [{ perk: 8128 }, { perk: 8143 }] }, { style: 8300, selections: [{ perk: 8347 }] }] },
   };
@@ -167,6 +168,8 @@ describe("résumé de mes parties", () => {
       matchId: "EUW1_1", account: "Moi#EUW", startMs: 2, durationS: 1800, patch: "16.23", season: 2026, championId: 141, role: "JUNGLE",
       win: true, remake: false, kills: 8, deaths: 2, assists: 6, cs: 190, vision: 31, gold15: 5015, cs15: 90,
       teamKills: 12, kills15: 1, assists15: 1, teamKills15: 3,
+      damage: 15000, teamDamage: 30000, // toi et ton allié (équipe 100)
+      cs10: null, objTeam: 0, objMine: 0, events: [], // événements sans position dans ce jeu d'essai
       items: [6699, 6697, 3158],
       perks: { primary: 8100, sub: 8300, selections: [8128, 8143, 8347], shards: [5008, 5008, 5011] },
     });
@@ -279,10 +282,14 @@ describe("collecte de mes parties", () => {
     const ctx = { store, api, now: () => now, pool: () => new Set<number>() };
     store.set(accountKey("Moi#EUW"), ME);
     scheduleAccounts(ctx, ["Moi#EUW"]);
-    // La saison d'abord, puis l'historique (une seule fois).
+    // La saison d'abord, puis la maîtrise, puis l'historique (une seule fois).
     const j = store.claimNext()!;
     expect(j.key).toBe(idsKey(ME, 0));
     store.done(j.id);
+    // Maîtrise : une fois par jour, même priorité que tes parties de la saison.
+    const m = store.claimNext()!;
+    expect(m.key).toBe(masteryKey("Moi#EUW", now));
+    store.done(m.id);
     const h = store.claimNext()!;
     expect(h.key).toBe(historyKey(ME, 0));
     store.done(h.id);
@@ -292,7 +299,24 @@ describe("collecte de mes parties", () => {
     now += 20 * 60_000;
     scheduleAccounts(ctx, ["Moi#EUW"]);
     expect(store.claimNext()?.key).toBe(idsKey(ME, 0));
+    now += 86_400_000;
+    scheduleAccounts(ctx, ["Moi#EUW"]);
+    expect(store.claimNext()?.key).toBe(masteryKey("Moi#EUW", now));
     store.close();
+  });
+
+  it("enregistre ma maîtrise de champion (points par compte)", async () => {
+    const file = tmpDb();
+    const store = new CollectorStore(file);
+    const f = (async (url: string) => {
+      expect(new URL(url).pathname).toBe(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${ME}`);
+      return json([{ championId: 141, championPoints: 250_000, championLevel: 30, lastPlayTime: 5 }, { championId: 233, championPoints: 40_000, championLevel: 9, lastPlayTime: 4 }]);
+    }) as typeof fetch;
+    const api = new RiotScheduler({ apiKey: "k", windows: FAST, fetch: f });
+    await HANDLERS.myMastery({ store, api, now: () => 0, pool: () => new Set<number>() }, { puuid: ME, riotId: "Moi#EUW" } as never);
+    store.putMyMastery("Autre#EUW", [{ championId: 141, points: 10_000, level: 3, lastPlayMs: 1 }]);
+    store.close();
+    expect(readMyMastery(file)).toEqual(new Map([[141, 260_000], [233, 40_000]]));
   });
 
   it("met le travail de côté et s'arrête sur une clé refusée", async () => {

@@ -6,12 +6,15 @@
 //                 jusqu'à ce que l'API ne renvoie plus rien), en priorité plus basse
 //   myMatch       une partie de la saison en cours + sa chronologie (2 requêtes) → my_games
 //   myOldMatch    idem pour une partie d'une saison précédente
+//   myMastery     ta maîtrise de champion (points, tous champions), une fois par jour et par compte
+//   myReread      relecture (v6) d'une de tes parties : chronologie complète (carte, objectifs)
+//   myDamage      complète une partie enregistrée avant la v7 : tes dégâts aux champions (la partie seule)
 //   myRefresh     relecture d'une partie enregistrée avant la v4 (participation aux kills), une seule fois
 import { SEASON_START } from "../../scripts/riot/season.ts";
 import { parseRiotId } from "../../scripts/riot/config.ts";
 import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
 import type { CollectorStore } from "./store.ts";
-import { summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
+import { damageOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
 import { META_LABELS, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
 
 export const QUEUE_SOLO_DUO = 420;
@@ -36,7 +39,11 @@ export const historyKey = (puuid: string, start: number) => `myHistoryIds:${puui
 export const matchKey = (matchId: string, puuid: string) => `myMatch:${matchId}:${puuid}`;
 
 /** Ajoute (ou relance si le dernier passage est ancien) la recherche de parties pour tes comptes. */
-export function scheduleAccounts(ctx: JobContext, riotIds: string[]): void {
+/** Tes parties relues pour l'analyse (v6), par compte : toutes (-1 = sans limite, comme LIMIT -1 en SQLite). */
+export const REREAD_LAST = -1;
+
+/** `force` : vérifie tout de suite les nouvelles parties (fin de partie), sans attendre REFRESH_MS. */
+export function scheduleAccounts(ctx: JobContext, riotIds: string[], force = false): void {
   for (const riotId of riotIds) {
     const key = accountKey(riotId);
     const puuid = ctx.store.get(key);
@@ -44,10 +51,54 @@ export function scheduleAccounts(ctx: JobContext, riotIds: string[]): void {
       if (!ctx.store.enqueue("account", key, PRIORITY.mine, { riotId })) ctx.store.requeue(key);
       continue;
     }
-    refreshIds(ctx, puuid, riotId);
+    refreshIds(ctx, puuid, riotId, force);
+    scheduleMastery(ctx, puuid, riotId);
+    scheduleReread(ctx, puuid, riotId);
+    scheduleDamage(ctx, puuid, riotId);
   }
   scheduleRefresh(ctx, riotIds);
 }
+
+const DAY_MS = 86_400_000;
+export const masteryKey = (riotId: string, now: number) => `myMastery:${riotId.toLocaleLowerCase()}:${Math.floor(now / DAY_MS)}`;
+
+/** Maîtrise du compte : une fois par jour (clé datée). */
+function scheduleMastery(ctx: JobContext, puuid: string, riotId: string): void {
+  ctx.store.enqueue("myMastery", masteryKey(riotId, ctx.now()), PRIORITY.mine, { puuid, riotId });
+}
+
+const myMastery: Handler = async (ctx, p: { puuid: string; riotId: string }) => {
+  const rows = (await ctx.api.get<{ championId: number; championPoints: number; championLevel: number; lastPlayTime: number }[]>(
+    "euw1", `/lol/champion-mastery/v4/champion-masteries/by-puuid/${encodeURIComponent(p.puuid)}`, PRIORITY.mine)) ?? [];
+  ctx.store.putMyMastery(p.riotId, rows.map((r) => ({ championId: r.championId, points: r.championPoints, level: r.championLevel, lastPlayMs: r.lastPlayTime })));
+};
+
+/** Relecture v6 de tes dernières parties (carte des kills et morts, objectifs) : une fois par partie. */
+function scheduleReread(ctx: JobContext, puuid: string, riotId: string): void {
+  const todo = ctx.store.gamesWithoutTimeline(riotId, REREAD_LAST);
+  if (!todo.length) return;
+  ctx.store.tx(() => {
+    for (const matchId of todo) ctx.store.enqueue("myReread", `myReread:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId, prio: PRIORITY.mineOld });
+  });
+}
+
+/** Parties sans dégâts (avant la v7) : relecture légère, une fois par partie. */
+function scheduleDamage(ctx: JobContext, puuid: string, riotId: string): void {
+  const todo = ctx.store.gamesWithoutDamage(riotId);
+  if (!todo.length) return;
+  ctx.store.tx(() => {
+    for (const matchId of todo) ctx.store.enqueue("myDamage", `myDamage:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId });
+  });
+}
+
+const myDamage: Handler = async (ctx, p: { matchId: string; puuid: string; riotId: string }) => {
+  const m = await ctx.api.get<MatchV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}`, PRIORITY.mineOld, { allow404: true });
+  const me = m?.info.participants.find((x) => x.puuid === p.puuid);
+  if (!m || !me) return;
+  const mates = m.info.participants.filter((x) => me.teamId == null || x.teamId === me.teamId);
+  const d = damageOf(me, mates);
+  ctx.store.setDamage(p.matchId, p.riotId, d.damage, d.teamDamage);
+};
 
 /** Parties enregistrées avant la v4 : relues une fois, en priorité basse (clé unique : jamais deux fois). */
 function scheduleRefresh(ctx: JobContext, riotIds: string[]): void {
@@ -63,12 +114,12 @@ function scheduleRefresh(ctx: JobContext, riotIds: string[]): void {
 }
 
 /** Relance la 1ʳᵉ page de la saison si elle date de plus de REFRESH_MS ; lance l'historique une fois. */
-function refreshIds(ctx: JobContext, puuid: string, riotId: string): void {
+function refreshIds(ctx: JobContext, puuid: string, riotId: string, force = false): void {
   ctx.store.enqueue("myHistoryIds", historyKey(puuid, 0), PRIORITY.mineOld, { puuid, riotId, start: 0 });
   const key = idsKey(puuid, 0);
   const st = ctx.store.jobStatus(key);
   if (!st) ctx.store.enqueue("myMatchIds", key, PRIORITY.mine, { puuid, riotId, start: 0 });
-  else if (st.status !== "pending" && st.status !== "running" && ctx.now() - st.updatedAt >= REFRESH_MS) ctx.store.requeue(key);
+  else if (st.status !== "pending" && st.status !== "running" && (force || ctx.now() - st.updatedAt >= REFRESH_MS)) ctx.store.requeue(key);
 }
 
 const account: Handler = async (ctx, p: { riotId: string }) => {
@@ -78,6 +129,7 @@ const account: Handler = async (ctx, p: { riotId: string }) => {
   if (!acc) throw new Error(`Compte ${p.riotId} introuvable.`);
   ctx.store.set(accountKey(p.riotId), acc.puuid);
   refreshIds(ctx, acc.puuid, p.riotId);
+  scheduleMastery(ctx, acc.puuid, p.riotId);
 };
 
 interface IdsPayload { puuid: string; riotId: string; start: number }
@@ -122,7 +174,7 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
 };
 
 export const HANDLERS: Record<string, Handler> = {
-  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch,
+  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage,
   metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
 };
 
@@ -133,6 +185,9 @@ export const JOB_LABELS: Record<string, string> = {
   myMatch: "Mes parties (saison)",
   myHistoryIds: "Listes de parties (anciennes saisons)",
   myOldMatch: "Mes parties (anciennes saisons)",
+  myMastery: "Ma maîtrise de champion",
+  myReread: "Mes parties : relecture pour l'analyse",
+  myDamage: "Mes parties : dégâts (radar)",
   myRefresh: "Mes parties : participation aux kills (mise à jour)",
   ...META_LABELS,
 };

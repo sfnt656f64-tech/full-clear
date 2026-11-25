@@ -25,3 +25,19 @@
 .col { background: transparent; border: none; padding: 0; }
 .card { background: #22222f; }
 .tag-prov { font-size: 11px; font-weight: 400; color: var(--warn); margin-left: 6px; }
+.card .calc { grid-column: 3 / 5; margin: 2px 0 0; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Classement par potentiel */
+.grp { font-size: 13px; margin: 12px 0 0; padding-left: 8px; border-left: 3px solid; }
+.grp.keep { border-color: var(--ok); }
+.grp.potential { border-color: var(--blue); }
+.grp.shelve { border-color: var(--red); }
+.pcard { grid-template-columns: 44px 1fr 64px; }
+.pcard .ptext, .pcard .calc { grid-column: 1 / 4; margin: 2px 0 0; font-size: 12.5px; }
+.pscore { font-weight: 400; color: var(--muted); font-size: 12px; }
+.mini-radar { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+.mini-radar.none { color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; }
+.radar.mini { width: 64px; height: 64px; }
+.radar-grid { fill: none; stroke: var(--line); stroke-width: 1; }
+.radar-median { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.radar-shape.s-main { fill: rgba(91,140,255,.3); stroke: var(--blue); stroke-width: 1.5; }

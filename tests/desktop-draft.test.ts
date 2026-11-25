@@ -53,6 +53,9 @@ describe("session de draft (LCU)", () => {
         { championId: 0, position: "utility" },
       ],
       enemies: [{ championId: key("Ahri") }, { championId: key("Jinx") }, { championId: key("Lulu") }, { championId: 0 }, { championId: 0 }],
+      myTurn: true,
+      side: null,
+      unavailable: [key("Zed"), key("Ahri"), key("Jinx"), key("Lulu"), key("Ornn"), key("Syndra")].sort((a, b) => a - b),
     });
   });
 
@@ -87,6 +90,7 @@ describe("recommandation de draft", () => {
     expect(v.build?.items).toHaveLength(6);
     expect(v.me).toMatchObject({ champion: { id: "Kayn" }, locked: false, position: "jungle" });
     expect(v.notKayn).toBe(false);
+    expect(v.isKayn).toBe(true);
     expect(v.timeLeftS).toBe(24);
     expect(v.link).toBe("draft=en-Ahri.Jinx.Lulu..~al-Ornn.Syndra..~src-live");
 
@@ -112,6 +116,7 @@ describe("recommandation de draft", () => {
     const s = toDraftSnapshot(session())!;
     const v = buildDraftView({ ...s, me: { championId: key("Ahri"), intentId: 0, position: "" }, enemies: [{ championId: 999999 }] });
     expect(v.notKayn).toBe(true);
+    expect(v.isKayn).toBe(false);
     expect(v.unknown).toBe(1);
   });
 });

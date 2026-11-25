@@ -6,6 +6,8 @@ import { DEFAULT_SHORTCUTS, isValidAccelerator, type Shortcuts } from "./shortcu
 export interface Settings {
   overlay: {
     enabled: boolean;
+    /** Conseils d'avant-partie dans l'overlay (début de partie). */
+    tips: boolean;
     /** Position en pixels écran (coin haut-gauche), ou absente : coin haut-droit par défaut. */
     x?: number;
     y?: number;
@@ -24,7 +26,7 @@ export interface Settings {
 
 export const DEFAULT_EXCLUDED = ["Jax", "Fiora", "Camille"];
 
-export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED] };
+export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED] };
 
 export function parseSettings(text: string | null): Settings {
   try {
@@ -32,7 +34,7 @@ export function parseSettings(text: string | null): Settings {
     const o = (raw.overlay ?? {}) as Partial<Settings["overlay"]>;
     const int = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : undefined);
     return {
-      overlay: { enabled: o.enabled !== false, x: int(o.x), y: int(o.y) },
+      overlay: { enabled: o.enabled !== false, tips: o.tips !== false, x: int(o.x), y: int(o.y) },
       formChoice: raw.formChoice === "blue" || raw.formChoice === "red" ? raw.formChoice : "auto",
       shortcuts: {
         toggle: isValidAccelerator(raw.shortcuts?.toggle) ? raw.shortcuts.toggle : DEFAULT_SHORTCUTS.toggle,

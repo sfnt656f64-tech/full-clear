@@ -27,6 +27,29 @@ export function readMetaMastery(dbFile: string): MetaMasteryRow[] {
       .map((r) => ({ championId: r.champion_id, role: r.role, win: !!r.win, points: r.points })));
 }
 
+/** Kill de début de partie (méta, anonyme) pour le plan d'avant-partie. */
+export interface GankKillRow { matchId: string; t: number; lane: string; killerTeam: number; killerRole: string; victimChamp: number; victimRole: string; assistRoles: string[] }
+/** Participant d'une partie dont la chronologie a été lue. */
+export interface TimelinePartRow { matchId: string; team: number; championId: number; role: string; win: boolean; startSide: string | null }
+
+/** Kills avant 10 min et participants des parties avec chronologie (patchs demandés). */
+export function readGankData(dbFile: string, patches: string[]): { kills: GankKillRow[]; parts: TimelinePartRow[] } {
+  const empty = { kills: [], parts: [] };
+  if (!patches.length) return empty;
+  return withDb(dbFile, empty, (db) => {
+    const marks = patches.map(() => "?").join(",");
+    const sel = `select match_id from meta_games where remake = 0 and patch in (${marks})`;
+    const kills = (db.prepare(`select match_id, t, lane, killer_team, killer_role, victim_champ, victim_role, assist_roles from meta_early_kills
+      where t < 600000 and match_id in (${sel})`).all(...patches) as
+      { match_id: string; t: number; lane: string; killer_team: number; killer_role: string; victim_champ: number; victim_role: string; assist_roles: string }[])
+      .map((r) => ({ matchId: r.match_id, t: r.t, lane: r.lane, killerTeam: r.killer_team, killerRole: r.killer_role, victimChamp: r.victim_champ, victimRole: r.victim_role, assistRoles: JSON.parse(r.assist_roles) as string[] }));
+    const parts = (db.prepare(`select match_id, team, champion_id, role, win, start_side from meta_parts where cs10 is not null and match_id in (${sel})`).all(...patches) as
+      { match_id: string; team: number; champion_id: number; role: string; win: number; start_side: string | null }[])
+      .map((r) => ({ matchId: r.match_id, team: r.team, championId: r.champion_id, role: r.role, win: !!r.win, startSide: r.start_side }));
+    return { kills, parts };
+  });
+}
+
 /** Données de méta des patchs demandés (hors remakes). */
 export function readMeta(dbFile: string, patches: string[]): MetaInput {
   const empty: MetaInput = { matches: 0, parts: [], builds: [], mastery: [], patches };

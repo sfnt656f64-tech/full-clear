@@ -1,4 +1,5 @@
-// Prochain item recommandé en jeu : build du moteur (ajusté aux items adverses), inventaire et or.
+// Prochain item recommandé en jeu : inventaire et or, sur le build du moteur pour Kayn (ajusté aux items
+// adverses) ou sur le build statistique Émeraude+ pour tes autres champions (coach/stat-build.ts).
 // Ne fait que suggérer : l'appli n'achète jamais rien (interdit par Riot, et impossible sans injection).
 import shopJson from "../src/data/generated/shop.json";
 import { findChamp } from "../src/data/champions";
@@ -9,6 +10,7 @@ import { analyse, resolveForm, type Analysis } from "../src/engine/analyse";
 import { chooseBuild, chooseStarter } from "../src/engine/build";
 import { DDRAGON_IMG } from "./draft-view.ts";
 import type { LiveSnapshot } from "./live-client.ts";
+import type { StatBuild } from "./coach/stat-build.ts";
 
 export interface ShopItem {
   name: string; cost: number; from?: string[];
@@ -133,33 +135,58 @@ export interface OverlayView {
   owned: number;
   reasons: string[];
   notKayn: boolean;
+  /** D'où vient le build : modèle de Kayn, méta Émeraude+ (autres champions), ou rien (pas assez de données). */
+  source: "kayn" | "meta" | "none";
+  /** Ton champion (nom affiché). */
+  champion: string | null;
+  /** Méta : parties utilisées pour le build. */
+  buildGames?: number;
+  /** Conseils d'avant-partie affichés en ce moment (deux au plus), ajoutés par le processus principal. */
+  tips?: string[];
 }
 
 const lite = (id: string, shop: Shop): ItemLite => ({ id, name: shop[id]?.name ?? id, icon: icon(id), cost: shop[id]?.cost ?? 0 });
 
-export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", shop: Shop = SHOP): OverlayView {
+export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", shop: Shop = SHOP, stat?: StatBuild | null): OverlayView {
   const enemies = s.enemies.map((e) => (e.champion ? findChamp(e.champion) ?? null : null));
   const allies = s.allies.map((a) => (a ? findChamp(a) ?? null : null));
   const base = analyse(enemies, allies);
-  const { x, reasons } = adjustAnalysis(base, readEnemyItems(s.enemies, enemies, shop));
   const form = resolveForm(base, formChoice);
+  const meChamp = s.me.champion ? findChamp(s.me.champion) ?? null : null;
+  const isKayn = !s.me.champion || s.me.champion === "Kayn";
+  const common = { gold: s.gold, form, formForced: formChoice !== "auto", notKayn: !isKayn, champion: meChamp?.name ?? null };
+
+  // Autre champion que Kayn : build statistique (ou rien sans assez de données).
+  if (!isKayn) {
+    if (!stat) return { ...common, next: null, then: [], owned: 0, reasons: [], source: "none" };
+    const pet = stat.starter ? Object.values(STARTERS).find((p) => p.id === stat.starter) : undefined;
+    const r = nextFrom(s, stat.ids, pet ? { id: pet.id, name: pet.name, cost: pet.cost, why: "Le plus joué en Émeraude+ sur ce champion." } : null, shop);
+    return { ...common, ...r, reasons: stat.reasons, source: "meta", buildGames: stat.games };
+  }
+
+  const { x, reasons } = adjustAnalysis(base, readEnemyItems(s.enemies, enemies, shop));
   const build: ItemKey[] = chooseBuild(x, form).b;
   const ids = build.map((k) => ITEMS[k].id!).filter(Boolean);
+  const [key, why] = chooseStarter(base)[0];
+  const pet = STARTERS[key];
+  return { ...common, ...nextFrom(s, ids, { id: pet.id, name: pet.name, cost: pet.cost, why }, shop), reasons, source: "kayn" };
+}
+
+/** Prochain achat sur un build donné : familier d'abord en début de partie, puis le premier item manquant. */
+function nextFrom(s: LiveSnapshot, ids: string[], pet: { id: string; name: string; cost: number; why: string } | null, shop: Shop): Pick<OverlayView, "next" | "then" | "owned"> {
 
   const bag = bagOf(s.me.items);
   const ownedFlags = ids.map((id) => owns(bag, id, shop));
   const idx = ownedFlags.indexOf(false);
   let next: OverlayView["next"] = null;
-  // Début de partie : ni familier ni item du build → le familier d'abord.
+  // Début de partie : ni familier ni item du build → le familier d'abord (jungle).
   const petOwned = s.me.items.some((id) => STARTER_ITEM_IDS.has(String(id)));
-  const starterFirst = !petOwned && !ownedFlags.some(Boolean);
-  if (starterFirst) {
-    const [key, why] = chooseStarter(base)[0];
-    const pet = STARTERS[key];
+  const starterFirst = !!pet && !petOwned && !ownedFlags.some(Boolean);
+  if (starterFirst && pet) {
     next = {
-      item: { id: pet.id, name: pet.nameFr, icon: icon(pet.id), cost: pet.cost },
+      item: { id: pet.id, name: pet.name, icon: icon(pet.id), cost: pet.cost },
       rank: 0,
-      why,
+      why: pet.why,
       missingGold: Math.max(0, pet.cost - s.gold),
       component: null,
     };
@@ -179,13 +206,8 @@ export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", sho
     next = { item: { ...lite(id, shop), cost: r.gold }, rank: idx + 1, missingGold, component };
   }
   return {
-    gold: s.gold,
-    form,
-    formForced: formChoice !== "auto",
     next,
     then: ids.filter((_, i) => !ownedFlags[i] && (starterFirst || i !== idx)).slice(0, 2).map((id) => lite(id, shop)),
     owned: ownedFlags.filter(Boolean).length,
-    reasons,
-    notKayn: !!s.me.champion && s.me.champion !== "Kayn",
   };
 }

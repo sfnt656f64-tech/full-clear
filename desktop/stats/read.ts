@@ -9,6 +9,23 @@ interface Raw {
   team_kills: number | null; kills15: number | null; assists15: number | null; team_kills15: number | null;
 }
 
+/** Ta maîtrise de champion : points cumulés sur tes comptes, par champion. */
+export function readMyMastery(dbFile: string): Map<number, number> {
+  const out = new Map<number, number>();
+  if (!existsSync(dbFile)) return out;
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(dbFile, { readOnly: true });
+    db.exec("pragma busy_timeout = 2000");
+    for (const r of db.prepare("select champion_id, sum(points) p from my_mastery group by champion_id").all() as { champion_id: number; p: number }[]) out.set(r.champion_id, r.p);
+  } catch {
+    // table pas encore créée
+  } finally {
+    db?.close();
+  }
+  return out;
+}
+
 export function readMyGames(dbFile: string): MyGameRow[] {
   if (!existsSync(dbFile)) return [];
   let db: DatabaseSync | null = null;

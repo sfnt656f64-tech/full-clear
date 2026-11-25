@@ -8,7 +8,10 @@
 //     à faire un champion fort (faux positif) ;
 //   - la force du champion dans la méta (win rate ramené vers 50 % de la même façon), avec un petit poids :
 //     elle sert déjà de point de départ à ton win rate lissé ;
-//   - ta maîtrise (nombre de parties pondéré).
+//   - ta maîtrise : parties classées pondérées (jusqu'à +6, en racine : chaque partie compte, sans plafond trop tôt) et points de maîtrise Riot de tes comptes,
+//     qui comptent aussi les autres modes (jusqu'à +1,5).
+//
+//   score = ton win rate lissé + 0,3 × (win rate méta lissé − 50) + bonus parties + bonus points
 import { champByKey, PROFILE_FROM_TAG, PROFILE_LABEL } from "../../src/data/champions";
 import { mobility, MOBILITY_LABEL } from "../../src/data/mobility";
 import type { Champion } from "../../src/data/types";
@@ -20,10 +23,14 @@ export const RECO_ROLES = ["JUNGLE", "MIDDLE"] as const;
 export const SHRINK_MY = 30;
 /** Parties « fictives » à 50 % ajoutées aux parties de méta. */
 export const SHRINK_META = 100;
-/** Parties dans le rôle (toutes saisons) pour faire partie de ton pool. */
-export const POOL_MIN_GAMES = 3;
+/** Parties dans le rôle (toutes saisons) pour faire partie de ton pool ; en dessous, le champion peut être proposé dans « À essayer ». */
+export const POOL_MIN_GAMES = 10;
 /** Parties de méta dans le rôle pour être proposé dans « À essayer ». */
 export const TRY_MIN_META = 50;
+/** Bonus de maîtrise : parties classées (racine, plein à GAMES_FULL parties pondérées), points Riot (plein à 300 000). */
+export const GAMES_BONUS = 6;
+export const GAMES_FULL = 150;
+export const POINTS_BONUS = 1.5;
 /** Win rate de méta (lissé) minimal pour « À essayer ». */
 export const TRY_MIN_META_WR = 49;
 /** Ressemblance (0 à 1) à partir de laquelle on cite un de tes champions. */
@@ -94,6 +101,10 @@ export interface PoolPick {
   winRate: number;
   /** Ton win rate lissé (pondéré par saison, ramené vers la méta). */
   adjustedWinRate: number;
+  /** Points de maîtrise (tes comptes cumulés). */
+  masteryPoints: number;
+  /** Détail du score : la somme des 4 termes. */
+  breakdown: { winRate: number; meta: number; games: number; mastery: number };
   kda: number;
   meta: Rate | null;
   /** Parties par saison, de la plus récente à la plus ancienne. */
@@ -109,6 +120,8 @@ export interface TryPick {
   meta: Rate;
   similarTo: number[];
   learning: Learning;
+  /** Tes parties sur ce champion dans le rôle (moins que le minimum du pool). */
+  tried: { games: number; wins: number } | null;
   reasons: string[];
   provisional: boolean;
 }
@@ -124,6 +137,8 @@ export interface RecoInput {
   mastery: MetaMasteryRow[];
   metaMatches: number;
   excluded: number[];
+  /** Tes points de maîtrise par champion (tes comptes cumulés). */
+  myMastery?: Map<number, number>;
 }
 
 export interface Recommendations {
@@ -322,18 +337,26 @@ export function recommend(input: RecoInput): Recommendations {
         if (g.win) ww += w;
       }
       const adjusted = shrink(ww, wn, metaAdj, SHRINK_MY);
-      const masteryBonus = 4 * Math.min(1, Math.log(1 + wn) / Math.log(51));
+      const points = input.myMastery?.get(championId) ?? 0;
+      const breakdown = {
+        winRate: adjusted,
+        meta: 0.3 * (metaAdj - 50),
+        games: GAMES_BONUS * Math.min(1, Math.sqrt(wn / GAMES_FULL)),
+        mastery: POINTS_BONUS * Math.min(1, Math.log(1 + points / 1000) / Math.log(1 + 300)),
+      };
       const k = gs.reduce((s, g) => s + g.kills, 0), d = gs.reduce((s, g) => s + g.deaths, 0), a = gs.reduce((s, g) => s + g.assists, 0);
       const bySeason = new Map<number, number>();
       for (const g of gs) bySeason.set(g.season, (bySeason.get(g.season) ?? 0) + 1);
       const wins = gs.filter((g) => g.win).length;
       const pick: PoolPick = {
         championId, role,
-        score: adjusted + 0.3 * (metaAdj - 50) + masteryBonus,
+        score: breakdown.winRate + breakdown.meta + breakdown.games + breakdown.mastery,
         games: gs.length,
         weightedGames: wn,
         winRate: pct(wins, gs.length),
         adjustedWinRate: adjusted,
+        masteryPoints: points,
+        breakdown,
         kda: (k + a) / Math.max(1, d),
         meta: m ? { games: m.games, winRate: m.winRate } : null,
         seasons: [...bySeason.entries()].sort((x, y) => y[0] - x[0]).map(([season, n]) => ({ season, games: n })),
@@ -346,7 +369,11 @@ export function recommend(input: RecoInput): Recommendations {
     pool.sort((x, y) => y.score - x.score || y.games - x.games);
     return [role, pool];
   }));
-  /** Champions que tu joues déjà (dans l'un ou l'autre rôle) : jamais dans « À essayer ». */
+  const triedOf = (role: string, championId: number) => {
+    const gs = games.filter((g) => g.role === role && g.championId === championId);
+    return gs.length ? { games: gs.length, wins: gs.filter((g) => g.win).length } : null;
+  };
+  /** Champions de ton pool (dans l'un ou l'autre rôle) : jamais dans « À essayer ». */
   const played = new Set([...pools.values()].flat().map((p) => p.championId));
 
   const roles = RECO_ROLES.map((role): RoleReco => {
@@ -386,6 +413,7 @@ export function recommend(input: RecoInput): Recommendations {
         meta: { games: m.games, winRate: m.winRate },
         similarTo: sims.filter((x) => x.sim >= SIMILAR).slice(0, 2).map((x) => x.id),
         learning: learn,
+        tried: triedOf(role, m.championId),
         reasons: [],
         provisional: provisional || m.games < PROVISIONAL_META || learn.games == null,
       };
@@ -410,7 +438,9 @@ function poolReasons(p: PoolPick, current: number | null, metaAdj: number): stri
   if (p.games >= 8 && p.winRate >= 54) r.push({ w: (p.winRate - 50) * Math.sqrt(p.games) / 4, text: `Tu gagnes ${nf(p.winRate)} % de tes ${p.games} parties.` });
   if (p.games >= 8 && p.winRate <= 46) r.push({ w: (50 - p.winRate) * Math.sqrt(p.games) / 4, text: `Seulement ${nf(p.winRate)} % de victoires sur ${p.games} parties.` });
   if (p.games < 8) r.push({ w: 6, text: `Seulement ${p.games} parties : ton win rate compte encore peu.` });
-  if (p.weightedGames >= 30) r.push({ w: 5 + p.weightedGames / 20, text: `Champion que tu maîtrises (${p.games} parties).` });
+  if (p.weightedGames >= 30 || p.masteryPoints >= 150_000) {
+    r.push({ w: 5 + p.weightedGames / 20, text: `Champion que tu maîtrises (${p.games} parties${p.masteryPoints >= 10_000 ? `, ${nf(Math.round(p.masteryPoints / 1000))} k points de maîtrise` : ""}).` });
+  }
   if (p.meta && metaAdj >= 51.5) r.push({ w: (metaAdj - 50) * 2.5, text: `Fort dans la méta Émeraude+ : ${nf(p.meta.winRate, 1)} % sur ${nf(p.meta.games)} parties.` });
   if (p.meta && metaAdj <= 48.5) r.push({ w: (50 - metaAdj) * 2.5, text: `En difficulté dans la méta : ${nf(p.meta.winRate, 1)} % en Émeraude+.` });
   if (!p.meta) r.push({ w: 1, text: "Pas encore de données de méta pour lui dans ce rôle." });
@@ -428,6 +458,7 @@ function tryReasons(p: TryPick, c: Champion, near: Champion | undefined, sim: nu
       ? `Rapide à prendre en main : ceux qui le découvrent gagnent déjà ${nf(l.novice.winRate)} %.`
       : `Rapide à prendre en main (${learningLabel(l)}).` });
   }
+  if (p.tried) r.push({ w: 9, text: `Tu l'as déjà joué ${p.tried.games} fois (${p.tried.wins} victoire${p.tried.wins > 1 ? "s" : ""}) : pas encore assez pour ton pool.` });
   if (l.games != null && l.games > 100) r.push({ w: 3, text: "Long à maîtriser : prévois de nombreuses parties avant d'être à l'aise." });
   if (st && fit > 0.3) {
     r.push({ w: fit * 7, text: profile.style === "early"

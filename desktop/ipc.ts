@@ -5,9 +5,44 @@ import type { MyGameRow } from "./stats/my-stats.ts";
 import type { MetaChampion } from "./meta/meta-stats.ts";
 import type { MetaPatchInfo } from "./meta/read.ts";
 import type { Recommendations } from "./reco/recommend.ts";
+import type { GameAnalysis } from "./analysis/analysis.ts";
+import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./analysis/overview.ts";
+import type { Radar } from "./analysis/radar.ts";
+import type { PotentialGroups } from "./reco/potential.ts";
+
+/** Vue d'ensemble de l'onglet « Analyse ». */
+export interface OverviewView {
+  filter: OverviewFilter;
+  /** Choix des filtres : tes champions (parties dans le rôle, la période et le compte choisis), saisons, comptes. */
+  options: { champions: { id: number; games: number }[]; seasons: number[]; accounts: string[] };
+  overview: Overview;
+  evolution: { by: "month" | "patch"; points: EvolutionPoint[] };
+  /** « Tous les champions » : tes champions comparés entre eux. */
+  table: ChampionRow[] | null;
+  /** Carte de chaleur : [x, y, 0 kill | 1 mort | 2 assist, minute]. */
+  points: [number, number, number, number][];
+  /** Radar de la sélection, et d'un champion à comparer (mêmes filtres). */
+  radar: Radar | null;
+  compare: { championId: number; radar: Radar | null } | null;
+  /** Champions comparables (au moins 5 parties avec les filtres hors champion). */
+  compareOptions: number[];
+}
+
+/** Onglet « Analyse » : tes dernières parties relues, et l'analyse de celle choisie. */
+export interface AnalysisView {
+  /** Radar de la partie choisie, et ta moyenne sur ce champion dans ce rôle. */
+  radar?: { game: Radar | null; average: Radar | null };
+  games: { key: string; championId: number; win: boolean; kda: string; startMs: number; role: string }[];
+  selected: string | null;
+  analysis: GameAnalysis | null;
+}
 
 /** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
-export interface RecoView extends Recommendations { patches: string[] }
+export interface RecoView extends Recommendations {
+  patches: string[];
+  /** Classement par potentiel et radars de tes champions, par rôle. */
+  potential: Record<string, PotentialGroups>;
+}
 
 /** Méta calculée pour la fenêtre « Méta ». */
 export interface MetaView {
@@ -36,6 +71,8 @@ export interface LiveState {
   inGame: boolean;
   view: import("./next-item.ts").OverlayView | null;
   overlayEnabled: boolean;
+  /** Conseils d'avant-partie dans l'overlay. */
+  tipsEnabled: boolean;
   overlayVisible: boolean;
   overlayMoving: boolean;
   hiddenByUser: boolean;
@@ -86,10 +123,16 @@ export interface KaynApi {
   /** Méta des `scope` derniers patchs (1 à 3). */
   getMeta(scope: number): Promise<MetaView>;
   openRecoWindow(): Promise<void>;
+  /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
+  getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
+  getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
+  /** Importe la page de runes recommandée de la draft en cours dans le client. */
+  importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;
   setExcludedChampions(ids: string[]): Promise<AppState>;
   openDraftInSimulator(): Promise<void>;
   setOverlayEnabled(on: boolean): Promise<AppState>;
+  setTipsEnabled(on: boolean): Promise<AppState>;
   setFormChoice(f: "auto" | "blue" | "red"): Promise<AppState>;
   resetOverlayPosition(): Promise<AppState>;
   /** null : raccourci par défaut. Renvoie aussi une erreur si la combinaison est refusée. */
@@ -110,10 +153,14 @@ export const IPC = {
   openMetaWindow: "kayn:open-meta-window",
   getMeta: "kayn:get-meta",
   openRecoWindow: "kayn:open-reco-window",
+  getAnalysis: "kayn:get-analysis",
+  getOverview: "kayn:get-overview",
+  importRunes: "kayn:import-runes",
   getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",
   openDraftInSimulator: "kayn:open-draft",
   setOverlayEnabled: "kayn:set-overlay-enabled",
+  setTipsEnabled: "kayn:set-tips-enabled",
   setFormChoice: "kayn:set-form-choice",
   resetOverlayPosition: "kayn:reset-overlay-position",
   setShortcut: "kayn:set-shortcut",

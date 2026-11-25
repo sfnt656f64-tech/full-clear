@@ -14,6 +14,10 @@ import { PRIORITY } from "./scheduler.ts";
 import type { JobContext } from "./jobs.ts";
 import { buildOrders, earlyStats, summarizeMetaMatch, type MetaMatchV5, type TimelineEventsV5 } from "./meta-parse.ts";
 import type { TimelineV5 } from "./my-games.ts";
+import { earlyKills, partExtras } from "./timeline-parse.ts";
+
+/** Kills de début de partie gardés (plan d'avant-partie : ganks avant 10 min ; 15 pour la marge). */
+const EARLY_MS = 15 * 60_000;
 
 const QUEUE = "RANKED_SOLO_5x5";
 const QUEUE_ID = 420;
@@ -133,8 +137,10 @@ export async function metaTimeline(ctx: JobContext, p: { matchId: string; parts:
   if (!t) return;
   const orders = buildOrders(t, p.parts.map((x) => x.pid));
   const early = earlyStats(t, ctx.store.metaTeams(p.matchId));
+  const roster = ctx.store.metaRoster(p.matchId);
   ctx.store.tx(() => {
     ctx.store.putEarly(p.matchId, early);
+    ctx.store.putMetaTimeline(p.matchId, partExtras(t, roster), earlyKills(t, roster, EARLY_MS));
     for (const x of p.parts) ctx.store.putBuild(p.matchId, x.pid, x.championId, x.role, x.win, orders.get(x.pid) ?? []);
   });
 }

@@ -219,12 +219,13 @@ export interface ShopItem {
 }
 
 /** Tous les items achetables sur la Faille (composants compris), pour l'overlay en jeu. */
-export function buildShop(en: DDFile<DDItem>, fr: DDFile<DDItem>): Record<string, ShopItem> {
+export function buildShop(en: DDFile<DDItem>): Record<string, ShopItem> {
   const out: Record<string, ShopItem> = {};
   const stat: [keyof ShopItem, string][] = [["ad", "FlatPhysicalDamageMod"], ["ap", "FlatMagicDamageMod"], ["armor", "FlatArmorMod"], ["mr", "FlatSpellBlockMod"], ["hp", "FlatHPPoolMod"]];
   for (const [id, it] of Object.entries(en.data).sort(([a], [b]) => Number(a) - Number(b))) {
     if (!it.maps["11"] || !it.gold.purchasable || Number(id) >= 10000) continue;
-    const e: ShopItem = { name: fr.data[id]?.name ?? it.name, cost: it.gold.total };
+    // Noms anglais, comme dans le reste de l'appli (les noms d'items s'affichent en anglais).
+    const e: ShopItem = { name: it.name, cost: it.gold.total };
     const from = (it.from ?? []).filter((f) => en.data[f]);
     if (from.length) e.from = from;
     for (const [k, dd] of stat) if (it.stats[dd]) (e as unknown as Record<string, number>)[k] = it.stats[dd];
@@ -398,7 +399,7 @@ async function main() {
   const champions = buildChampions(champEn, champFr);
   const kayn = buildKayn(kaynFr, kaynEn);
   const itemIndex = buildItemIndex(itemEn, itemFr);
-  const shop = buildShop(itemEn, itemFr);
+  const shop = buildShop(itemEn);
   const starters = buildStarters(itemEn, itemFr);
   await checkOverrides(champions, warnings);
 

@@ -83,6 +83,12 @@ export class Collector {
     this.pool = new Set(rows.map((r) => r.c).filter((c) => !this.excluded.has(c)));
   }
 
+/** Vérifie tout de suite les nouvelles parties de tes comptes (fin de partie). */
+  checkNewGames(): void {
+    scheduleAccounts(this.ctx, this.accounts, true);
+    this.poke();
+  }
+
   pause(reason: string): void { this.ctx.api.pause(reason); this.publish(); }
 
   resume(reason: string): void {
