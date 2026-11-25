@@ -63,7 +63,7 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -275,6 +275,21 @@ export class CollectorStore {
         primary key (match_id, participant_id)
       );
       pragma user_version = 9;`));
+    // v10 : tes parties hors Solo/Duo (tous modes) : champion, mode et victoire seulement (expérience sur un
+    // champion, calibrage des points de maîtrise). Les normales en draft ont aussi leur détail (my_detail).
+    if (v < 10) this.tx(() => this.db.exec(`
+      create table if not exists my_other_games (
+        match_id text not null,
+        account text not null,
+        start_ms integer not null,
+        queue integer not null,
+        champion_id integer not null,
+        role text not null,
+        win integer not null,
+        remake integer not null,
+        primary key (match_id, account)
+      );
+      pragma user_version = 10;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -308,6 +323,8 @@ export class CollectorStore {
       toTimeline: this.db.prepare(`select match_id from (select match_id, timeline_v6, remake, start_ms from my_games where account = ? order by start_ms desc limit ?)
         where timeline_v6 = 0 and remake = 0 order by start_ms desc`),
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
+      putOtherGame: this.db.prepare("insert or replace into my_other_games (match_id, account, start_ms, queue, champion_id, role, win, remake) values (?, ?, ?, ?, ?, ?, ?, ?)"),
+      knownGame: this.db.prepare("select 1 from my_games where match_id = ? and account = ? union all select 1 from my_other_games where match_id = ? and account = ? limit 1"),
       putJungleMastery: this.db.prepare("insert or replace into meta_jungle_mastery (match_id, participant_id, champion_id, win, points, read_after_ms) values (?, ?, ?, ?, ?, ?)"),
       hasJungleMastery: this.db.prepare("select 1 from meta_jungle_mastery where match_id = ?"),
       recentMetaWithoutJungleMastery: this.db.prepare("select g.match_id, g.start_ms from meta_games g where g.remake = 0 and g.start_ms > ? and not exists (select 1 from meta_jungle_mastery j where j.match_id = g.match_id) order by g.start_ms desc"),
@@ -415,6 +432,12 @@ export class CollectorStore {
 
 /** Détail anonyme d'une de tes parties (v8). */
   putDetail(matchId: string, account: string, data: Uint8Array): void { this.st.putDetail.run(matchId, account, data); }
+  /** Partie hors Solo/Duo : champion, mode, victoire. */
+  putOtherGame(g: { matchId: string; account: string; startMs: number; queue: number; championId: number; role: string; win: boolean; remake: boolean }): void {
+    this.st.putOtherGame.run(g.matchId, g.account, g.startMs, g.queue, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0);
+  }
+  /** Partie déjà connue (Solo/Duo ou autre mode) pour ce compte. */
+  knownGame(matchId: string, account: string): boolean { return !!this.st.knownGame.get(matchId, account, matchId, account); }
 
   /** Tes parties sans détail (v8), à compléter. */
   gamesWithoutDetail(account: string): string[] {

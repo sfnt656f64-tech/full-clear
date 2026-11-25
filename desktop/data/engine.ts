@@ -36,7 +36,16 @@ import { myDuelValues, opponentValues } from "../analysis/opponent.ts";
 import type { DraftSnapshot } from "../champ-select.ts";
 import type { ChampLite, DraftView } from "../draft-view.ts";
 import type { LiveSnapshot } from "../live-client.ts";
-import type { AnalysisView, MetaView, OverviewView, RecoView } from "../ipc.ts";
+import type { AnalysisView, MetaView, OverviewView, PoolGoal, ProgressionView, RecoView, TrackEntry } from "../ipc.ts";
+import ddChamps from "../../src/data/generated/champions.json";
+import { METRICS as ALL_METRICS } from "../analysis/analysis.ts";
+import { AXES } from "../analysis/radar.ts";
+import { myGameFromDetail } from "../analysis/opponent.ts";
+import { DEFAULT_TAU, firstGamesEffect, statsSpread, WEIGHTS, type AxisGame } from "../reco/progress.ts";
+import { readJungleMastery, readJungleMeta, readOtherGames } from "../reco/progress-read.ts";
+import { progressAdvice, progression, readiness, RIFT_QUEUES, STANDARD_QUEUES, type ChampionFlag } from "../reco/progression.ts";
+
+const DIFFICULTY = new Map((Object.values(ddChamps) as { key: string | number; info: { difficulty: number } }[]).map((x) => [Number(x.key), x.info.difficulty]));
 import type { MyGameRow } from "../stats/my-stats.ts";
 
 /** Patchs de méta pour les recommandations : les 2 derniers (équilibrage actuel, assez de parties). */
@@ -270,8 +279,8 @@ export class Engine {
 
   // ---------- Recommandations ----------
 
-  reco(excluded: number[], tier: RefTier = DEFAULT_REF_TIER): RecoView {
-    return this.memo(`reco:${excluded.join(",")}:${tier}`, () => {
+  reco(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, goal: PoolGoal = "win", flags: Record<string, ChampionFlag> = {}): RecoView {
+    return this.memo(`reco:${excluded.join(",")}:${tier}:${goal}:${JSON.stringify(flags)}`, () => {
       const patches = this.patches(RECO_PATCHES);
       const input = this.recentMeta();
       const reco = recommend({ myGames: readMyGames(this.dbFile), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(this.dbFile), metaMatches: input.matches, excluded, myMastery: readMyMastery(this.dbFile) });
@@ -291,7 +300,13 @@ export class Engine {
         });
         trends[r.role] = this.trends(r.role);
       }
-      return { ...reco, patches, potential, advice, trends, reference: this.refInfo(reco.roles.map((r) => r.role), tier) };
+      // Objectif « Progresser » (jungle) : 2 champions de progression + ton meilleur « À garder » en confort.
+      const jungle = reco.roles.find((r) => r.role === "JUNGLE");
+      if (goal === "progress" && jungle && potential.JUNGLE) {
+        const p = this.progressionCore(excluded, tier, flags);
+        advice.JUNGLE = progressAdvice(p, potential.JUNGLE.keep.map((k) => ({ championId: k.championId, games: k.games })), jungle.pool[0]?.championId ?? null) as unknown as PoolAdvice;
+      }
+      return { ...reco, patches, potential, advice, trends, goal, reference: this.refInfo(reco.roles.map((r) => r.role), tier) };
     });
   }
 
@@ -309,6 +324,143 @@ export class Engine {
         out[m.championId] = { delta: m.winRate - o.winRate, latest: { patch: p0, winRate: m.winRate, games: m.games }, previous: { patch: p1, winRate: o.winRate, games: o.games } };
       }
       return out;
+    });
+  }
+
+// ---------- Progression ----------
+
+  private flagMap(flags: Record<string, ChampionFlag>): Map<number, ChampionFlag> {
+    const m = new Map<number, ChampionFlag>();
+    for (const [id, f] of Object.entries(flags)) { const k = findChamp(id)?.key; if (k != null) m.set(k, f); }
+    return m;
+  }
+
+  /** Parties de méta (jungle, référence choisie) avec leur position sur chaque axe : effet de tes axes forts. */
+  private axisGames(tier: RefTier): Map<number, AxisGame[]> {
+    return this.cached(`axisGames:${tier}`, META_TTL, () => {
+      const ref = this.metaRef(["JUNGLE"], tier);
+      const out = new Map<number, AxisGame[]>();
+      for (const r of this.metaRows("JUNGLE", tier)) {
+        const rad = radarOf([{ ...r, role: "JUNGLE" } as unknown as AnalysisGame], ref, 1);
+        if (!rad) continue;
+        (out.get(r.championId) ?? out.set(r.championId, []).get(r.championId)!).push({ win: r.win, axes: rad.values });
+      }
+      return out;
+    });
+  }
+
+  /** Tes normales en draft (règles standard de la Faille), reconstruites depuis leur détail. */
+  private draftNormals(): AnalysisGame[] {
+    return this.memo("draftNormals", () => {
+      const keys = new Set(readOtherGames(this.dbFile).filter((g) => g.queue === 400 && !g.remake).map((g) => `${g.matchId}|${g.account}`));
+      if (!keys.size) return [];
+      const out: AnalysisGame[] = [];
+      let db: DatabaseSync | null = null;
+      try {
+        db = new DatabaseSync(this.dbFile, { readOnly: true });
+        const get = db.prepare("select data from my_detail where match_id = ? and account = ?");
+        for (const k of keys) {
+          const [m, a] = k.split("|");
+          const row = get.get(m, a) as { data: Uint8Array } | undefined;
+          const g = row ? myGameFromDetail(unpackDetail(row.data)) : null;
+          if (g) out.push(g);
+        }
+      } catch { /* table absente */ } finally { db?.close(); }
+      return out;
+    });
+  }
+
+  /** `ratio` : rapport « 1 point de stats = r points de win rate » (1 par défaut ; test de sensibilité). */
+  private progressionCore(excluded: number[], tier: RefTier, flags: Record<string, ChampionFlag>, ratio?: number) {
+    return this.memo(`progressionCore:${excluded.join(",")}:${tier}:${JSON.stringify(flags)}:${ratio ?? ""}`, () => {
+      const all = this.analysisGames(excluded);
+      const season = Math.max(0, ...all.map((g) => g.season ?? 0));
+      const ref = this.metaRef(["JUNGLE"], tier);
+      const jungle = all.filter((g) => g.role === "JUNGLE");
+      const recent = all.filter((g) => (g.season ?? 0) >= season - 1);
+      const byChamp = new Map<number, AnalysisGame[]>();
+      for (const g of jungle.filter((x) => (x.season ?? 0) >= season - 1)) (byChamp.get(g.championId) ?? byChamp.set(g.championId, []).get(g.championId)!).push(g);
+      const mine = new Map([...byChamp].map(([c, gs]) => [c, { games: gs.length, wins: gs.filter((g) => g.win).length, radar: radarOf(gs, ref) }]));
+      const played = new Map<number, number>();
+      for (const g of recent) played.set(g.championId, (played.get(g.championId) ?? 0) + 1);
+      // τ : écart réel de tes stats d'un champion à l'autre (champions à 10 parties ou plus).
+      const spread = statsSpread([...mine.values()].filter((m) => m.games >= 10 && m.radar?.score != null && m.radar.margin != null).map((m) => ({ score: m.radar!.score!, margin: m.radar!.margin! })));
+      const tau = spread ?? DEFAULT_TAU;
+      const p = progression({
+        metaRates: readJungleMeta(this.dbFile, this.patches(3)), mastery: this.cached("jungleMastery", META_TTL, () => readJungleMastery(this.dbFile)),
+        difficulty: (c) => DIFFICULTY.get(c) ?? 5, axisGames: this.axisGames(tier),
+        myRadar: radarOf(jungle.filter((g) => g.season === season), ref), mine, played, points: readMyMastery(this.dbFile),
+        excluded: new Set(excluded), flags: this.flagMap(flags), tau, ratio,
+      });
+      return { ...p, mine, tau, season };
+    });
+  }
+
+  /** Mode « Progresser » : classement, confort, ta vitesse d'apprentissage, calibrage, suivi « prêt pour la classée ». */
+  progression(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, goal: PoolGoal = "progress", flags: Record<string, ChampionFlag> = {}): ProgressionView {
+    return this.memo(`progression:${excluded.join(",")}:${tier}:${goal}:${JSON.stringify(flags)}`, () => {
+      const core = this.progressionCore(excluded, tier, flags);
+      const all = this.analysisGames(excluded);
+      const others = readOtherGames(this.dbFile).filter((g) => !g.remake);
+      const normals = this.draftNormals();
+      const ref = this.metaRef(["JUNGLE"], tier);
+      const fm = this.flagMap(flags);
+
+      // Ta vitesse d'apprentissage : comptes fusionnés, ordre chronologique, champions découverts pendant l'historique.
+      const byKey = new Map(ALL_METRICS.map((m) => [m.key, m]));
+      const vsOpp = (g: AnalysisGame) => {
+        const xs = AXES.flatMap((a) => a.metrics).flatMap((k) => { const m = byKey.get(k)!, v = m.value(g), o = g.opp ? m.value(g.opp) : null; return v == null || o == null ? [] : [v === o ? 50 : (m.better === "+" ? v > o : v < o) ? 100 : 0]; });
+        return xs.length >= 5 ? xs.reduce((s, x) => s + x, 0) / xs.length : null;
+      };
+      const points = readMyMastery(this.dbFile);
+      const histStart = new Map<string, number>();
+      for (const g of all) histStart.set(g.account, Math.min(histStart.get(g.account) ?? Infinity, g.startMs));
+      const DAY = 86_400_000;
+      const groups: { score: number | null }[][] = [];
+      const byC = new Map<number, AnalysisGame[]>();
+      for (const g of all) (byC.get(g.championId) ?? byC.set(g.championId, []).get(g.championId)!).push(g);
+      for (const gs0 of byC.values()) {
+        const gs = [...gs0].sort((a, b) => a.startMs - b.startMs);
+        if (gs.length < 20) continue;
+        const early = gs[0].startMs - histStart.get(gs[0].account)! < 30 * DAY;
+        if (early || (points.get(gs[0].championId) ?? 0) > gs.length * 1_500 * 2) continue;
+        groups.push(gs.map((g) => ({ score: vsOpp(g) })));
+      }
+
+      // Points de maîtrise par partie, tous modes : champions découverts pendant l'historique (comptes cumulés).
+      let calibration: ProgressionView["calibration"] = null;
+      if (others.length) {
+        const games = new Map<number, number[]>();
+        for (const g of all) (games.get(g.championId) ?? games.set(g.championId, []).get(g.championId)!).push(g.startMs);
+        for (const g of others) (games.get(g.championId) ?? games.set(g.championId, []).get(g.championId)!).push(g.startMs);
+        const start = Math.min(...[...games.values()].flat());
+        const ratios = [...games].filter(([c, ts]) => ts.length >= 5 && Math.min(...ts) - start > 60 * DAY && (points.get(c) ?? 0) > 0).map(([c, ts]) => points.get(c)! / ts.length).sort((a, b) => a - b);
+        if (ratios.length >= 3) calibration = { champions: ratios.length, median: ratios[Math.floor(ratios.length / 2)], low: ratios[Math.floor(ratios.length / 4)], high: ratios[Math.floor((ratios.length * 3) / 4)] };
+      }
+
+      // Suivi : les champions de progression du pool conseillé, et ceux que tu as choisis.
+      const tracked = new Map<number, TrackEntry["source"]>();
+      for (const e of core.candidates.slice(0, 2)) tracked.set(e.championId, "advice");
+      for (const [c, f] of fm) if (f === "progress") tracked.set(c, "flag");
+      const tracking: TrackEntry[] = [...tracked].map(([c, source]) => {
+        const ranked = all.filter((g) => g.championId === c);
+        const rift = others.filter((g) => g.championId === c && RIFT_QUEUES.has(g.queue));
+        const draft = normals.filter((g) => g.championId === c && g.role === "JUNGLE");
+        const rankedJ = ranked.filter((g) => g.role === "JUNGLE");
+        const standard = radarOf([...rankedJ, ...draft], ref);
+        const rankedRadar = radarOf(rankedJ, ref);
+        const r = readiness({ experience: ranked.length + rift.length, standard, ranked: rankedRadar, rankedGames: rankedJ.length });
+        return { championId: c, source, experience: ranked.length + rift.length, draftNormal: draft.length, rankedGames: rankedJ.length, standard, ranked: rankedRadar, ...r };
+      });
+      void STANDARD_QUEUES;
+
+      return {
+        goal, weights: { ...WEIGHTS }, reference: this.refInfo(["JUNGLE"], tier), patches: this.patches(3),
+        masteryGames: this.cached("jungleMastery", META_TTL, () => readJungleMastery(this.dbFile)).length,
+        candidates: core.candidates.slice(0, 15).map((e) => ({ ...e, myGames: core.mine.get(e.championId)?.games ?? 0, myWins: core.mine.get(e.championId)?.wins ?? 0 })),
+        comfort: core.comfort, notForMe: core.notForMe, learningSpeed: firstGamesEffect(groups), tau: core.tau, calibration, tracking,
+        myAxes: radarOf(all.filter((g) => g.role === "JUNGLE" && g.season === core.season), ref)?.values ?? [],
+      };
     });
   }
 

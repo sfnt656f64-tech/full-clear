@@ -16,6 +16,32 @@ export const POINTS_PER_GAME = { low: 1_000, high: 1_500 } as const;
 export const WEIGHTS = { force: 0.55, fit: 0.45, learning: 0 } as const;
 /** Tes parties sur le champion pour que ton score de stats y pèse autant que le potentiel. */
 export const MINE_HALF = 20;
+/**
+ * Écart réel de ton score de stats d'un champion à l'autre (τ, en points), hors hasard : sert à rapprocher ton score
+ * de 50 selon sa marge (moyenne bayésienne). Mesuré sur tes champions (≥ 10 parties) ; à défaut, 2,5.
+ */
+export const DEFAULT_TAU = 2.5;
+/**
+ * Rapport « 1 point de stats = r points de win rate » pour mettre ton score de stats sur l'échelle de la force.
+ * Non calibrable proprement (la méta ne garde pas les joueurs) : partie par partie, la pente est de 0,63, gonflée
+ * par l'issue de la partie (majorant). 1 par défaut ; le classement est vérifié avec 0,5 et 2.
+ */
+export const DEFAULT_STATS_RATIO = 1;
+
+/** Ton score de stats rapproché de 50 selon sa marge : 50 + (s − 50) × τ² / (τ² + (marge / 1,96)²). */
+export function shrinkStats(score: number, margin: number, tau = DEFAULT_TAU): number {
+  const se2 = (margin / 1.96) ** 2;
+  return 50 + (score - 50) * (tau * tau) / (tau * tau + se2);
+}
+
+/** τ : écart-type de tes scores par champion moins la part due au hasard (scores et marges de tes champions). */
+export function statsSpread(champs: { score: number; margin: number }[]): number | null {
+  if (champs.length < 4) return null;
+  const m = champs.reduce((s, c) => s + c.score, 0) / champs.length;
+  const v = champs.reduce((s, c) => s + (c.score - m) ** 2, 0) / (champs.length - 1);
+  const noise = champs.reduce((s, c) => s + (c.margin / 1.96) ** 2, 0) / champs.length;
+  return Math.sqrt(Math.max(0, v - noise));
+}
 /** Parties avec maîtrise sur le champion pour que sa correction de maîtrise soit mesurée (sinon : « à confirmer »). */
 export const MIX_MEASURED_MIN = 100;
 /** Accord : parties de méta « fictives » sans effet (un accord tiré de peu de parties reste proche de 50). */
@@ -180,12 +206,12 @@ export interface PotentialScore {
   /** Score final : potentiel, mélangé à ton score de stats sur le champion si tu y as déjà joué. */
   total: number;
   potential: number; force: number; fit: number; learning: number;
-  /** Ton score de stats sur le champion (0–100, même échelle), ses parties et son poids dans le total. */
-  mine: { score: number; games: number; weight: number } | null;
+  /** Tes stats sur le champion : brutes, rapprochées de 50 selon leur marge, sur l'échelle 0–100, poids dans le total. */
+  mine: { stats: number; shrunk: number; score: number; games: number; weight: number } | null;
 }
 
 /** Notes sur 100 de chaque critère, puis total pondéré. */
-export function potentialScore(p: PotentialParts, mine?: { stats: number; games: number } | null): PotentialScore {
+export function potentialScore(p: PotentialParts, mine?: { stats: number; margin: number; games: number } | null, o: { tau?: number; ratio?: number } = {}): PotentialScore {
   const clamp = (x: number) => Math.max(0, Math.min(100, x));
   // Force : ±10 points de win rate autour de 50 % couvrent toute l'échelle.
   const force = clamp(50 + (p.force.adjusted - 50) * 5);
@@ -196,8 +222,12 @@ export function potentialScore(p: PotentialParts, mine?: { stats: number; games:
   const learning = clamp(100 - (100 * Math.log10(mid / 5)) / Math.log10(300 / 5));
   const potential = WEIGHTS.force * force + WEIGHTS.fit * fit + WEIGHTS.learning * learning;
   // Tes résultats sur le champion : la preuve la plus directe ; leur poids monte avec tes parties (½ à 20 parties).
-  // Même échelle que la force : stats 40 → 0, 50 → 50, 60 → 100.
-  const m = mine && mine.games > 0 ? { score: clamp(50 + (mine.stats - 50) * 5), games: mine.games, weight: mine.games / (mine.games + MINE_HALF) } : null;
+  // Rapprochés de 50 selon leur marge, puis mis sur l'échelle de la force (1 point de stats = `ratio` point de win rate).
+  const ratio = o.ratio ?? DEFAULT_STATS_RATIO;
+  const m = mine && mine.games > 0 ? (() => {
+    const shrunk = shrinkStats(mine.stats, mine.margin, o.tau ?? DEFAULT_TAU);
+    return { stats: mine.stats, shrunk, score: clamp(50 + (shrunk - 50) * ratio * 5), games: mine.games, weight: mine.games / (mine.games + MINE_HALF) };
+  })() : null;
   const total = m ? m.weight * m.score + (1 - m.weight) * potential : potential;
   return { total, potential, force, fit, learning, mine: m };
 }

@@ -445,6 +445,8 @@ const legacyWarning = (s: AppState) => s.data.changedAfter
   : null;
 
 function render(s: AppState): void {
+  const goal = $<HTMLSelectElement>("pool-goal");
+  if (document.activeElement !== goal) goal.value = s.poolGoal;
   const ref = $<HTMLSelectElement>("af-ref");
   if (document.activeElement !== ref) ref.value = s.refTier;
   renderClient(s);
@@ -616,6 +618,31 @@ function readFilters(): void {
   };
 }
 for (const id of ["af-champ", "af-role", "af-period", "af-account"]) $(id).addEventListener("change", () => { readFilters(); anKey = null; void loadAnalysis(null); });
+// Objectif du pool : mémorisé, puis l'accueil et Champions sont recalculés.
+$<HTMLSelectElement>("pool-goal").addEventListener("change", (e) => {
+  const goal = (e.target as HTMLSelectElement).value as AppState["poolGoal"];
+  void window.kayn.setPoolGoal(goal).then(() => { renderHome(); void loadTracking(); const fr = $<HTMLIFrameElement>("frame-reco"); if (fr.src) fr.src = fr.dataset.src!; });
+});
+
+/** Progresser : champions en progression et repère « prêt pour la classée ». */
+async function loadTracking(): Promise<void> {
+  const p = await window.kayn.getProgression().catch(() => null);
+  const sec = $("track-sec");
+  if (!p || p.goal !== "progress" || !p.tracking.length) { sec.hidden = true; return; }
+  sec.hidden = false;
+  const STAGE_CLASS: Record<string, string> = { confirmed: "good", readyToTest: "good", backToNormal: "bad", keepPracticing: "", toConfirm: "", learning: "" };
+  const LABEL: Record<string, string> = { learning: "En apprentissage", keepPracticing: "Continuer en normale", readyToTest: "Prêt à tester en classée", confirmed: "Confirmé", backToNormal: "Retour en normale conseillé", toConfirm: "À confirmer" };
+  $("track").replaceChildren(...p.tracking.map((t) => h("div", { class: `track ${STAGE_CLASS[t.stage]}` },
+    h("b", {}, champName(t.championId)), h("span", { class: "small muted" }, t.source === "flag" ? " · choisi par toi" : " · conseillé"),
+    h("span", { class: "badge" }, LABEL[t.stage]),
+    h("p", { class: "small" }, t.text),
+    h("p", { class: "small muted" }, `${plural(t.experience, "partie")} sur la Faille, dont ${plural(t.draftNormal, "normale")} en draft et ${plural(t.rankedGames, "classée")} (jungle).`))));
+}
+function plural(n: number, word: string): string { return `${n} ${word}${n > 1 ? "s" : ""}`;
+}
+void loadTracking();
+window.setInterval(() => void loadTracking(), 120_000);
+
 // Niveau de référence : mémorisé dans les réglages (partagé avec Champions recommandés), puis tout est recalculé.
 $<HTMLSelectElement>("af-ref").addEventListener("change", (e) => {
   const tier = (e.target as HTMLSelectElement).value as AppState["refTier"];

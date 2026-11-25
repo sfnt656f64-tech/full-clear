@@ -59,3 +59,11 @@
 /* Intégrée dans la fenêtre unique : onglets Jungle / Milieu et choix de la référence sur une ligne. */
 .filters { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .filters .tabs { margin: 0; padding: 0; position: static; }
+
+/* Progression */
+.progression { background: var(--panel); border: 1px solid var(--blue); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+.progression h2 { margin: 0 0 6px; font-size: 14px; }
+.prog { display: flex; gap: 10px; align-items: flex-start; }
+.prog > div { flex: 1; min-width: 0; }
+.prog .rank { color: var(--muted); font-weight: 600; width: 18px; flex: none; padding-top: 10px; }
+.flag-btn { font-size: 11px; padding: 2px 8px; }

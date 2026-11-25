@@ -291,6 +291,8 @@ function state(): AppState {
     collectorPaused: settings?.collectorPaused ?? false,
     excludedChampions: settings?.excludedChampions ?? [],
     refTier: settings?.refTier ?? DEFAULT_REF_TIER,
+    poolGoal: settings?.poolGoal ?? "progress",
+    championFlags: settings?.championFlags ?? {},
     data: {
       dir: app.getPath("userData"),
       migratedFrom: migration.status === "migrated" ? migration.from : null,
@@ -489,7 +491,23 @@ function registerIpc(): void {
       return { ok: false, message: `Le client a refusé l'import (${e instanceof Error ? e.message : String(e)}).` };
     }
   });
-  ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier));
+  ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
+  ipcMain.handle(IPC.getProgression, () => engine.call("progression", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
+  ipcMain.handle(IPC.setPoolGoal, (_e, goal: unknown) => {
+    if (goal === "win" || goal === "progress") { settings.poolGoal = goal; saveSettings(settingsFile, settings); }
+    pushState();
+    return state();
+  });
+  ipcMain.handle(IPC.setChampionFlag, (_e, id: unknown, flag: unknown) => {
+    // Seulement des champions qui existent ; null retire le choix.
+    if (typeof id === "string" && findChamp(id)?.id) {
+      const key = findChamp(id)!.id as string;
+      if (flag === "notForMe" || flag === "progress") settings.championFlags[key] = flag; else delete settings.championFlags[key];
+      saveSettings(settingsFile, settings);
+    }
+    pushState();
+    return state();
+  });
   ipcMain.handle(IPC.setExcludedChampions, (_e, ids: unknown) => {
     // Seulement des champions qui existent (identifiants Data Dragon).
     settings.excludedChampions = Array.isArray(ids) ? [...new Set(ids.filter((x): x is string => typeof x === "string" && !!findChamp(x)?.id))] : settings.excludedChampions;

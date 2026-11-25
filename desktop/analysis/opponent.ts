@@ -1,7 +1,7 @@
 // Mesures d'un participant tirées du détail anonyme d'une partie : sert de référence « adversaire direct »
 // (même rôle, même partie) pour les saisons sans méta. Fonctions pures.
 import type { Detail } from "../collector/detail.ts";
-import type { DuelValues, Values } from "./analysis.ts";
+import type { AnalysisGame, DuelValues, Values } from "./analysis.ts";
 import { OBJECTIVES, trades } from "./goals.ts";
 
 const MIN = 60_000;
@@ -87,6 +87,21 @@ const partsOf = (d: Detail) => d.match.parts.map((x) => ({ participantId: n(x.pa
 export function myDuelValues(d: Detail): DuelValues {
   const me = d.match.parts.find((x) => x.me);
   return me && d.timeline && me.teamPosition ? duelValues(d.timeline, partsOf(d), n(me.participantId)) : {};
+}
+
+/** Ta partie reconstruite depuis son détail (normales en draft : elles ne sont pas dans tes parties classées). */
+export function myGameFromDetail(d: Detail): AnalysisGame | null {
+  const me = d.match.parts.find((x) => x.me);
+  if (!me || !d.timeline) return null;
+  const v = valuesOf(d, n(me.participantId));
+  if (!v) return null;
+  const [major, minor] = d.match.version.split(".");
+  return {
+    ...v, matchId: d.match.matchId, account: d.account, startMs: d.match.start, durationS: d.match.duration,
+    patch: `${major}.${minor}`, season: 2010 + Number(major), championId: n(me.championId), role: String(me.teamPosition ?? ""), win: !!me.win,
+    kills: n(me.kills), deaths: n(me.deaths), assists: n(me.assists), cs: n(me.totalMinionsKilled) + n(me.neutralMinionsKilled),
+    teamKills: v.teamKills ?? null, deaths15: v.deaths15 ?? 0, opp: opponentValues(d),
+  };
 }
 
 /** Mesures de ton adversaire direct (même rôle, autre équipe) dans une de tes parties. */

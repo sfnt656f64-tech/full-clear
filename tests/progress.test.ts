@@ -67,8 +67,12 @@ describe("potentiel de progression", () => {
     expect(s.fit).toBe(50);
     expect(s.total).toBeCloseTo(0.55 * 70 + 0.45 * 50, 5); // durée d'apprentissage à 0 %
     // Tes résultats sur le champion : moitié-moitié à 20 parties.
-    const m = potentialScore(parts, { stats: 42, games: 20 });
+    // Marge nulle : pas de rapprochement ; marge large : rapproché de 50.
+    const m = potentialScore(parts, { stats: 42, margin: 0, games: 20 });
     expect(m.mine).toMatchObject({ score: 10, games: 20, weight: 0.5 });
+    expect(potentialScore(parts, { stats: 62, margin: 18, games: 7 }).mine!.shrunk).toBeLessThan(51);
+    // Rapport stats → win rate : 2 fois plus fort, 2 fois plus d'écart.
+    expect(potentialScore(parts, { stats: 45, margin: 0, games: 20 }, { ratio: 2 }).mine!.score).toBe(0);
     expect(m.total).toBeCloseTo(0.5 * 10 + 0.5 * s.potential, 5);
   });
 

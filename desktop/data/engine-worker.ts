@@ -10,6 +10,7 @@ const calls = {
   analysis: (...a: Parameters<Engine["analysis"]>) => engine.analysis(...a),
   goals: (startMs: number, targets: Record<string, number>, excluded: number[]) => engine.goals(startMs, targets, excluded),
   reco: (...a: Parameters<Engine["reco"]>) => engine.reco(...a),
+  progression: (...a: Parameters<Engine["progression"]>) => engine.progression(...a),
   metaView: (scope: number) => engine.metaView(scope),
   myGames: () => engine.myGames(),
   draftExtras: (...a: Parameters<Engine["draftExtras"]>) => engine.draftExtras(...a),

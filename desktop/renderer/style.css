@@ -269,3 +269,8 @@ body.app { display: flex; height: 100vh; padding: 0; overflow: hidden; }
 .frame { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .frame[hidden] { display: none; }
 .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 12px; }
+
+.track { border-left: 3px solid var(--line); padding: 4px 10px; margin: 6px 0; }
+.track.good { border-left-color: var(--ok); }
+.track.bad { border-left-color: var(--red); }
+.track .badge { margin-left: 8px; }
