@@ -17,9 +17,11 @@ import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
 import type { CollectorStore } from "./store.ts";
 import { damageOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
 import { cleanDetail, packDetail } from "./detail.ts";
-import { META_LABELS, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
+import { META_LABELS, metaJungleMastery, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
 
 export const QUEUE_SOLO_DUO = 420;
+/** Normale en draft : seule file hors classée aux règles standard de la Faille gardée pour les stats. */
+export const QUEUE_DRAFT_NORMAL = 400;
 const PAGE = 100;
 /** Délai minimal entre deux vérifications de nouvelles parties sur un compte. */
 export const REFRESH_MS = 20 * 60_000;
@@ -37,6 +39,9 @@ type Handler = (ctx: JobContext, payload: never) => Promise<void>;
 export const accountKey = (riotId: string) => `account:${riotId.toLocaleLowerCase()}`;
 export const idsKey = (puuid: string, start: number) => `myMatchIds:${puuid}:${start}`;
 export const historyKey = (puuid: string, start: number) => `myHistoryIds:${puuid}:${start}`;
+export const allIdsKey = (puuid: string, start: number) => `myAllIds:${puuid}:${start}`;
+/** Tous les modes : après l'historique classé (même priorité), pour ne pas relire des parties classées pas encore enregistrées. */
+const ALL_MODES_RANK = 10;
 /** Même clé pour une partie, qu'elle vienne de la liste de la saison ou de l'historique : jamais deux fois. */
 export const matchKey = (matchId: string, puuid: string) => `myMatch:${matchId}:${puuid}`;
 
@@ -132,6 +137,11 @@ function refreshIds(ctx: JobContext, puuid: string, riotId: string, force = fals
   const st = ctx.store.jobStatus(key);
   if (!st) ctx.store.enqueue("myMatchIds", key, PRIORITY.mine, { puuid, riotId, start: 0 });
   else if (st.status !== "pending" && st.status !== "running" && (force || ctx.now() - st.updatedAt >= REFRESH_MS)) ctx.store.requeue(key);
+  // Tous les modes (expérience sur un champion, normales en draft) : même rythme, priorité basse.
+  const all = allIdsKey(puuid, 0);
+  const sa = ctx.store.jobStatus(all);
+  if (!sa) ctx.store.enqueue("myAllIds", all, PRIORITY.mineOld, { puuid, riotId, start: 0 }, ALL_MODES_RANK);
+  else if (sa.status !== "pending" && sa.status !== "running" && (force || ctx.now() - sa.updatedAt >= REFRESH_MS)) ctx.store.requeue(all);
 }
 
 const account: Handler = async (ctx, p: { riotId: string }) => {
@@ -172,6 +182,40 @@ async function listPage(ctx: JobContext, p: IdsPayload, scope: "season" | "histo
   });
 }
 
+/**
+ * Liste de toutes tes parties, tous modes : chaque partie inconnue est lue une fois (champion, mode, victoire).
+ * Page suivante tant que la page est pleine et apporte du nouveau (au premier passage : tout l'historique de l'API).
+ */
+const myAllIds: Handler = async (ctx, p: IdsPayload) => {
+  const q = new URLSearchParams({ start: String(p.start), count: String(PAGE) });
+  const ids = (await ctx.api.get<string[]>("europe", `/lol/match/v5/matches/by-puuid/${encodeURIComponent(p.puuid)}/ids?${q}`, PRIORITY.mineOld)) ?? [];
+  let fresh = 0;
+  ctx.store.tx(() => {
+    for (const matchId of ids) {
+      if (ctx.store.knownGame(matchId, p.riotId)) continue;
+      if (ctx.store.enqueue("myOther", `myOther:${matchId}:${p.puuid}`, PRIORITY.mineOld, { matchId, puuid: p.puuid, riotId: p.riotId }, ALL_MODES_RANK)) fresh++;
+    }
+    if (ids.length === PAGE && fresh > 0) {
+      const next = allIdsKey(p.puuid, p.start + PAGE);
+      if (!ctx.store.enqueue("myAllIds", next, PRIORITY.mineOld, { ...p, start: p.start + PAGE }, ALL_MODES_RANK)) ctx.store.requeue(next);
+    }
+  });
+};
+
+/** Partie hors Solo/Duo : champion, mode, victoire ; normale en draft : aussi son détail anonyme (stats). */
+const myOther: Handler = async (ctx, p: { matchId: string; puuid: string; riotId: string }) => {
+  const m = await ctx.api.get<MatchV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}`, PRIORITY.mineOld, { allow404: true });
+  if (!m || m.info.queueId === QUEUE_SOLO_DUO) return; // Solo/Duo : déjà lue par la collecte de tes parties
+  const me = (m.info.participants as unknown as { puuid: string; championId: number; teamPosition?: string; win: boolean; gameEndedInEarlySurrender?: boolean }[]).find((x) => x.puuid === p.puuid);
+  if (!me) return;
+  const start = (m.info as { gameStartTimestamp?: number }).gameStartTimestamp ?? m.info.gameCreation;
+  ctx.store.putOtherGame({ matchId: p.matchId, account: p.riotId, startMs: start, queue: m.info.queueId, championId: me.championId, role: me.teamPosition ?? "", win: me.win, remake: !!me.gameEndedInEarlySurrender });
+  if (m.info.queueId === QUEUE_DRAFT_NORMAL && !me.gameEndedInEarlySurrender) {
+    const t = await ctx.api.get<TimelineV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}/timeline`, PRIORITY.mineOld, { allow404: true });
+    ctx.store.putDetail(p.matchId, p.riotId, packDetail(cleanDetail(p.riotId, m as never, t as never, p.puuid)));
+  }
+};
+
 const myMatchIds: Handler = (ctx, p: IdsPayload) => listPage(ctx, p, "season");
 const myHistoryIds: Handler = (ctx, p: IdsPayload) => listPage(ctx, p, "history");
 
@@ -189,8 +233,8 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
 };
 
 export const HANDLERS: Record<string, Handler> = {
-  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage, myDetail: myMatch,
-  metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
+  account, myMatchIds, myHistoryIds, myMatch, myAllIds, myOther, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage, myDetail: myMatch,
+  metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler, metaJungleMastery: metaJungleMastery as Handler,
 };
 
 /** Libellés pour l'affichage. */
@@ -199,6 +243,8 @@ export const JOB_LABELS: Record<string, string> = {
   myMatchIds: "Listes de parties (saison)",
   myMatch: "Mes parties (saison)",
   myHistoryIds: "Listes de parties (anciennes saisons)",
+  myAllIds: "Listes de parties (tous modes)",
+  myOther: "Parties hors classée (expérience, normales en draft)",
   myOldMatch: "Mes parties (anciennes saisons)",
   myMastery: "Ma maîtrise de champion",
   myReread: "Mes parties : relecture pour l'analyse",

@@ -1,4 +1,6 @@
 // Contrat entre le processus principal et la fenêtre (exposé par preload.ts sous window.kayn).
+import type { ComfortEntry, ProgressEntry, Stage } from "./reco/progression.ts";
+import type { FirstGames } from "./reco/progress.ts";
 import type { RefInfo, RefTier } from "./analysis/ref-tier.ts";
 import type { DraftView } from "./draft-view.ts";
 import type { HostState } from "./collector-host.ts";
@@ -52,6 +54,8 @@ export interface AnalysisView {
 /** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
 export interface RecoView extends Recommendations {
   patches: string[];
+  /** Objectif du pool utilisé pour le pool conseillé. */
+  goal?: PoolGoal;
   /** Référence des radars et du classement. */
   reference: RefInfo;
   /** Classement par potentiel et radars de tes champions, par rôle. */
@@ -124,6 +128,8 @@ export interface AppState {
   excludedChampions: string[];
   /** Niveau de référence choisi. */
   refTier: RefTier;
+  poolGoal: PoolGoal;
+  championFlags: Record<string, "notForMe" | "progress">;
   /** Dossier de données, et reprise de l'ancien dossier « kayn-sim » (changement de nom). */
   data: { dir: string; migratedFrom: string | null; legacyKept: string | null; error: string | null; /** Ancien dossier modifié après la reprise (date de la reprise). */ changedAfter: string | null };
   problems: string[];
@@ -151,6 +157,10 @@ export interface KaynApi {
   onNavigate(cb: (nav: Navigation) => void): void;
   /** Niveau de référence des comparaisons (Analyse, Champions). */
   setRefTier(tier: RefTier): Promise<AppState>;
+  /** Objectif du pool, et choix par champion (null : retirer le choix). */
+  setPoolGoal(goal: PoolGoal): Promise<AppState>;
+  setChampionFlag(id: string, flag: "notForMe" | "progress" | null): Promise<AppState>;
+  getProgression(): Promise<ProgressionView>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Suivi de tes objectifs (jungle). */
   getGoals(): Promise<GoalsView>;
@@ -186,6 +196,9 @@ export const IPC = {
   openRecoWindow: "kayn:open-reco-window",
   getAnalysis: "kayn:get-analysis",
   setRefTier: "kayn:set-ref-tier",
+  setPoolGoal: "kayn:set-pool-goal",
+  setChampionFlag: "kayn:set-champion-flag",
+  getProgression: "kayn:get-progression",
   navigate: "kayn:navigate",
   getOverview: "kayn:get-overview",
   getGoals: "kayn:get-goals",
@@ -220,3 +233,38 @@ export const OVERLAY_IPC = {
 
 /** Vue de la fenêtre unique : onglet, sous-vue de Champions, ancre du simulateur (draft). */
 export interface Navigation { tab: "home" | "draft" | "analysis" | "champions" | "settings"; sub?: "reco" | "stats" | "meta" | "sim"; hash?: string }
+
+/** Objectif du pool : gagner tout de suite (pool établi) ou progresser sur de nouveaux champions. */
+export type PoolGoal = "win" | "progress";
+
+export interface ProgressCandidate extends ProgressEntry { myGames: number; myWins: number }
+export interface TrackEntry {
+  championId: number;
+  /** Pourquoi il est suivi : conseillé (pool) ou choisi par toi. */
+  source: "advice" | "flag";
+  /** Parties sur la Faille, toutes files (expérience), dont normales en draft et classées. */
+  experience: number; draftNormal: number; rankedGames: number;
+  /** Stats sur les parties aux règles standard (classées et normales en draft), et en classée seulement. */
+  standard: Radar | null; ranked: Radar | null;
+  stage: Stage; text: string;
+}
+export interface ProgressionView {
+  goal: PoolGoal;
+  weights: { force: number; fit: number; learning: number };
+  reference: RefInfo;
+  patches: string[];
+  /** Parties de jungle de la méta avec points de maîtrise. */
+  masteryGames: number;
+  candidates: ProgressCandidate[];
+  comfort: ComfortEntry[];
+  notForMe: number[];
+  /** Ta vitesse d'apprentissage (10 premières parties contre les suivantes) ; null : pas encore mesurable. */
+  learningSpeed: FirstGames | null;
+  /** Écart réel de tes stats d'un champion à l'autre (τ). */
+  tau: number;
+  /** Points de maîtrise par partie, tous modes (champions découverts pendant l'historique). */
+  calibration: { champions: number; median: number; low: number; high: number } | null;
+  tracking: TrackEntry[];
+  /** Ton radar en jungle (saison en cours) : tes axes forts. */
+  myAxes: (number | null)[];
+}

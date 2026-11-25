@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Collector, type CollectorStatus } from "../desktop/collector/collector";
-import { accountKey, HANDLERS, historyKey, idsKey, masteryKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { accountKey, HANDLERS, historyKey, allIdsKey, idsKey, masteryKey, scheduleAccounts } from "../desktop/collector/jobs";
 import { readMyMastery } from "../desktop/stats/read";
 import { at15, patchOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "../desktop/collector/my-games";
 import { KeyRefusedError, PRIORITY, RiotScheduler } from "../desktop/collector/scheduler";
@@ -199,7 +199,8 @@ function fakeRiot(onMatch: (n: number) => void = () => {}) {
     if (u.pathname.startsWith("/riot/account/v1/accounts/by-riot-id/Moi/EUW")) return json({ puuid: ME });
     if (u.pathname.endsWith("/ids")) {
       const start = Number(u.searchParams.get("start"));
-      expect(u.searchParams.get("queue")).toBe("420");
+      // Solo/Duo (queue=420), ou tous les modes (sans filtre) : la même liste, ARAM comprise.
+      expect([null, "420"]).toContain(u.searchParams.get("queue"));
       return json(ids.slice(start, start + Number(u.searchParams.get("count"))));
     }
     const m = u.pathname.match(/matches\/([^/]+)(\/timeline)?$/);
@@ -234,8 +235,13 @@ describe("collecte de mes parties", () => {
     await until(() => (store.gameCounts()["Moi#EUW"] ?? 0) === 149);
     col.stop();
     expect(store.get(accountKey("Moi#EUW"))).toBe(ME);
-    // 2 pages pour la saison, 2 pour l'historique (dont les parties, déjà connues, ne sont pas redemandées).
-    expect(calls.filter((c) => c.endsWith("/ids"))).toHaveLength(4);
+    // 2 pages pour la saison, 2 pour l'historique, puis tous les modes (dont les parties, déjà connues, ne sont pas
+    // redemandées).
+    await until(() => (store.db.prepare("select count(*) n from my_other_games").get() as { n: number }).n === 1);
+    col.stop();
+    expect(calls.filter((c) => c.endsWith("/ids")).length).toBeGreaterThanOrEqual(5);
+    // L'ARAM (hors Solo/Duo) est gardée comme expérience : champion, mode, victoire, sans chronologie.
+    expect(store.db.prepare("select match_id, queue from my_other_games").all()).toEqual([{ match_id: "EUW1_999", queue: 450 }]);
     expect(calls.filter((c) => c.endsWith("/timeline"))).toHaveLength(149); // pas de chronologie pour l'ARAM
     expect(last!.myGames).toEqual({ "Moi#EUW": 149 });
     expect(last!.jobs.find((j) => j.kind === "myMatch")).toMatchObject({ done: 150, failed: 0 });
@@ -293,6 +299,10 @@ describe("collecte de mes parties", () => {
     const h = store.claimNext()!;
     expect(h.key).toBe(historyKey(ME, 0));
     store.done(h.id);
+    // Tous les modes : après l'historique classé.
+    const a = store.claimNext()!;
+    expect(a.key).toBe(allIdsKey(ME, 0));
+    store.done(a.id);
     now += 60_000;
     scheduleAccounts(ctx, ["Moi#EUW"]);
     expect(store.claimNext()).toBeNull();
@@ -367,7 +377,9 @@ describe("anciennes saisons", () => {
     await until(() => (store.gameCounts()["Moi#EUW"] ?? 0) === 150);
     col.stop();
     // Chaque partie une seule fois, et toutes celles de la saison avant les anciennes.
-    expect(order).toHaveLength(150);
+    // Classées : 150 ; la liste « tous modes » passe après, à 3 travaux près en parallèle (au plus 3 relectures).
+    expect(order.length).toBeGreaterThanOrEqual(150);
+    expect(order.length).toBeLessThanOrEqual(150 + 3);
     const firstOld = order.findIndex((id) => Number(id.slice(5)) <= 500);
     expect(order.slice(0, firstOld).every((id) => season.includes(id))).toBe(true);
     expect(firstOld).toBeGreaterThanOrEqual(season.length - 3); // 3 travaux en parallèle

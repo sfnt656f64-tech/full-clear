@@ -2,7 +2,8 @@
 import { officialPatch } from "../../src/data/version";
 import { champByKey } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
-import type { KaynApi, MetaTrend, RecoView } from "../ipc.ts";
+import type { KaynApi, MetaTrend, ProgressionView, RecoView } from "../ipc.ts";
+import { AXES } from "../analysis/radar.ts";
 import { wilson } from "../reco/pool-advice.ts";
 import type { PlayProfile, PoolPick, RoleReco, TryPick } from "../reco/recommend.ts";
 import { learningLabel } from "../reco/recommend.ts";
@@ -132,6 +133,7 @@ function render(): void {
   if (!r) return;
   renderProfile(r);
   renderAdvice();
+  renderProgression();
   const groups = view.potential?.[role] ?? { keep: [], potential: [], neutral: [], shelve: [] };
   const pickOf = new Map(r.pool.map((p) => [p.championId, p]));
   const EMPTY = { keep: "Aucun champion pour l'instant.", potential: "Aucun champion pour l'instant.", neutral: "Aucun.", shelve: "Aucun : rien à écarter." } as const;
@@ -155,12 +157,75 @@ function renderAdvice(): void {
     el("p", { class: "small" }, a.text));
 }
 
+let prog: ProgressionView | null = null;
+const f1 = (n: number) => nf(n, 1);
+const sg = (n: number) => `${n >= 0 ? "+" : "−"}${f1(Math.abs(n))}`;
+
+/** Bouton de choix par champion (« Pas pour moi », « Je veux progresser dessus », ou retirer le choix). */
+function flagButton(championId: number, flag: "notForMe" | "progress" | null, label: string): HTMLElement {
+  const b = el("button", { type: "button", class: "flag-btn" }, label);
+  b.addEventListener("click", async () => {
+    const id = champByKey(championId)?.id;
+    if (!id) return;
+    b.setAttribute("disabled", "");
+    await window.kayn.setChampionFlag(id, flag);
+    prog = null;
+    await reload();
+  });
+  return b;
+}
+
+/** Mode « Progresser » (jungle) : classement, critères et poids, confort, champions écartés. */
+function renderProgression(): void {
+  const sec = $("progression");
+  const p = prog;
+  if (!p || view?.goal !== "progress" || role !== "JUNGLE") {
+    sec.hidden = true;
+    if (view?.goal === "progress" && role !== "JUNGLE") { sec.hidden = false; sec.replaceChildren(el("p", { class: "small muted" }, "Objectif « Progresser » : jungle seulement pour l'instant (la maîtrise des joueurs n'est collectée que pour les junglers). Au milieu, le pool conseillé reste celui de l'objectif « Gagner tout de suite »."));}
+    return;
+  }
+  sec.hidden = false;
+  const strong = p.myAxes.map((v, i) => ({ v, l: AXES[i]?.label })).filter((x) => x.v != null && x.v > 50).map((x) => `${x.l} (${f1(x.v!)})`).join(", ");
+  const w = p.weights;
+  const row = (e: ProgressionView["candidates"][number], i: number) => el("li", { class: "card prog" },
+    el("span", { class: "rank" }, String(i + 1)), portrait(e.championId),
+    el("div", {},
+      el("div", { class: "name" }, champName(e.championId), e.flag === "progress" ? el("span", { class: "tag-prov" }, "choisi") : "", el("span", { class: "pscore" }, ` · potentiel ${f1(e.score.total)}`)),
+      el("div", { class: "facts" },
+        `force à maîtrise égale ${f1(e.force.adjusted)} % `, e.force.mixMeasured ? "" : el("span", { class: "tag-prov", title: "Part de débutants tirée de son groupe de difficulté : moins de 100 parties avec maîtrise sur ce champion" }, "à confirmer"),
+        ` (brut ${f1(e.force.raw)} % ± ${f1(e.force.margin)} sur ${nf(e.force.games)} parties → corrigé de maîtrise ${f1(e.force.equal)} % → rapproché de 50 % selon les parties : ${f1(e.force.adjusted)} %) · accord avec tes axes forts ${sg(e.fit.value)} ± ${f1(e.fit.margin)} pts de win rate · difficulté Riot ${e.difficulty}/10`,
+        e.ceiling.measurable ? ` · plafond ${sg(e.ceiling.delta)} ± ${f1(e.ceiling.margin)} (info)` : " · plafond non mesurable (info)"),
+      el("div", { class: "small muted" }, e.score.mine
+        ? `Toi : ${e.score.mine.games} parties, stats ${f1(e.score.mine.stats)} → ${f1(e.score.mine.shrunk)} rapprochées de 50 selon leur marge, poids ${Math.round(e.score.mine.weight * 100)} % (potentiel seul ${f1(e.score.potential)})${e.score.mine.games < 20 ? " · moins de 20 parties" : ""}`
+        : `Toi : ${e.myGames ? `${e.myGames} partie${e.myGames > 1 ? "s" : ""} en jungle, pas encore de stats (moins de 5 parties)` : "jamais joué en jungle"}`),
+      el("div", { class: "row" }, e.flag === "progress" ? flagButton(e.championId, null, "Retirer le choix") : flagButton(e.championId, "progress", "Je veux progresser dessus"), flagButton(e.championId, "notForMe", "Pas pour moi"))));
+  const comfort = p.comfort.map((c) => el("li", {}, portrait(c.championId, "advice-ic"),
+    el("div", {}, el("b", {}, champName(c.championId)), el("div", { class: "small muted" },
+      `${c.games} parties en jungle (deux saisons) · ${c.games ? `${nf((c.wins / c.games) * 100)} % ± ${nf(wilson(c.wins, c.games))} de victoires` : "–"} · stats ${c.stats != null ? `${f1(c.stats)}${c.margin != null ? ` ± ${f1(c.margin)}` : ""}` : "–"} · confort : ${c.reason}`),
+      el("div", { class: "row" }, flagButton(c.championId, "progress", "Je veux progresser dessus"), flagButton(c.championId, "notForMe", "Pas pour moi")))));
+  const banned = p.notForMe.map((c) => el("li", {}, champName(c), " ", flagButton(c, null, "Rétablir")));
+  const ls = p.learningSpeed;
+  sec.replaceChildren(
+    el("h2", {}, "Progression (jungle)"),
+    el("p", { class: "small" }, `Potentiel = ${Math.round(w.force * 100)} % force à maîtrise égale + ${Math.round(w.fit * 100)} % accord avec tes axes forts${w.learning ? ` + ${Math.round(w.learning * 100)} % durée d'apprentissage` : " (durée d'apprentissage : 0 % pour l'instant, difficulté Riot en information)"}. Tes axes forts : ${strong || "aucun au-dessus de la médiane"}. Tes stats sur un champion comptent de plus en plus avec tes parties (moitié-moitié à 20 parties), rapprochées de 50 selon leur marge.`),
+    el("ol", { class: "cards" }, ...p.candidates.slice(0, 10).map(row)),
+    el("h3", { class: "grp keep" }, "Confort (déjà beaucoup joués) : tes résultats"),
+    el("ol", { class: "advice-list" }, ...(comfort.length ? comfort : [el("li", { class: "empty" }, "Aucun.")])),
+    ...(banned.length ? [el("h3", { class: "grp shelve" }, "Pas pour moi"), el("ul", { class: "small" }, ...banned)] : []),
+    el("p", { class: "small muted" }, [
+      `Méta : ${nf(p.masteryGames)} parties de jungle avec maîtrise (la collecte en ajoute à chaque partie).`,
+      ls ? `Ta vitesse d'apprentissage : ${sg(ls.diff)} ± ${f1(ls.margin)} entre tes 10 premières parties et les suivantes (${ls.champions} champions)${Math.abs(ls.diff) > ls.margin ? "." : " : pas encore mesurable, vitesse moyenne utilisée."}` : "Ta vitesse d'apprentissage : pas encore mesurable.",
+      p.calibration ? `Points de maîtrise par partie (tous modes) : ${nf(p.calibration.median)} (${nf(p.calibration.low)}–${nf(p.calibration.high)}, ${p.calibration.champions} champions).` : "Points par partie : en attente du comptage de toutes tes parties (collecte).",
+    ].join(" ")));
+}
+
 async function reload(): Promise<void> {
   // Premier chargement : indicateur pendant le calcul (dans le moteur, la fenêtre reste utilisable).
   if (!view) $("summary").textContent = "Calcul des recommandations…";
   const v = await window.kayn.getRecommendations().catch((e) => { console.error(e); return null; });
   if (!v) return;
   view = v;
+  prog = v.goal === "progress" ? await window.kayn.getProgression().catch((e) => { console.error(e); return null; }) : null;
   $<HTMLSelectElement>("ref-tier").value = view.reference.tier;
   $("summary").textContent = view.patches.length
     ? `Méta : ${nf(view.metaMatches)} partie(s) Émeraude+ en ${view.patches.map(officialPatch).join(" et ")} · radars comparés au niveau ${view.reference.short} (${nf(view.reference.games)} joueurs de méta en jungle et au milieu)`

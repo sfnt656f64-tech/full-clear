@@ -27,11 +27,15 @@ export interface Settings {
   goals: { startMs: number | null; targets: Record<string, number> };
   /** Niveau de référence des comparaisons. */
   refTier: RefTier;
+  /** Objectif du pool : gagner tout de suite, ou progresser sur de nouveaux champions. */
+  poolGoal: "win" | "progress";
+  /** Choix par champion (identifiant Data Dragon), prioritaires sur le seuil « déjà beaucoup joué ». */
+  championFlags: Record<string, "notForMe" | "progress">;
 }
 
 export const DEFAULT_EXCLUDED = ["Jax", "Fiora", "Camille"];
 
-export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED], goals: { startMs: null, targets: {} }, refTier: DEFAULT_REF_TIER };
+export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED], goals: { startMs: null, targets: {} }, refTier: DEFAULT_REF_TIER, poolGoal: "progress", championFlags: {} };
 
 export function parseSettings(text: string | null): Settings {
   try {
@@ -55,6 +59,8 @@ export function parseSettings(text: string | null): Settings {
         targets: Object.fromEntries(Object.entries(raw.goals?.targets ?? {}).filter(([k, v]) => /^[A-Za-z0-9]{1,30}$/.test(k) && typeof v === "number" && Number.isFinite(v))),
       },
       refTier: isRefTier(raw.refTier) ? raw.refTier : DEFAULT_REF_TIER,
+      poolGoal: raw.poolGoal === "win" ? "win" : "progress",
+      championFlags: Object.fromEntries(Object.entries(raw.championFlags ?? {}).filter(([k, v]) => /^[A-Za-z]{1,30}$/.test(k) && (v === "notForMe" || v === "progress"))),
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

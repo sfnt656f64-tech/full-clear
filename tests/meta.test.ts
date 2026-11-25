@@ -157,12 +157,19 @@ describe("collecte de la méta", () => {
     expect(store.db.prepare("select champion_id, role, win, points from meta_mastery order by match_id").all()).toEqual([
       { champion_id: 1, role: "MIDDLE", win: 1, points: 123_456 }, { champion_id: 1, role: "MIDDLE", win: 1, points: 123_456 },
     ]);
+    // Maîtrise des deux junglers de chaque partie (participants 1 et 6), lue à la collecte.
+    expect(store.db.prepare("select match_id, participant_id, champion_id, win, points from meta_jungle_mastery order by match_id, participant_id").all()).toEqual([
+      { match_id: "EUW1_1", participant_id: 1, champion_id: 141, win: 1, points: 123_456 }, { match_id: "EUW1_1", participant_id: 6, champion_id: 5, win: 0, points: 123_456 },
+      { match_id: "EUW1_2", participant_id: 1, champion_id: 141, win: 1, points: 123_456 }, { match_id: "EUW1_2", participant_id: 6, champion_id: 5, win: 0, points: 123_456 },
+    ]);
+    // Par partie : joueur suivi (milieu) + 2 junglers.
+    expect(calls.filter((c) => c.includes("/champion-mastery/"))).toHaveLength(6);
     // Ordre d'achat seulement pour Kayn (ton pool), pas pour les 9 autres.
     expect(store.db.prepare("select distinct champion_id c from meta_builds").all()).toEqual([{ c: 141 }]);
     expect(calls.filter((c) => c.endsWith("/timeline"))).toHaveLength(2);
     // Confidentialité : plus aucun PUUID nulle part une fois les travaux terminés.
     const dump = JSON.stringify(store.db.prepare("select key, payload from jobs where status = 'done'").all())
-      + JSON.stringify(store.db.prepare("select * from meta_parts").all());
+      + JSON.stringify(store.db.prepare("select * from meta_parts").all()) + JSON.stringify(store.db.prepare("select * from meta_jungle_mastery").all());
     expect(dump).not.toMatch(/src-0|puuid-/);
 
     // Lecture pour la fenêtre « Méta ».
@@ -170,6 +177,37 @@ describe("collecte de la méta", () => {
     const input = readMeta(file, ["16.23", "16.22"]);
     expect(input.matches).toBe(2);
     expect(metaStats(input).find((c) => c.championId === 141)).toMatchObject({ games: 2, pickRate: 100, starter: { id: 1101 } });
+    store.close();
+  });
+
+  it("rattrapage de la maîtrise des junglers : seulement les parties de moins de 14 jours", async () => {
+    const { scheduleMeta, metaJungleMastery } = await import("../desktop/collector/meta-jobs");
+    const store = new CollectorStore(tmpDb());
+    const DAY = 86_400_000, now = 100 * DAY;
+    const recent = summarizeMetaMatch(metaMatch("R")), old = summarizeMetaMatch(metaMatch("O"));
+    store.putMetaGame({ ...recent, startMs: now - 3 * DAY }, "EMERALD");
+    store.putMetaGame({ ...old, startMs: now - 20 * DAY }, "EMERALD");
+    const calls: string[] = [];
+    const api = { get: async (_r: string, path: string) => {
+      calls.push(path);
+      if (path.includes("/champion-mastery/")) return { championPoints: 4_200 };
+      const mm = metaMatch("R"); mm.info.gameCreation = now - 3 * DAY; return mm;
+    } };
+    const ctx = { store, api, now: () => now, pool: () => new Set<number>() } as never;
+    scheduleMeta(ctx);
+    const jobs = store.db.prepare("select key from jobs where kind = 'metaJungleMastery'").all() as { key: string }[];
+    expect(jobs.map((j) => j.key)).toEqual(["metaJungleMastery:R"]);
+    // Les plus récentes d'abord.
+    const r2 = summarizeMetaMatch(metaMatch("N"));
+    store.putMetaGame({ ...r2, startMs: now - 1 * DAY }, "EMERALD");
+    scheduleMeta(ctx);
+    const order = store.db.prepare("select key from jobs where kind = 'metaJungleMastery' order by priority, rank, id").all() as { key: string }[];
+    expect(order.map((j) => j.key)).toEqual(["metaJungleMastery:N", "metaJungleMastery:R"]);
+    await metaJungleMastery(ctx, { matchId: "R" });
+    expect(store.db.prepare("select participant_id, champion_id, points from meta_jungle_mastery").all()).toEqual([
+      { participant_id: 1, champion_id: 141, points: 4_200 }, { participant_id: 6, champion_id: 5, points: 4_200 },
+    ]);
+    expect(calls.filter((c) => c.includes("/champion-mastery/"))).toHaveLength(2);
     store.close();
   });
 
