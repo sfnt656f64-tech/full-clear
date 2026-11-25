@@ -60,32 +60,89 @@
 
   <!-- ===================== Analyse ===================== -->
   <main id="tab-analysis" class="tab" role="tabpanel" hidden>
-    <section>
-      <div class="row an-head">
-        <select id="an-game" aria-label="Partie analysée"></select>
+    <section class="an-filters">
+      <div class="an-grid">
+        <label>Champion <select id="af-champ"></select></label>
+        <label>Rôle <select id="af-role"><option value="">Tous</option><option value="JUNGLE">Jungle</option><option value="MIDDLE">Milieu</option></select></label>
+        <label>Période <select id="af-period"></select></label>
+        <label>Compte <select id="af-account"></select></label>
       </div>
-      <p id="an-summary" class="small muted"></p>
-      <p id="an-empty" class="muted" hidden>Pas encore de partie analysée : la collecte relit tes dernières parties (onglet Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
-    </section>
-    <section id="an-map-sec">
-      <h2>Carte de tes kills et de tes morts</h2>
-      <div class="row an-filter" role="group" aria-label="Période">
-        <button type="button" data-f="all" aria-pressed="true">Toute la partie</button>
-        <button type="button" data-f="early" aria-pressed="false">Avant 15 min</button>
-        <button type="button" data-f="late" aria-pressed="false">Après 15 min</button>
+      <div class="an-views" role="tablist">
+        <button type="button" data-view="overview" aria-selected="true">Vue d'ensemble</button>
+        <button type="button" data-view="game" aria-selected="false">Partie par partie</button>
       </div>
-      <div id="an-map" class="an-map"><img id="an-map-img" alt="Carte de la Faille de l'invocateur"></div>
-      <p class="small muted"><span class="dot-k"></span> kill <span class="dot-a"></span> assist <span class="dot-d"></span> mort · survole un point pour la minute et le champion</p>
     </section>
-    <section id="an-metrics-sec">
-      <h2>Ta partie comparée à l'Émeraude+</h2>
-      <div id="an-metrics"></div>
-      <p id="an-ref" class="small muted"></p>
-    </section>
-    <section id="an-focus-sec">
-      <h2>Points à travailler</h2>
-      <div id="an-focus"></div>
-    </section>
+
+    <!-- Vue d'ensemble -->
+    <div id="an-overview">
+      <section>
+        <p id="ov-summary" class="ov-summary"></p>
+        <p id="ov-note" class="small muted"></p>
+        <div id="ov-metrics"></div>
+      </section>
+      <section>
+        <div class="ov-sw">
+          <div><h2>Points forts</h2><ul id="ov-strengths" class="ov-list"></ul></div>
+          <div><h2>Points faibles</h2><ul id="ov-weaknesses" class="ov-list"></ul></div>
+        </div>
+      </section>
+      <section>
+        <h2>Carte de chaleur</h2>
+        <div class="row an-filter" role="group" aria-label="Événements">
+          <button type="button" data-hk="both" aria-pressed="true">Kills et morts</button>
+          <button type="button" data-hk="kills" aria-pressed="false">Kills</button>
+          <button type="button" data-hk="deaths" aria-pressed="false">Morts</button>
+        </div>
+        <div class="row an-filter" role="group" aria-label="Période de la partie">
+          <button type="button" data-ht="all" aria-pressed="true">Toute la partie</button>
+          <button type="button" data-ht="early" aria-pressed="false">Avant 15 min</button>
+          <button type="button" data-ht="late" aria-pressed="false">Après 15 min</button>
+        </div>
+        <div class="an-map"><img class="an-map-bg" alt="Carte de la Faille de l'invocateur"><canvas id="ov-heat"></canvas></div>
+        <p id="ov-heat-note" class="small muted"></p>
+      </section>
+      <section>
+        <h2>Évolution</h2>
+        <div class="row"><select id="ov-evo-metric" aria-label="Mesure"></select></div>
+        <div id="ov-evo"></div>
+      </section>
+      <section id="ov-table-sec">
+        <h2>Tes champions entre eux</h2>
+        <div class="table-scroll"><table id="ov-table" class="ov-table"></table></div>
+        <p class="small muted">Couleurs : par rapport à tes autres champions (vert = ton meilleur, rouge = ton plus faible). Survol : médiane Émeraude+ sur le champion. Clic sur un nom : le choisir dans le filtre.</p>
+      </section>
+      <p id="ov-empty" class="muted" hidden>Aucune partie analysée pour ces filtres. La collecte relit tes parties (onglet Collecte).</p>
+    </div>
+
+    <!-- Partie par partie -->
+    <div id="an-game-view" hidden>
+      <section>
+        <div class="row an-head">
+          <select id="an-game" aria-label="Partie analysée"></select>
+        </div>
+        <p id="an-summary" class="small muted"></p>
+        <p id="an-empty" class="muted" hidden>Pas de partie analysée pour ces filtres : la collecte relit tes parties (onglet Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
+      </section>
+      <section id="an-map-sec">
+        <h2>Carte de tes kills et de tes morts</h2>
+        <div class="row an-filter an-game-filter" role="group" aria-label="Période">
+          <button type="button" data-f="all" aria-pressed="true">Toute la partie</button>
+          <button type="button" data-f="early" aria-pressed="false">Avant 15 min</button>
+          <button type="button" data-f="late" aria-pressed="false">Après 15 min</button>
+        </div>
+        <div id="an-map" class="an-map"><img class="an-map-bg" alt="Carte de la Faille de l'invocateur"></div>
+        <p class="small muted"><span class="dot-k"></span> kill <span class="dot-a"></span> assist <span class="dot-d"></span> mort · survole un point pour la minute et le champion</p>
+      </section>
+      <section id="an-metrics-sec">
+        <h2>Ta partie comparée à l'Émeraude+</h2>
+        <div id="an-metrics"></div>
+        <p id="an-ref" class="small muted"></p>
+      </section>
+      <section id="an-focus-sec">
+        <h2>Points à travailler</h2>
+        <div id="an-focus"></div>
+      </section>
+    </div>
   </main>
 
   <!-- ===================== Collecte ===================== -->

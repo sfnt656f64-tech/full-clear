@@ -6,6 +6,20 @@ import type { MetaChampion } from "./meta/meta-stats.ts";
 import type { MetaPatchInfo } from "./meta/read.ts";
 import type { Recommendations } from "./reco/recommend.ts";
 import type { GameAnalysis } from "./analysis/analysis.ts";
+import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./analysis/overview.ts";
+
+/** Vue d'ensemble de l'onglet « Analyse ». */
+export interface OverviewView {
+  filter: OverviewFilter;
+  /** Choix des filtres : tes champions (parties dans le rôle, la période et le compte choisis), saisons, comptes. */
+  options: { champions: { id: number; games: number }[]; seasons: number[]; accounts: string[] };
+  overview: Overview;
+  evolution: { by: "month" | "patch"; points: EvolutionPoint[] };
+  /** « Tous les champions » : tes champions comparés entre eux. */
+  table: ChampionRow[] | null;
+  /** Carte de chaleur : [x, y, 0 kill | 1 mort | 2 assist, minute]. */
+  points: [number, number, number, number][];
+}
 
 /** Onglet « Analyse » : tes dernières parties relues, et l'analyse de celle choisie. */
 export interface AnalysisView {
@@ -97,7 +111,8 @@ export interface KaynApi {
   getMeta(scope: number): Promise<MetaView>;
   openRecoWindow(): Promise<void>;
   /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
-  getAnalysis(key: string | null): Promise<AnalysisView>;
+  getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
+  getOverview(filter: OverviewFilter): Promise<OverviewView>;
   /** Importe la page de runes recommandée de la draft en cours dans le client. */
   importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;
@@ -126,6 +141,7 @@ export const IPC = {
   getMeta: "kayn:get-meta",
   openRecoWindow: "kayn:open-reco-window",
   getAnalysis: "kayn:get-analysis",
+  getOverview: "kayn:get-overview",
   importRunes: "kayn:import-runes",
   getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",

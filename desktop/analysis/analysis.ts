@@ -3,7 +3,7 @@
 // anonyme : aucun nom de joueur.
 
 export interface AnalysisGame {
-  matchId: string; account: string; startMs: number; durationS: number; patch: string;
+  matchId: string; account: string; startMs: number; durationS: number; patch: string; season?: number;
   championId: number; role: string; win: boolean; kills: number; deaths: number; assists: number; cs: number;
   gold15: number | null; cs15: number | null; cs10: number | null;
   teamKills: number | null; kills15: number | null; assists15: number | null; teamKills15: number | null;
@@ -13,9 +13,13 @@ export interface MyEventRow { t: number; kind: "kill" | "death" | "assist"; x: n
 export interface MetaMetricRow {
   championId: number; win: boolean; cs10: number | null; cs15: number | null; gold15: number | null; deaths15: number | null;
   kills15: number | null; assists15: number | null; teamKills15: number | null; objTeam: number | null; objMine: number | null;
+  /** Toute la partie (participation après 15 min). */
+  kills?: number; assists?: number; teamKills?: number | null;
 }
 
-type Values = Pick<AnalysisGame, "cs10" | "cs15" | "gold15" | "kills15" | "assists15" | "teamKills15" | "objTeam" | "objMine"> & { deaths15: number | null };
+type Values = Pick<AnalysisGame, "cs10" | "cs15" | "gold15" | "kills15" | "assists15" | "teamKills15" | "objTeam" | "objMine"> & {
+  deaths15: number | null; kills?: number; assists?: number; teamKills?: number | null;
+};
 
 export interface Metric {
   key: string;
@@ -34,6 +38,12 @@ export const METRICS: Metric[] = [
   { key: "gold15", label: "Or à 15 min", better: "+", group: null, unit: "", value: (v) => v.gold15 },
   { key: "kp15", label: "Participation aux kills avant 15 min", better: "+", group: "kills", unit: " %",
     value: (v) => (v.teamKills15 && v.kills15 != null && v.assists15 != null ? ((v.kills15 + v.assists15) / v.teamKills15) * 100 : null) },
+  { key: "kpLate", label: "Participation aux kills après 15 min", better: "+", group: "kills", unit: " %",
+    value: (v) => {
+      if (v.kills == null || v.assists == null || v.teamKills == null || v.kills15 == null || v.assists15 == null || v.teamKills15 == null) return null;
+      const team = v.teamKills - v.teamKills15;
+      return team > 0 ? ((v.kills + v.assists - v.kills15 - v.assists15) / team) * 100 : null;
+    } },
   { key: "obj", label: "Participation aux objectifs", better: "+", group: "objectives", unit: " %",
     value: (v) => (v.objTeam && v.objMine != null ? (v.objMine / v.objTeam) * 100 : null) },
   { key: "deaths15", label: "Morts avant 15 min", better: "-", group: null, unit: "", value: (v) => v.deaths15 },

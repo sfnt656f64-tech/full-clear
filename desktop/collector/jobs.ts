@@ -7,7 +7,7 @@
 //   myMatch       une partie de la saison en cours + sa chronologie (2 requêtes) → my_games
 //   myOldMatch    idem pour une partie d'une saison précédente
 //   myMastery     ta maîtrise de champion (points, tous champions), une fois par jour et par compte
-//   myReread      relecture (v6) d'une de tes 200 dernières parties : chronologie complète (carte, objectifs)
+//   myReread      relecture (v6) d'une de tes parties : chronologie complète (carte, objectifs)
 //   myRefresh     relecture d'une partie enregistrée avant la v4 (participation aux kills), une seule fois
 import { SEASON_START } from "../../scripts/riot/season.ts";
 import { parseRiotId } from "../../scripts/riot/config.ts";
@@ -38,8 +38,8 @@ export const historyKey = (puuid: string, start: number) => `myHistoryIds:${puui
 export const matchKey = (matchId: string, puuid: string) => `myMatch:${matchId}:${puuid}`;
 
 /** Ajoute (ou relance si le dernier passage est ancien) la recherche de parties pour tes comptes. */
-/** Tes dernières parties relues pour l'analyse (v6), par compte. */
-export const REREAD_LAST = 200;
+/** Tes parties relues pour l'analyse (v6), par compte : toutes (-1 = sans limite, comme LIMIT -1 en SQLite). */
+export const REREAD_LAST = -1;
 
 /** `force` : vérifie tout de suite les nouvelles parties (fin de partie), sans attendre REFRESH_MS. */
 export function scheduleAccounts(ctx: JobContext, riotIds: string[], force = false): void {

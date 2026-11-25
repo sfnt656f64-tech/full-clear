@@ -19,9 +19,10 @@ import { importRunePage, lcuPerks } from "./runes/import.ts";
 import type { LcuCredentials } from "./lcu.ts";
 import { champByKey } from "../src/data/champions";
 import { metaStats } from "./meta/meta-stats.ts";
-import type { AnalysisView, MetaView, RecoView } from "./ipc.ts";
-import { readAnalysisGames, readMetaMetrics, readMyEvents } from "./analysis/read.ts";
-import { analyseGame } from "./analysis/analysis.ts";
+import type { AnalysisView, MetaView, OverviewView, RecoView } from "./ipc.ts";
+import { readAllMyEvents, readAnalysisGames, readMetaMetrics, readMyEvents } from "./analysis/read.ts";
+import { analyseGame, type MetaMetricRow } from "./analysis/analysis.ts";
+import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "./analysis/overview.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -472,9 +473,59 @@ function computePicks(snap: DraftSnapshot, role: string, enemyLanes: Map<number,
   }
 }
 
-/** Onglet « Analyse » : 30 dernières parties relues, analyse de celle demandée (ou de la dernière). */
-function getAnalysisView(key: string | null): AnalysisView {
-  const games = readAnalysisGames(dbFile(), 30, excludedKeys());
+const ANY_FILTER: OverviewFilter = { championId: null, role: null, period: { kind: "all" }, account: null };
+
+/** Filtre reçu de la fenêtre, vérifié. */
+function cleanFilter(f: unknown): OverviewFilter {
+  const o = (f && typeof f === "object" ? f : {}) as Record<string, unknown>;
+  const p = (o.period && typeof o.period === "object" ? o.period : {}) as Record<string, unknown>;
+  const period: OverviewFilter["period"] = p.kind === "season" && typeof p.season === "number" ? { kind: "season", season: p.season }
+    : p.kind === "30d" ? { kind: "30d" } : p.kind === "patch" ? { kind: "patch" } : { kind: "all" };
+  return {
+    championId: typeof o.championId === "number" ? o.championId : null,
+    role: typeof o.role === "string" && /^[A-Z]{3,8}$/.test(o.role) ? o.role : null,
+    period,
+    account: typeof o.account === "string" ? o.account : null,
+  };
+}
+
+/** Méta par rôle (chronologies lues, 3 derniers patchs), gardée 5 minutes. */
+let metaMetricsCache: { at: number; byRole: Map<string, MetaMetricRow[]> } | null = null;
+function metaRef(roles: string[]): MetaRef {
+  if (!metaMetricsCache || Date.now() - metaMetricsCache.at > 5 * 60_000) metaMetricsCache = { at: Date.now(), byRole: new Map() };
+  const patches = readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch);
+  for (const r of roles) if (!metaMetricsCache.byRole.has(r)) metaMetricsCache.byRole.set(r, readMetaMetrics(dbFile(), patches, r));
+  return new MetaRef(metaMetricsCache.byRole);
+}
+
+/** Vue d'ensemble selon les filtres (champions exclus toujours écartés). */
+function getOverviewView(raw: unknown): OverviewView {
+  const filter = cleanFilter(raw);
+  const all = readAnalysisGames(dbFile(), -1, excludedKeys());
+  const games = filterGames(all, filter);
+  const ref = metaRef([...new Set(games.map((g) => g.role))]);
+  // Champions proposés : ceux joués avec les autres filtres (rôle, période, compte).
+  const forChamps = filterGames(all, { ...filter, championId: null });
+  const counts = new Map<number, number>();
+  for (const g of forChamps) counts.set(g.championId, (counts.get(g.championId) ?? 0) + 1);
+  const events = readAllMyEvents(dbFile());
+  const kindCode = { kill: 0, death: 1, assist: 2 } as const;
+  const points = games.flatMap((g) => (events.get(`${g.matchId}|${g.account}`) ?? []).map((e) => [e.x, e.y, kindCode[e.kind], Math.floor(e.t / 60_000)] as [number, number, number, number]));
+  const seasons = [...new Set(all.map((g) => g.season).filter((s): s is number => !!s))].sort((a, b) => b - a);
+  return {
+    filter,
+    options: { champions: [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, games: n })), seasons, accounts: [...new Set(all.map((g) => g.account))].sort() },
+    overview: overview(games, ref, filter, seasons[0] ?? null),
+    evolution: evolution(games),
+    table: filter.championId == null ? championTable(games, ref) : null,
+    points,
+  };
+}
+
+/** Onglet « Analyse », partie par partie : les 30 dernières parties selon les filtres, analyse de celle demandée. */
+function getAnalysisView(key: string | null, rawFilter?: unknown): AnalysisView {
+  const all = readAnalysisGames(dbFile(), -1, excludedKeys());
+  const games = filterGames(all, rawFilter ? cleanFilter(rawFilter) : ANY_FILTER).slice(0, 30);
   const list = games.map((g) => ({ key: `${g.matchId}|${g.account}`, championId: g.championId, win: g.win, kda: `${g.kills}/${g.deaths}/${g.assists}`, startMs: g.startMs, role: g.role }));
   const game = games.find((g) => `${g.matchId}|${g.account}` === key) ?? games[0];
   if (!game) return { games: list, selected: null, analysis: null };
@@ -602,7 +653,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openMetaWindow, () => showMetaWindow());
   ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
   ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
-  ipcMain.handle(IPC.getAnalysis, (_e, key: unknown) => getAnalysisView(typeof key === "string" ? key : null));
+  ipcMain.handle(IPC.getAnalysis, (_e, key: unknown, filter: unknown) => getAnalysisView(typeof key === "string" ? key : null, filter));
+  ipcMain.handle(IPC.getOverview, (_e, filter: unknown) => getOverviewView(filter));
   ipcMain.handle(IPC.importRunes, async () => {
     const page = draft?.runePage;
     if (!page) return { ok: false, message: "Pas de page de runes à importer pour l'instant." };

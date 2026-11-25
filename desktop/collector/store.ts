@@ -200,7 +200,7 @@ export class CollectorStore {
     // - méta : CS à 10/15 min, morts avant 15 min, objectifs, côté de départ du jungler, kills avant 15 min
     //   (positions, champions et rôles, anonymes) ;
     // - tes parties : CS à 10 min, objectifs, tes kills / morts / assists avec leur position. Les parties déjà
-    //   enregistrées sont relues (les 200 dernières par compte).
+    //   enregistrées sont toutes relues.
     if (v < 6) this.tx(() => this.db.exec(`
       alter table meta_parts add column cs10 integer;
       alter table meta_parts add column cs15 integer;

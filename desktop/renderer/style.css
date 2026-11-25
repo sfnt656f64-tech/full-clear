@@ -182,3 +182,31 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .spark { width: 100%; max-width: 260px; height: 36px; display: block; }
 .spark-line { fill: none; stroke: var(--warn); stroke-width: 2; }
 .spark-med { stroke: var(--muted); stroke-dasharray: 3 3; stroke-width: 1; }
+
+/* Analyse : vue d'ensemble */
+.an-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.an-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.an-grid select { width: 100%; }
+.an-views { display: flex; margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.an-views button { flex: 1; border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px; }
+.an-views button[aria-selected="true"] { background: #2a2a3a; color: var(--text); }
+.ov-summary { font-size: 14px; }
+.ov-sw { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ov-list { margin: 0; padding-left: 16px; font-size: 12.5px; }
+.ov-list li { margin-bottom: 4px; }
+.an-map canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.evo { width: 100%; height: auto; display: block; margin-top: 6px; }
+.evo-dot { fill: var(--warn); }
+.evo-axis { fill: var(--muted); font-size: 9px; }
+.evo-n { fill: var(--muted); font-size: 8px; opacity: .8; }
+.table-scroll { overflow-x: auto; }
+.ov-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
+.ov-table th, .ov-table td { padding: 4px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.ov-table th { color: var(--muted); font-weight: 600; cursor: pointer; font-size: 11px; }
+.ov-table th:hover { color: var(--text); }
+.ov-table .left { text-align: left; }
+.ov-table td.best { color: var(--ok); font-weight: 600; }
+.ov-table td.worst { color: var(--red); }
+.ov-table button.link { padding: 0; color: var(--text); text-decoration: none; font-size: 12px; }
+.ov-table button.link:hover { text-decoration: underline; }
+#an-overview .an-map img { opacity: .45; }
