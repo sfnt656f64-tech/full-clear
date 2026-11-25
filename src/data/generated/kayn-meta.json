@@ -1,0 +1,45 @@
+{
+  "generated": "2026-11-25",
+  "patches": [
+    "16.23",
+    "16.22"
+  ],
+  "officialPatches": [
+    "26.23",
+    "26.22"
+  ],
+  "games": 869,
+  "wins": 411,
+  "keystones": [
+    {
+      "id": 8128,
+      "name": "Dark Harvest",
+      "games": 418,
+      "wins": 199
+    },
+    {
+      "id": 8010,
+      "name": "Conqueror",
+      "games": 351,
+      "wins": 159
+    },
+    {
+      "id": 8112,
+      "name": "Electrocute",
+      "games": 19,
+      "wins": 8
+    },
+    {
+      "id": 9923,
+      "name": "Hail of Blades",
+      "games": 16,
+      "wins": 8
+    },
+    {
+      "id": 8021,
+      "name": "Fleet Footwork",
+      "games": 3,
+      "wins": 1
+    }
+  ]
+}

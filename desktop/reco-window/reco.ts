@@ -1,4 +1,5 @@
 // Fenêtre « Champions recommandés » : mon pool (classé par score) et « À essayer », en jungle et au milieu.
+import { officialPatch } from "../../src/data/version";
 import { champByKey } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
 import type { KaynApi, MetaTrend, RecoView } from "../ipc.ts";
@@ -48,7 +49,7 @@ function trendEl(t: MetaTrend | undefined): HTMLElement {
   const m = Math.hypot(wilson(Math.round((t.latest.winRate / 100) * t.latest.games), t.latest.games), wilson(Math.round((t.previous.winRate / 100) * t.previous.games), t.previous.games));
   const sure = Math.abs(t.delta) > m;
   const arrow = t.delta >= 0.5 ? "↑" : t.delta <= -0.5 ? "↓" : "→";
-  return el("span", { class: `trend${sure ? (t.delta > 0 ? " up" : " down") : " muted"}`, title: `${t.latest.patch} : ${nf(t.latest.winRate, 1)} % sur ${t.latest.games} parties · ${t.previous.patch} : ${nf(t.previous.winRate, 1)} % sur ${t.previous.games} parties · marge de l'écart ± ${nf(m, 1)}` },
+  return el("span", { class: `trend${sure ? (t.delta > 0 ? " up" : " down") : " muted"}`, title: `${officialPatch(t.latest.patch)} : ${nf(t.latest.winRate, 1)} % sur ${t.latest.games} parties · ${officialPatch(t.previous.patch)} : ${nf(t.previous.winRate, 1)} % sur ${t.previous.games} parties · marge de l'écart ± ${nf(m, 1)}` },
     ` · ${arrow} ${t.delta >= 0 ? "+" : "−"}${nf(Math.abs(t.delta), 1)} pt${sure ? "" : " (dans la marge)"}`);
 }
 
@@ -162,7 +163,7 @@ async function reload(): Promise<void> {
   view = v;
   $<HTMLSelectElement>("ref-tier").value = view.reference.tier;
   $("summary").textContent = view.patches.length
-    ? `Méta : ${nf(view.metaMatches)} partie(s) Émeraude+ en ${view.patches.join(" et ")} · radars comparés au niveau ${view.reference.short} (${nf(view.reference.games)} joueurs de méta en jungle et au milieu)`
+    ? `Méta : ${nf(view.metaMatches)} partie(s) Émeraude+ en ${view.patches.map(officialPatch).join(" et ")} · radars comparés au niveau ${view.reference.short} (${nf(view.reference.games)} joueurs de méta en jungle et au milieu)`
     : "Pas encore de méta";
   const warn = $("warn");
   warn.hidden = !view.provisional;

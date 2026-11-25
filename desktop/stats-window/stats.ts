@@ -1,4 +1,5 @@
 // Fenêtre « Mes stats » : tableau par champion et par rôle, filtres et tri.
+import { officialPatch } from "../../src/data/version";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
 import type { AppState, KaynApi } from "../ipc.ts";
@@ -36,13 +37,22 @@ function champCell(l: StatLine): Node {
   return el("span", { class: "champ-cell" }, img, champName(l.championId));
 }
 
-const wrClass = (l: StatLine) => (l.games < 5 ? "few" : l.winRate >= 55 ? "good" : l.winRate < 45 ? "bad" : "");
+/** Marge à 95 % (Wilson) du win rate. */
+const margin = (l: StatLine) => {
+  const n = l.games, z = 1.96, p = l.winRate / 100, d = 1 + z * z / n;
+  return n ? ((z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d) * 100 : 100;
+};
+/** Couleur seulement à partir de 20 parties, et si toute la marge est au-dessus (ou au-dessous) de 50 %. */
+const wrClass = (l: StatLine) => (l.games < 20 ? "few" : l.winRate - margin(l) > 50 ? "good" : l.winRate + margin(l) < 50 ? "bad" : "");
+/** Mesures qui dépendent de la saison (le jeu change) : pas de moyenne sur plusieurs saisons. */
+const SEASON_DEPENDENT = new Set(["gold15", "cs15", "cspm", "vision", "vpm"]);
+const columns = () => (filter.season === "all" ? COLUMNS.filter((c) => !SEASON_DEPENDENT.has(c.key)) : COLUMNS);
 
 const COLUMNS: Column[] = [
   { key: "champ", label: "Champion", left: true, value: (l) => champName(l.championId), cell: champCell },
   { key: "role", label: "Rôle", left: true, value: (l) => l.role, cell: (l) => el("span", { class: "role" }, ROLE_LABELS[l.role] ?? l.role) },
   { key: "games", label: "Parties", value: (l) => l.games, cell: (l) => nf(l.games) },
-  { key: "wr", label: "Win rate", value: (l) => l.winRate, cell: (l) => el("span", { class: wrClass(l) }, `${nf(l.winRate, 1)} %`) },
+  { key: "wr", label: "Win rate", value: (l) => l.winRate, cell: (l) => el("span", { class: wrClass(l), title: l.games < 20 ? "Moins de 20 parties : pas de conclusion" : "Marge d'erreur à 95 %" }, `${nf(l.winRate, 1)} %`, el("span", { class: "margin" }, ` ±${nf(margin(l), 0)}`)) },
   { key: "kda", label: "KDA", title: "(K + A) / M, et moyenne K / M / A par partie", value: (l) => l.kda, cell: (l) => `${nf(l.kda, 2)}  (${nf(l.kills, 1)} / ${nf(l.deaths, 1)} / ${nf(l.assists, 1)})` },
   { key: "gold15", label: "Or à 15 min", value: (l) => l.gold15 ?? -1, cell: (l) => nf(l.gold15) },
   { key: "cs15", label: "CS à 15 min", value: (l) => l.cs15 ?? -1, cell: (l) => nf(l.cs15, 1) },
@@ -84,7 +94,7 @@ async function setExcluded(ids: string[]): Promise<void> {
 }
 
 function renderHead(): void {
-  $("head").replaceChildren(...COLUMNS.map((c) => {
+  $("head").replaceChildren(...columns().map((c) => {
     const th = el("th", { class: [c.left ? "left" : "", sort.key === c.key ? "sorted" : "", sort.key === c.key && sort.asc ? "asc" : ""].join(" ").trim(), ...(c.title ? { title: c.title } : {}) }, c.label);
     th.addEventListener("click", () => {
       sort = sort.key === c.key ? { key: c.key, asc: !sort.asc } : { key: c.key, asc: c.left === true };
@@ -97,21 +107,22 @@ function renderHead(): void {
 function render(): void {
   renderHead();
   const r = myStats(games, filter);
-  const col = COLUMNS.find((c) => c.key === sort.key)!;
+  if (!columns().some((c) => c.key === sort.key)) sort = { key: "games", asc: false };
+  const col = columns().find((c) => c.key === sort.key)!;
   const lines = [...r.lines].sort((a, b) => {
     const va = col.value(a), vb = col.value(b);
     const d = typeof va === "string" ? va.localeCompare(String(vb), "fr") : va - (vb as number);
     return sort.asc ? d : -d;
   });
-  $("body").replaceChildren(...lines.map((l) => el("tr", {}, ...COLUMNS.map((c) => el("td", c.left ? { class: "left" } : {}, c.cell(l))))));
-  $("foot").replaceChildren(...(r.total ? [el("tr", {}, ...COLUMNS.map((c, i) =>
+  $("body").replaceChildren(...lines.map((l) => el("tr", {}, ...columns().map((c) => el("td", c.left ? { class: "left" } : {}, c.cell(l))))));
+  $("foot").replaceChildren(...(r.total ? [el("tr", {}, ...columns().map((c, i) =>
     el("td", c.left ? { class: "left" } : {}, i === 0 ? "Total" : i === 1 ? "" : c.cell(r.total!))))] : []));
   const empty = $("empty");
   empty.hidden = r.games > 0;
   empty.textContent = games.length ? "Aucune partie pour ces filtres." : "Pas encore de partie enregistrée : la collecte est peut-être en cours (voir la fenêtre principale).";
-  $("summary").textContent = `${r.season ? `Saison ${r.season}` : "Toutes saisons"} · ${nf(r.games)} partie(s)`
+  $("summary").textContent = `${r.season ? `Saison ${r.season}` : "Toutes saisons (or, CS et vision masqués : le jeu change d'une saison à l'autre)"} · ${nf(r.games)} partie(s)`
     + `${r.remakes ? `, ${r.remakes} remake(s) exclu(s)` : ""}${r.excludedGames ? `, ${r.excludedGames} sur des champions exclus` : ""}`
-    + ` · ${lines.length} ligne(s)${r.patch ? ` · dernier patch : ${r.patch}` : ""}`;
+    + ` · ${lines.length} ligne(s)${r.patch ? ` · dernier patch : ${officialPatch(r.patch)}` : ""}`;
 
   // Saisons présentes dans tes parties.
   const ss = $<HTMLSelectElement>("f-season");

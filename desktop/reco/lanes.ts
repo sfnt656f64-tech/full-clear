@@ -62,6 +62,9 @@ export interface LaneRow<C> {
   enemy: C | null;
   /** Rôle adverse déduit de la méta (jamais annoncé par le client). */
   probable: boolean;
+  /** Part des parties de méta du champion adverse dans ce rôle (%), et ses parties de méta. */
+  share?: number | null;
+  games?: number;
 }
 
 /**
@@ -89,6 +92,10 @@ export function laneRows<C>(
     const row = rows.find((r) => r.lane === lanes[i])!;
     row.enemy = e.champ;
     row.probable = true;
+    const s = shares.get(e.id) ?? {};
+    const total = LANES.reduce((t, l) => t + (s[l] ?? 0), 0);
+    row.games = total;
+    row.share = total ? ((s[lanes[i]] ?? 0) / total) * 100 : null;
   });
   return rows;
 }

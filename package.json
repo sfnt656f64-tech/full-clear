@@ -17,7 +17,8 @@
     "stats": "tsx scripts/riot/stats.ts",
     "desktop:build": "node scripts/desktop/build.ts",
     "desktop": "node scripts/desktop/build.ts && electron .",
-    "desktop:dist": "node scripts/desktop/build.ts && electron-builder --win nsis"
+    "desktop:dist": "node scripts/desktop/build.ts && electron-builder --win nsis",
+    "site:meta": "tsx scripts/site-meta.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

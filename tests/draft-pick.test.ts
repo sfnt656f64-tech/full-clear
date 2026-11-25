@@ -86,7 +86,7 @@ describe("choix en draft", () => {
     ]);
     const r = draftPicks({ ...base, index: idx, enemies: [LEE] });
     expect(r.list[0].championId).toBe(BRIAR);
-    expect(r.list[0].reasons[0]).toMatch(/^Bon contre Lee Sin : 75 % sur 120 parties/);
+    expect(r.list[0].reasons[0]).toMatch(/^Bon contre Lee Sin : 75 % ± 8 sur 120 parties en Émeraude\+, contre \d+ % d'habitude/);
     const kayn = r.list.find((p) => p.championId === KAYN);
     expect(kayn === undefined || kayn.reasons[0].startsWith("Difficile contre Lee Sin")).toBe(true);
   });
@@ -113,5 +113,20 @@ describe("choix en draft", () => {
   it("aucun nom de joueur : seulement des champions", () => {
     const r = draftPicks({ ...base, index: pairIndex([]), enemies: [AHRI] });
     expect(Object.keys(r.list[0]).sort()).toEqual(["base", "championId", "counter", "damage", "inPool", "poolRank", "provisional", "reasons", "score", "synergy"]);
+  });
+});
+
+describe("duels : pas de conclusion sous 20 parties", () => {
+  it("15 parties face à un adversaire : aucun effet ; 40 parties : effet", async () => {
+    const { pairIndex, pairEffects } = await import("../desktop/reco/draft-pick");
+    const parts = (vsGames: number) => Array.from({ length: 200 }, (_, i) => [
+      { matchId: `M${i}`, team: 100, championId: 141, role: "JUNGLE", win: i < vsGames ? true : i % 2 === 0 },
+      { matchId: `M${i}`, team: 200, championId: i < vsGames ? 64 : 11, role: "JUNGLE", win: false },
+    ]).flat();
+    const few = pairEffects(pairIndex(parts(15) as never), 141, "JUNGLE", [64], "enemy")[0];
+    expect(few).toMatchObject({ games: 15, effect: 0 });
+    const many = pairEffects(pairIndex(parts(40) as never), 141, "JUNGLE", [64], "enemy")[0];
+    expect(many.games).toBe(40);
+    expect(many.effect).toBeGreaterThan(0);
   });
 });

@@ -10,6 +10,7 @@
 // après une pénalité parce que tu ne le joues pas.
 //
 // L'appli met en avant des choix, avec leurs raisons ; c'est toi qui choisis (règles Riot).
+import { wilson } from "./pool-advice.ts";
 import { champByKey } from "../../src/data/champions";
 import type { Champion } from "../../src/data/types";
 import type { MetaChampion, MetaPartRow } from "../meta/meta-stats.ts";
@@ -21,8 +22,8 @@ export const K_PAIR = 150;
 /** Effet maximal d'un adversaire ou d'un allié (points), et du total des contres / synergies. */
 export const PAIR_CAP = 3;
 export const TOTAL_CAP = 4;
-/** Un duel ne compte que s'il repose sur assez de parties ; il est cité s'il pèse assez. */
-export const PAIR_MIN_GAMES = 10;
+/** Un duel ne compte que s'il repose sur assez de parties (pas de conclusion sous 20) ; il est cité s'il pèse assez. */
+export const PAIR_MIN_GAMES = 20;
 export const PAIR_MIN_EFFECT = 0.5;
 /** Hors pool : parties de méta minimales, pénalité (tu ne le joues pas), marge pour le proposer. */
 export const OFF_POOL_MIN_GAMES = 100;
@@ -54,7 +55,7 @@ export function pairIndex(parts: MetaPartRow[]): PairIndex {
   return { byChampRole, byMatch };
 }
 
-export interface PairEffect { championId: number; games: number; winRate: number; effect: number }
+export interface PairEffect { championId: number; games: number; winRate: number; effect: number; /** Win rate habituel du champion dans ce rôle. */ base: number }
 
 export interface DraftPick {
   championId: number;
@@ -100,6 +101,8 @@ export interface DraftPickInput {
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const nf = (n: number, d = 0) => n.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const name = (id: number) => champByKey(id)?.name ?? `#${id}`;
+/** « 58 % ± 9 sur 112 parties » : win rate ensemble et marge à 95 % (Wilson). */
+const pm = (e: PairEffect) => `${nf(e.winRate)} % ± ${nf(wilson(Math.round((e.winRate / 100) * e.games), e.games))} sur ${e.games} parties`;
 
 /** Effet (points de win rate, lissé) de chaque champion `others` sur C, côté adverse ou allié. */
 export function pairEffects(index: PairIndex, championId: number, role: string, others: number[], side: "enemy" | "ally"): PairEffect[] {
@@ -117,7 +120,7 @@ export function pairEffects(index: PairIndex, championId: number, role: string, 
     }
     const shrunk = ((w + (K_PAIR * baseWr) / 100) / (n + K_PAIR)) * 100;
     // Trop peu de parties ensemble : aucun effet (même lissé, 6 victoires sur 6 pèseraient sans pouvoir être expliquées).
-    return { championId: o, games: n, winRate: n ? (w / n) * 100 : 0, effect: n < PAIR_MIN_GAMES ? 0 : clamp(shrunk - baseWr, -PAIR_CAP, PAIR_CAP) };
+    return { championId: o, games: n, winRate: n ? (w / n) * 100 : 0, base: baseWr, effect: n < PAIR_MIN_GAMES ? 0 : clamp(shrunk - baseWr, -PAIR_CAP, PAIR_CAP) };
   });
 }
 
@@ -159,20 +162,22 @@ function evaluate(input: DraftPickInput, championId: number, base: number, poolR
   const damage = damageBonus(c, need);
 
   const r: { w: number; text: string }[] = [];
-  const cite = (e: PairEffect) => e.games >= PAIR_MIN_GAMES && Math.abs(e.effect) >= PAIR_MIN_EFFECT;
+  // Cité seulement si l'écart avec le win rate habituel dépasse la marge d'erreur (sinon : pas de conclusion).
+  const cite = (e: PairEffect) => e.games >= PAIR_MIN_GAMES && Math.abs(e.effect) >= PAIR_MIN_EFFECT
+    && Math.abs(e.winRate - e.base) > wilson(Math.round((e.winRate / 100) * e.games), e.games);
   const who = (id: number) => {
     const lane = input.enemyLanes?.get(id);
     return lane ? `${name(id)} (${LANE_LABELS[lane].toLowerCase()})` : name(id);
   };
   for (const e of enemies.filter(cite)) {
     r.push({ w: Math.abs(e.effect), text: e.effect > 0
-      ? `Bon contre ${who(e.championId)} : ${nf(e.winRate)} % sur ${e.games} parties en Émeraude+.`
-      : `Difficile contre ${who(e.championId)} : ${nf(e.winRate)} % sur ${e.games} parties en Émeraude+.` });
+      ? `Bon contre ${who(e.championId)} : ${pm(e)} en Émeraude+, contre ${nf(e.base)} % d'habitude.`
+      : `Difficile contre ${who(e.championId)} : ${pm(e)} en Émeraude+, contre ${nf(e.base)} % d'habitude.` });
   }
   for (const e of allies.filter(cite)) {
     r.push({ w: Math.abs(e.effect), text: e.effect > 0
-      ? `Bonne synergie avec ${name(e.championId)} (${nf(e.winRate)} % sur ${e.games} parties).`
-      : `Va mal avec ${name(e.championId)} (${nf(e.winRate)} % sur ${e.games} parties).` });
+      ? `Bonne synergie avec ${name(e.championId)} : ${pm(e)}, contre ${nf(e.base)} % d'habitude.`
+      : `Va mal avec ${name(e.championId)} : ${pm(e)}, contre ${nf(e.base)} % d'habitude.` });
   }
   if (need && damage > 0) r.push({ w: damage, text: `Ton équipe manque de dégâts ${DMG_LABEL[need]} : ${c.name} en apporte.` });
   if (need && damage < 0) r.push({ w: -damage, text: `Ton équipe a déjà surtout des dégâts ${DMG_LABEL[need === "magic" ? "physical" : "magic"]}, comme ${c.name}.` });

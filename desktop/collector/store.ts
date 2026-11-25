@@ -296,7 +296,8 @@ export class CollectorStore {
         where timeline_v6 = 0 and remake = 0 order by start_ms desc`),
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
       metaCount: this.db.prepare("select count(*) n, max(patch) p from meta_games"),
-      metaPatches: this.db.prepare("select patch, count(*) n from meta_games group by patch"),
+      // Parties utilisables (remakes exclus), comme dans la fenêtre Méta.
+      metaPatches: this.db.prepare("select patch, sum(remake = 0) n from meta_games group by patch"),
       retry: this.db.prepare("update jobs set status = 'pending', attempts = attempts + 1, not_before = ?, error = ?, updated_at = ? where id = ?"),
       fail: this.db.prepare("update jobs set status = 'failed', attempts = attempts + 1, error = ?, updated_at = ? where id = ?"),
       release: this.db.prepare("update jobs set status = 'pending', updated_at = ? where id = ?"),

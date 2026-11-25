@@ -22,3 +22,5 @@ tfoot td { font-weight: 600; border-top: 2px solid var(--line); border-bottom: n
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 12px; background: #2a2a3a; border: 1px solid var(--line); margin-right: 4px; }
 .chip button { background: none; border: none; color: var(--muted); padding: 0 6px; font-size: 14px; line-height: 1; }
 .chip button:hover { color: var(--red); background: none; }
+
+.margin { color: var(--muted); font-size: 11px; margin-left: 2px; }

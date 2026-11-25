@@ -5,7 +5,7 @@ import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
 import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
-import { DDRAGON_VERSION } from "../../src/data/version";
+import { DDRAGON_VERSION, officialPatch } from "../../src/data/version";
 import { runeIconUrl, runeName, RUNE_TREES, RUNES_BY_ID } from "../../src/data/runes";
 
 declare global {
@@ -69,6 +69,12 @@ function slots(list: (DraftView["enemies"][number])[], side: "en" | "al"): HTMLE
 }
 
 const CDN_CHAMP = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/`;
+/** Marge à 95 % (Wilson) d'un win rate en %, sur n parties. */
+const wilsonPm = (wr: number, n: number) => {
+  if (!n) return 100;
+  const z = 1.96, p = wr / 100, d = 1 + z * z / n;
+  return ((z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d) * 100;
+};
 const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
 
 /** Plan d'avant-partie (jungle) : chance de gank par lane, premier gank, départ, objectifs. */
@@ -85,7 +91,7 @@ function renderPlan(p: NonNullable<DraftView["plan"]>): HTMLElement {
       ` · départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}`,
       p.start.topShare != null ? h("span", { class: "muted" }, ` · en Émeraude+ : ${Math.round(p.start.topShare)} % des départs côté top`) : null),
     ...p.objectives.map((o) => h("p", { class: "small" }, "› ", o)),
-    h("p", { class: "small muted" }, `Chances estimées depuis les ganks des junglers Émeraude+ avant 10 min (${p.games} parties avec ton champion), le contrôle de tes alliés, les duels et les laners adverses. Calculé une fois, avec la draft.`));
+    h("p", { class: "small muted" }, `Chances estimées depuis les ganks des junglers Émeraude+ avant 10 min (${p.games} parties avec ton champion), le contrôle de tes alliés, les duels et les laners adverses. Estimation, pas une mesure : les ganks ratés sans mort n'apparaissent pas dans les chronologies, la réussite est donc surestimée ; seul l'ordre entre les lanes compte. Calculé une fois, avec la draft.`));
 }
 
 /** Page de runes recommandée, avec le bouton d'import dans le client. */
@@ -97,7 +103,7 @@ function renderRunePage(p: NonNullable<DraftView["runePage"]>, note: string | nu
   const tree = (id: number) => RUNE_TREES[id]?.nameEn ?? String(id);
   const source = p.source === "guide"
     ? "Guide Kayn pour la forme recommandée."
-    : `Page la plus jouée en Émeraude+ avec ${runeName(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % de victoires.`;
+    : `Page la plus jouée en Émeraude+ avec ${runeName(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % ± ${Math.round(wilsonPm(p.winRate ?? 0, p.games ?? 0))} de victoires.`;
   const status = h("p", { class: "small muted", role: "status" });
   const btn = h("button", { type: "button" }, "Importer dans le client") as HTMLButtonElement;
   btn.addEventListener("click", async () => {
@@ -172,7 +178,8 @@ function renderLanes(rows: NonNullable<DraftView["lanes"]>): HTMLElement {
     ...rows.map((r) => h("div", { class: `lane-row${r.me ? " me" : ""}` },
       h("span", { class: "lane-label", title: LANE_LABELS[r.lane] }, laneIcon(r.lane), h("span", { class: "small" }, LANE_LABELS[r.lane])),
       cell(r.ally, "al", r.me ? h("span", { class: "small muted" }, " (toi)") : null),
-      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: "Rôle déduit de la méta Émeraude+" }, " probable") : null))));
+      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: "Rôle déduit de la méta Émeraude+ : part de ses parties dans ce rôle" },
+        r.games == null || r.games < 20 ? " rôle incertain (moins de 20 parties de méta)" : ` probable (${Math.round(r.share ?? 0)} % de ses ${r.games.toLocaleString("fr-FR")} parties)`) : null))));
 }
 
 let timerHandle: number | undefined;
@@ -410,7 +417,7 @@ function renderCollector(s: AppState): void {
       if (!j.pending && !j.done && !j.failed) continue;
       body.push(h("p", { class: "small muted" }, `${j.label} : ${j.done} fait(s)${j.pending ? `, ${j.pending} en attente` : ""}${j.failed ? `, ${j.failed} en échec` : ""}`));
     }
-    if (x.meta.length) summary.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games.toLocaleString("fr-FR")} partie(s) en ${m.patch}`).join(", ")}`));
+    if (x.meta.length) summary.push(h("p", { class: "small" }, `Méta Émeraude+ : ${x.meta.map((m) => `${m.games.toLocaleString("fr-FR")} partie(s) en ${officialPatch(m.patch)}`).join(", ")}`));
     if (x.poolSize) body.push(h("p", { class: "small muted" }, `Ordres d'achat suivis pour ${x.poolSize} champion(s) de ton pool`));
     const metaTotal = x.meta.reduce((n, m) => n + m.games, 0);
     homeText = metaTotal ? ` · méta ${metaTotal.toLocaleString("fr-FR")} parties` : "";
@@ -610,7 +617,7 @@ function renderOverview(): void {
   if (empty) return;
   const who = v.filter.championId != null ? champName(v.filter.championId) : "tous tes champions";
   $("ov-summary").replaceChildren(h("b", {}, `${o.games} partie${o.games > 1 ? "s" : ""}`), ` · ${who} · `,
-    h("b", {}, `${fmtNum(o.winRate, " %")} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (${refShort} : ${fmtNum(o.metaWinRate, " %")})`) : "");
+    h("b", {}, `${fmtNum(o.winRate, " %")} ± ${Math.round(wilsonPm(o.winRate ?? 0, o.games))} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (${refShort} : ${fmtNum(o.metaWinRate, " %")})`) : "");
   const season = o.refs.season ?? "";
   const metaRef = o.comparedTo === "champion" ? `joueurs ${refShort} ${season} sur ${who}` : `joueurs ${refShort} ${season} du rôle`;
   $("ov-note").textContent = [
@@ -771,14 +778,19 @@ function renderTable(): void {
     name.addEventListener("click", () => { anFilterSel = { ...anFilterSel, championId: r.championId }; void loadAnalysis(null); });
     return h("tr", {}, h("td", { class: "left" }, name), ...cols.map((c) => {
       const v = c.get(r);
-      const all = rows.map((x) => c.get(x)).filter((x): x is number => x != null);
+      // Meilleur / plus faible : seulement entre champions d'au moins 20 parties (pas de conclusion en dessous).
+      // Comparaison par la position face à la référence de chaque saison (jamais des moyennes brutes qui
+      // mélangeraient des saisons différentes) ; le win rate tel quel.
+      const pos = (x: ChampionRow) => (c.key === "wr" ? x.winRate : x.ranks[c.key] ?? null);
+      const all = rows.filter((x) => x.games >= 20).map(pos).filter((x): x is number => x != null);
+      const p = pos(r);
       let cls = "";
-      if (v != null && all.length >= 2 && c.key !== "games") {
-        const best = c.better === "+" ? Math.max(...all) : Math.min(...all), worst = c.better === "+" ? Math.min(...all) : Math.max(...all);
-        cls = v === best ? "best" : v === worst ? "worst" : "";
+      if (p != null && r.games >= 20 && all.length >= 2 && c.key !== "games") {
+        cls = p === Math.max(...all) ? "best" : p === Math.min(...all) ? "worst" : "";
       }
       const med = r.medians[c.key];
-      return h("td", { class: cls, title: med != null ? `Médiane Émeraude+ sur ${champName(r.championId)} : ${fmtNum(med, c.unit)}` : "" }, fmtNum(v, c.unit));
+      return h("td", { class: cls, title: med != null ? `Médiane ${refShort} sur ${champName(r.championId)} : ${fmtNum(med, c.unit)}` : "" },
+        fmtNum(v, c.unit), c.key === "wr" ? h("span", { class: "small muted" }, ` ±${Math.round(wilsonPm(v ?? 0, r.games))}`) : null);
     }));
   });
   $("ov-table").replaceChildren(h("thead", {}, head), h("tbody", {}, ...body));
@@ -796,7 +808,7 @@ function renderAnalysis(): void {
   if (!v?.analysis) return;
   sel.value = v.selected ?? "";
   const a = v.analysis, g = a.game;
-  $("an-summary").textContent = `${champName(g.championId)} · ${g.win ? "victoire" : "défaite"} en ${mmss(g.durationS * 1000)} · ${g.kills}/${g.deaths}/${g.assists} · ${g.cs} CS · patch ${g.patch}`;
+  $("an-summary").textContent = `${champName(g.championId)} · ${g.win ? "victoire" : "défaite"} en ${mmss(g.durationS * 1000)} · ${g.kills}/${g.deaths}/${g.assists} · ${g.cs} CS · patch ${officialPatch(g.patch)}`;
 
   // Carte : base bleue en bas à gauche ; y inversé pour l'écran.
   const evs = a.events.filter((e) => anFilter === "all" || (anFilter === "early" ? e.t < 900_000 : e.t >= 900_000));

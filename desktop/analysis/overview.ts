@@ -1,6 +1,7 @@
 // Vue d'ensemble de l'onglet « Analyse » : tes parties filtrées (champion, rôle, période, compte), comparées à
 // la méta Émeraude+ (même rôle, et même champion quand il y en a un), avec points forts / faibles, évolution
 // et tableau de tes champions. Fonctions pures.
+import { officialPatch } from "../../src/data/version";
 import { METRICS, type AnalysisGame, type MetaMetricRow, type Metric } from "./analysis.ts";
 
 export type Period = { kind: "season"; season: number } | { kind: "30d" } | { kind: "patch" } | { kind: "all" };
@@ -70,6 +71,14 @@ export class MetaRef {
       this.cache.set(key, xs);
     }
     return xs;
+  }
+
+  /** Valeurs de méta du champion lui-même (assez de parties), sinon null : pas de « médiane du champion » prise sur tout le rôle. */
+  championSorted(m: Metric, role: string, championId: number): number[] | null {
+    const { rows, champion } = this.rowsFor(role, championId);
+    if (!champion) return null;
+    const xs = rows.map((r) => m.value(r)).filter((x): x is number => x != null);
+    return xs.length >= MIN_META_CHAMP ? xs.sort((a, b) => a - b) : null;
   }
 }
 
@@ -202,7 +211,7 @@ export function evolution(games: AnalysisGame[]): { by: "month" | "patch"; point
       const gs = groups.get(k)!;
       const values: Record<string, number | null> = {};
       for (const m of METRICS) values[m.key] = mean(gs.map((g) => m.value(g)).filter((x): x is number => x != null));
-      return { label: by === "month" ? monthLabel(k) : k, games: gs.length, winRate: (gs.filter((g) => g.win).length / gs.length) * 100, values };
+      return { label: by === "month" ? monthLabel(k) : officialPatch(k), games: gs.length, winRate: (gs.filter((g) => g.win).length / gs.length) * 100, values };
     }),
   };
 }
@@ -235,7 +244,8 @@ export function championTable(games: AnalysisGame[], ref: MetaRef): ChampionRow[
       values[m.key] = mean(vals);
       const rs = gs.flatMap((g) => { const r = gameRank(m, g, ref, championId).rank; return r == null ? [] : [r]; });
       ranks[m.key] = mean(rs);
-      medians[m.key] = ref.rowsFor(role, championId).champion && gs.every((g) => sameSeason(g, ref)) ? median(ref.sorted(m, role, championId)) : null;
+      const own = gs.every((g) => sameSeason(g, ref)) ? ref.championSorted(m, role, championId) : null;
+      medians[m.key] = own ? median(own) : null;
     }
     rows.push({ championId, games: gs.length, winRate: (gs.filter((g) => g.win).length / gs.length) * 100, values, ranks, medians });
   }

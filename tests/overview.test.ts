@@ -71,7 +71,7 @@ describe("évolution et tableau", () => {
     const short = [game({ patch: "16.22", win: false }), game({ patch: "16.23" }), game({ patch: "16.23", cs10: 70 })];
     const e = evolution(short);
     expect(e.by).toBe("patch");
-    expect(e.points.map((p) => [p.label, p.games, p.winRate])).toEqual([["16.22", 1, 0], ["16.23", 2, 100]]);
+    expect(e.points.map((p) => [p.label, p.games, p.winRate])).toEqual([["26.22", 1, 0], ["26.23", 2, 100]]); // numérotation officielle (Data Dragon : 16.22, 16.23)
     expect(e.points[1].values.cs10).toBe(65);
     const long = [game({ startMs: Date.UTC(2026, 0, 10) }), game({ startMs: Date.UTC(2026, 5, 10) })];
     expect(evolution(long).points.map((p) => p.label)).toEqual(["janv. 26", "juin 26"]);

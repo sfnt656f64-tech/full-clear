@@ -1,4 +1,5 @@
 // Fenêtre « Méta » : stats Émeraude+ par champion et par rôle, avec builds, runes et familier.
+import { officialPatch } from "../../src/data/version";
 import shop from "../../src/data/generated/shop.json";
 import { champByKey, matchesQuery } from "../../src/data/champions";
 import { runeIconUrl, runeName, RUNES_BY_ID } from "../../src/data/runes";
@@ -91,7 +92,7 @@ async function reload(): Promise<void> {
   const r = await window.kayn.getMeta(filter.scope);
   rows = r.champions;
   $("summary").textContent = r.selected.length
-    ? `${nf(r.matches)} partie(s) · patch${r.selected.length > 1 ? "s" : ""} ${r.selected.join(", ")}${r.patches.length ? ` · en base : ${r.patches.map((p) => `${p.patch} (${nf(p.games)})`).join(", ")}` : ""}`
+    ? `${nf(r.matches)} partie(s) · patch${r.selected.length > 1 ? "s" : ""} ${r.selected.map(officialPatch).join(", ")}${r.patches.length ? ` · en base : ${r.patches.map((p) => `${officialPatch(p.patch)} (${nf(p.games)})`).join(", ")}` : ""}`
     : "Aucune donnée pour l'instant";
   render();
 }
