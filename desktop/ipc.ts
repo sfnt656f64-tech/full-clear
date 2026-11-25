@@ -9,6 +9,8 @@ import type { GameAnalysis } from "./analysis/analysis.ts";
 import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./analysis/overview.ts";
 import type { Radar } from "./analysis/radar.ts";
 import type { PotentialGroups } from "./reco/potential.ts";
+import type { GoalsView } from "./analysis/goals.ts";
+export type { GoalsView };
 
 /** Vue d'ensemble de l'onglet « Analyse ». */
 export interface OverviewView {
@@ -126,6 +128,11 @@ export interface KaynApi {
   /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
   getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
+  /** Suivi de tes objectifs (jungle). */
+  getGoals(): Promise<GoalsView>;
+  /** Recommence le suivi aujourd'hui (comparaison avec les 4 semaines d'avant). */
+  restartGoals(): Promise<GoalsView>;
+  setGoalTarget(key: string, value: number | null): Promise<GoalsView>;
   /** Importe la page de runes recommandée de la draft en cours dans le client. */
   importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;
@@ -155,6 +162,9 @@ export const IPC = {
   openRecoWindow: "kayn:open-reco-window",
   getAnalysis: "kayn:get-analysis",
   getOverview: "kayn:get-overview",
+  getGoals: "kayn:get-goals",
+  restartGoals: "kayn:restart-goals",
+  setGoalTarget: "kayn:set-goal-target",
   importRunes: "kayn:import-runes",
   getRecommendations: "kayn:get-recommendations",
   setExcludedChampions: "kayn:set-excluded-champions",

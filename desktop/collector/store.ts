@@ -63,7 +63,7 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -247,6 +247,21 @@ export class CollectorStore {
       alter table my_games add column damage integer;
       alter table my_games add column team_damage integer;
       pragma user_version = 7;`));
+    // v8 : détail anonyme de tes parties (partie + chronologie compressées : analyses poussées), et courbe de CS
+    // minute par minute des junglers de la méta (avec la minute de leur premier item légendaire).
+    // « if not exists » : un import ponctuel a pu créer les deux premières tables.
+    if (v < 8) this.tx(() => this.db.exec(`
+      create table if not exists my_detail (match_id text not null, account text not null, data blob not null, primary key (match_id, account));
+      create table if not exists meta_detail (match_id text primary key, data blob not null);
+      create table if not exists meta_jungle_curve (
+        match_id text not null,
+        participant_id integer not null,
+        champion_id integer not null,
+        cs text not null,
+        first_item real,
+        primary key (match_id, participant_id)
+      );
+      pragma user_version = 8;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -260,6 +275,9 @@ export class CollectorStore {
       putMetaGame: this.db.prepare("insert or ignore into meta_games (match_id, patch, start_ms, duration_s, tier, remake) values (?, ?, ?, ?, ?, ?)"),
       putMetaPart: this.db.prepare(`insert or ignore into meta_parts (match_id, participant_id, team, champion_id, role, win, kills, deaths, assists, items, perks, damage)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      putDetail: this.db.prepare("insert or replace into my_detail (match_id, account, data) values (?, ?, ?)"),
+      toDetail: this.db.prepare("select g.match_id from my_games g left join my_detail d on d.match_id = g.match_id and d.account = g.account where g.account = ? and g.remake = 0 and d.match_id is null"),
+      putCurve: this.db.prepare("insert or replace into meta_jungle_curve (match_id, participant_id, champion_id, cs, first_item) values (?, ?, ?, ?, ?)"),
       putDamage: this.db.prepare("update my_games set damage = ?, team_damage = ? where match_id = ? and account = ?"),
       toDamage: this.db.prepare("select match_id from my_games where account = ? and damage is null and remake = 0 order by start_ms desc"),
       putBuild: this.db.prepare("insert or replace into meta_builds (match_id, participant_id, champion_id, role, win, items) values (?, ?, ?, ?, ?, ?)"),
@@ -378,7 +396,20 @@ export class CollectorStore {
     });
   }
 
-/** Tes parties sans dégâts (v7), à compléter. */
+/** Détail anonyme d'une de tes parties (v8). */
+  putDetail(matchId: string, account: string, data: Uint8Array): void { this.st.putDetail.run(matchId, account, data); }
+
+  /** Tes parties sans détail (v8), à compléter. */
+  gamesWithoutDetail(account: string): string[] {
+    return (this.st.toDetail.all(account) as { match_id: string }[]).map((r) => r.match_id);
+  }
+
+  /** Courbe de CS d'un jungler de la méta (v8). */
+  putJungleCurve(matchId: string, pid: number, championId: number, cs: (number | null)[], firstItem: number | null): void {
+    this.st.putCurve.run(matchId, pid, championId, JSON.stringify(cs), firstItem);
+  }
+
+  /** Tes parties sans dégâts (v7), à compléter. */
   gamesWithoutDamage(account: string): string[] {
     return (this.st.toDamage.all(account) as { match_id: string }[]).map((r) => r.match_id);
   }
@@ -472,7 +503,7 @@ export class CollectorStore {
     const marks = keep.map(() => "?").join(",");
     return this.tx(() => {
       const old = `select match_id from meta_games where patch not in (${marks})`;
-      for (const t of ["meta_parts", "meta_builds", "meta_mastery", "meta_early_kills"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
+      for (const t of ["meta_parts", "meta_builds", "meta_mastery", "meta_early_kills", "meta_jungle_curve", "meta_detail"]) this.db.prepare(`delete from ${t} where match_id in (${old})`).run(...keep);
       return Number(this.db.prepare(`delete from meta_games where patch not in (${marks})`).run(...keep).changes);
     });
   }

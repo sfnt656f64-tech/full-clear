@@ -104,10 +104,10 @@ function render(): void {
   const r: RoleReco | undefined = view.roles.find((x) => x.role === role);
   if (!r) return;
   renderProfile(r.profile);
-  const groups = view.potential?.[role] ?? { keep: [], potential: [], shelve: [] };
+  const groups = view.potential?.[role] ?? { keep: [], potential: [], neutral: [], shelve: [] };
   const pickOf = new Map(r.pool.map((p) => [p.championId, p]));
-  const EMPTY = { keep: "Aucun champion pour l'instant.", potential: "Aucun champion pour l'instant.", shelve: "Aucun : rien à écarter." } as const;
-  for (const g of ["keep", "potential", "shelve"] as const) {
+  const EMPTY = { keep: "Aucun champion pour l'instant.", potential: "Aucun champion pour l'instant.", neutral: "Aucun.", shelve: "Aucun : rien à écarter." } as const;
+  for (const g of ["keep", "potential", "neutral", "shelve"] as const) {
     $(`g-${g}`).replaceChildren(...(groups[g].length ? groups[g].map((e) => potentialCard(e, pickOf.get(e.championId))) : [el("li", { class: "empty" }, EMPTY[g])]));
   }
   // « À essayer » : sans les champions passés en « Potentiel à développer ».

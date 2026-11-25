@@ -1,8 +1,10 @@
-// Radar à 6 axes (Farm, Early, Teamfight, Objectifs, Survie, Or) : chaque axe est ta position « mieux que
-// X % » face aux joueurs Émeraude+ du même rôle, calculée partie par partie puis moyennée. La médiane
-// Émeraude+ vaut 50 sur chaque axe (hexagone régulier). Fonctions pures.
+// Radar à 6 axes (Farm, Early, Teamfight, Objectifs, Survie, Or), calculé partie par partie puis moyenné :
+// - partie de la saison de la méta : position « mieux que X % » face aux joueurs Émeraude+ du même rôle ;
+// - partie d'une saison précédente : face à ton adversaire direct de la même partie (part des parties où tu fais
+//   mieux que lui).
+// 50 = la référence sur chaque axe (hexagone régulier). Fonctions pures.
 import { METRICS, type AnalysisGame } from "./analysis.ts";
-import { percentile, type MetaRef } from "./overview.ts";
+import { gameRank, type MetaRef } from "./overview.ts";
 
 export interface RadarAxis {
   key: string;
@@ -43,9 +45,8 @@ export function radarOf(games: AnalysisGame[], ref: MetaRef, minGames = MIN_RADA
     const perGame: number[] = [];
     for (const g of games) {
       const ranks = axis.metrics.flatMap((k) => {
-        const m = byKey.get(k)!;
-        const v = m.value(g);
-        const r = v == null ? null : percentile(v, ref.sorted(m, g.role, null), m.better);
+        // Même saison que la méta : position parmi les joueurs Émeraude+ ; sinon : face à ton adversaire direct.
+        const r = gameRank(byKey.get(k)!, g, ref, null).rank;
         return r == null ? [] : [r];
       });
       const r = mean(ranks);

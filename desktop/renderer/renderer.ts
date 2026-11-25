@@ -563,14 +563,14 @@ for (const b of document.querySelectorAll<HTMLButtonElement>(".an-views button")
 }
 
 /** Ligne de mesure : valeur, barre de position, médiane. */
-function metricRow(label: string, mine: number | null, unit: string, rank: number | null, med: number | null, extra = ""): HTMLElement {
+function metricRow(label: string, mine: number | null, unit: string, rank: number | null, med: number | null, extra = "", medLabel = "méd."): HTMLElement {
   const fill = h("span", { class: "an-fill", "data-pct": String(Math.round(rank ?? 0)) });
   const cls = rank == null ? "" : rank >= 60 ? " good" : rank < 40 ? " bad" : "";
   return h("div", { class: `an-metric${cls}` },
     h("span", { class: "an-label" }, label, extra ? h("span", { class: "small muted" }, extra) : null),
     h("span", { class: "an-val" }, fmtNum(mine, unit)),
     h("span", { class: "an-bar", title: rank == null ? "" : `Mieux que ${Math.round(rank)} % des joueurs Émeraude+` }, fill),
-    h("span", { class: "an-med small muted" }, med == null ? "" : `méd. ${fmtNum(med, unit)}`));
+    h("span", { class: "an-med small muted" }, med == null ? "" : `${medLabel} ${fmtNum(med, unit)}`));
 }
 const applyBars = () => { for (const f of document.querySelectorAll<HTMLElement>(".an-fill")) f.style.width = `${f.dataset.pct}%`; };
 
@@ -585,11 +585,14 @@ function renderOverview(): void {
   const who = v.filter.championId != null ? champName(v.filter.championId) : "tous tes champions";
   $("ov-summary").replaceChildren(h("b", {}, `${o.games} partie${o.games > 1 ? "s" : ""}`), ` · ${who} · `,
     h("b", {}, `${fmtNum(o.winRate, " %")} de victoires`), o.metaWinRate != null ? h("span", { class: "muted" }, ` (Émeraude+ : ${fmtNum(o.metaWinRate, " %")})`) : "");
+  const season = o.refs.season ?? "";
+  const metaRef = o.comparedTo === "champion" ? `joueurs Émeraude+ ${season} sur ${who}` : `joueurs Émeraude+ ${season} du rôle`;
   $("ov-note").textContent = [
-    o.comparedTo === "champion" ? `Comparé aux joueurs Émeraude+ sur ${who}.` : o.comparedTo === "role" ? "Comparé à tous les joueurs Émeraude+ du rôle." : "Chaque partie comparée aux joueurs Émeraude+ de son rôle.",
-    "Barre : ta position moyenne (à droite = meilleur).",
-    o.oldSeasons ? "Attention : des parties d'anciennes saisons sont comparées à la méta actuelle (le jeu a changé)." : "",
-  ].filter(Boolean).join(" ");
+    o.refs.opponent === 0 ? `Référence : ${metaRef}.`
+      : o.refs.meta === 0 ? `Référence : ton adversaire direct de la même partie (${o.refs.opponent} parties de saisons sans méta) ; la barre donne la part des parties où tu fais mieux que lui.`
+      : `Référence : ${metaRef} pour ${o.refs.meta} parties de ${season} ; ton adversaire direct de la même partie pour ${o.refs.opponent} parties des saisons précédentes (part des parties où tu fais mieux que lui).`,
+    "Barre : à droite = meilleur, 50 % = la référence.",
+  ].join(" ");
   $("ov-metrics").replaceChildren(...o.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median, m.n < o.games ? ` (${m.n})` : "")));
   applyBars();
   const item = (m: (typeof o.metrics)[number]) => h("li", {}, h("b", {}, m.label), ` : ${fmtNum(m.mine, m.unit)}${m.median != null ? ` (méd. ${fmtNum(m.median, m.unit)})` : ""} · mieux que ${Math.round(m.rank ?? 0)} %`);
@@ -617,7 +620,7 @@ function renderRadar(): void {
   $("ov-radar-note").replaceChildren(h("span", { class: "lg lg-main" }), ` ${name} (${v.radar.games} parties)`,
     v.compare ? h("span", {}, h("span", { class: "lg lg-cmp" }), ` ${champName(v.compare.championId)}${v.compare.radar ? ` (${v.compare.radar.games} parties)` : " : moins de 5 parties"}`) : "",
     h("span", {}, h("span", { class: "lg lg-med" }), " médiane Émeraude+ du rôle"),
-    h("br"), "Chaque axe : ta position « mieux que X % » face aux joueurs Émeraude+ du même rôle. Survole un point pour le détail.");
+    h("br"), "Chaque axe : ta position « mieux que X % » face aux joueurs Émeraude+ du même rôle pour les parties de la saison de la méta, et la part des parties où tu fais mieux que ton adversaire direct pour les saisons précédentes. Survole un point pour le détail.");
 }
 $<HTMLSelectElement>("ov-compare").addEventListener("change", (e) => {
   const v = (e.target as HTMLSelectElement).value;
@@ -781,9 +784,12 @@ function renderAnalysis(): void {
   if (v.radar?.average) rs.push({ values: v.radar.average.values, cls: "s-avg", name: `Ta moyenne (${v.radar.average.games} parties)` });
   if (v.radar?.game) rs.push({ values: v.radar.game.values, cls: "s-main", name: "Cette partie" });
   $("an-radar").replaceChildren(radarSvg(rs, { size: 200, labels: true }));
-  $("an-metrics").replaceChildren(...a.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median)));
+  const opp = a.comparedTo === "opponent";
+  $("an-metrics").replaceChildren(...a.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median, "", opp ? "adv." : "méd.")));
   applyBars();
-  $("an-ref").textContent = a.comparedTo === "champion"
+  $("an-ref").textContent = opp
+    ? `Partie d'une saison sans méta : comparée à ton adversaire direct (même rôle, même partie). « adv. » : sa valeur ; barre pleine si tu fais mieux que lui, à moitié à égalité.`
+    : a.comparedTo === "champion"
     ? `Comparé à ${a.metaGames.toLocaleString("fr-FR")} parties Émeraude+ sur ${champName(g.championId)} (${ROLE_SHORT[g.role] ?? g.role}). La barre : ta position (à droite = meilleur).`
     : `Pas encore assez de parties Émeraude+ sur ce champion : comparé à tous les joueurs du rôle (${a.metaGames.toLocaleString("fr-FR")} parties).`;
 
@@ -819,6 +825,108 @@ for (const b of document.querySelectorAll<HTMLButtonElement>(".an-game-filter bu
     renderAnalysis();
   });
 }
+
+// ---------- Objectifs ----------
+
+type GV = Awaited<ReturnType<typeof window.kayn.getGoals>>;
+const fmtStat = (s: GV["goals"][number]["metrics"][number]["since"], unit: string) =>
+  s.value == null ? "–" : `${fmtNum(s.value, unit)}${s.margin != null ? ` ± ${fmtNum(s.margin, unit === " %" ? "" : "")}` : ""} (${s.n})`;
+
+function goalCard(g: GV["goals"][number]): HTMLElement {
+  const per = g.horizon === "week" ? "semaine" : "mois";
+  return h("div", { class: `goal${g.main ? " main" : ""}` },
+    h("h3", {}, g.main ? "★ " : "", g.label, g.main ? h("span", { class: "small muted" }, " · priorité principale") : null),
+    ...g.metrics.map((m) => {
+      if (m.info) {
+        return h("div", { class: "goal-metric" },
+          h("div", { class: "goal-label" }, m.label, h("span", { class: "small muted" }, ` · pour information${m.note ? ` (${m.note})` : ""}`)),
+          h("div", { class: "goal-vals small" }, h("span", {}, "avant ", h("b", {}, fmtStat(m.before, m.unit))), h("span", {}, " → depuis ", h("b", {}, fmtStat(m.since, m.unit)))));
+      }
+      const status = m.since.n < 20 ? ["muted", `pas de conclusion (${m.since.n}/20 parties)`]
+        : m.reached ? ["ok-text", "cible atteinte"] : ["warn-text", "pas encore"];
+      const delta = m.since.value != null && m.before.value != null ? m.since.value - m.before.value : null;
+      return h("div", { class: "goal-metric" },
+        h("div", { class: "goal-label" }, m.label, h("span", { class: "small muted" }, ` · cible ${m.better === "-" ? "≤" : "≥"} ${fmtNum(m.target, m.unit)}`)),
+        h("div", { class: "goal-vals small" },
+          h("span", {}, "avant ", h("b", {}, fmtStat(m.before, m.unit))),
+          h("span", {}, " → depuis ", h("b", {}, fmtStat(m.since, m.unit))),
+          delta != null ? h("span", { class: m.clear ? "" : "muted" }, ` · ${delta >= 0 ? "+" : ""}${fmtNum(delta, m.unit)}`) : null),
+        h("div", { class: `small ${status[0]}` }, status[1],
+          h("span", { class: "muted" }, m.needed === 0 ? " · assez de parties pour trancher par rapport à la cible"
+            : m.needed == null ? " · trop proche de la cible pour trancher (il faudrait des centaines de parties)"
+            : ` · encore environ ${m.needed} partie${m.needed > 1 ? "s" : ""} pour savoir si tu es à la cible`),
+          m.clear ? h("span", { class: "ok-text" }, " · écart net avec la période d'avant") : null),
+        m.periods.filter((w) => w.stat.value != null).length >= 2 ? periodBars(m, per) : null);
+    }),
+    h("details", { class: "small" }, h("summary", {}, g.horizon === "week" ? "Exercice" : "À quoi ça sert"), h("p", {}, g.exercise)));
+}
+
+function renderGoals(v: GV): void {
+  const start = new Date(v.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const from = new Date(v.baseline.fromMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  $("goals-head").textContent = `Depuis le ${start} : ${v.sinceGames} partie(s). Référence : ${v.baseline.extended ? `tes ${v.baseline.games} dernières parties d'avant (moins de 20 sur les 4 semaines)` : `les 4 semaines d'avant (${v.baseline.games} parties, depuis le ${from})`}. Entre parenthèses : nombre de parties ; ± : marge à 95 %.`;
+  const weekly = v.goals.filter((g) => g.horizon === "week"), monthly = v.goals.filter((g) => g.horizon === "month");
+  $("goals").replaceChildren(
+    h("h3", { class: "goal-section" }, "Objectifs de la semaine", h("span", { class: "small muted" }, " · ce que tu contrôles, tranchable en 20 à 30 parties")),
+    ...weekly.map(goalCard),
+    h("h3", { class: "goal-section" }, "Résultats à long terme", h("span", { class: "small muted" }, " · suivis chaque mois")),
+    ...monthly.map(goalCard));
+}
+
+/** Valeur par période depuis le début du suivi (barres), avec la cible en pointillés. */
+function periodBars(m: GV["goals"][number]["metrics"][number], per: string): Element {
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 260, H = 44, pts = m.periods;
+  const vals = pts.map((w) => w.stat.value ?? 0);
+  const hi = Math.max(m.target, ...vals) * 1.15 || 1;
+  const bw = (W - 10) / pts.length;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "weeks");
+  svg.setAttribute("aria-label", `Valeur par ${per}`);
+  pts.forEach((w, i) => {
+    if (w.stat.value == null) return;
+    const hgt = (w.stat.value / hi) * (H - 12);
+    const r = document.createElementNS(NS, "rect");
+    r.setAttribute("x", String(5 + i * bw + 2)); r.setAttribute("width", String(Math.max(2, bw - 4)));
+    r.setAttribute("y", String(H - 10 - hgt)); r.setAttribute("height", String(hgt));
+    const good = m.better === "-" ? w.stat.value <= m.target : w.stat.value >= m.target;
+    r.setAttribute("class", good ? "wk good" : "wk");
+    const t = document.createElementNS(NS, "title"); t.textContent = `${w.label} : ${fmtNum(w.stat.value, m.unit)} (${w.stat.n} partie(s))${w.stat.n < 20 ? " · moins de 20 parties : indicatif" : ""}`; r.append(t);
+    svg.append(r);
+  });
+  const y = H - 10 - (m.target / hi) * (H - 12);
+  const l = document.createElementNS(NS, "line");
+  l.setAttribute("x1", "0"); l.setAttribute("x2", String(W)); l.setAttribute("y1", String(y)); l.setAttribute("y2", String(y)); l.setAttribute("class", "spark-med");
+  svg.append(l);
+  return svg;
+}
+
+/** Réglages : début du suivi et cibles. */
+function renderGoalSettings(v: GV): void {
+  $("goals-start").textContent = `Suivi depuis le ${new Date(v.startMs).toLocaleDateString("fr-FR")}.`;
+  $("goals-targets").replaceChildren(...v.goals.flatMap((g) => g.metrics.filter((m) => !m.info).map((m) => {
+    const input = h("input", { type: "number", step: m.unit === " %" ? "1" : "0.1", value: String(m.target), "aria-label": `Cible : ${m.label}` }) as HTMLInputElement;
+    input.addEventListener("change", async () => { const x = Number(input.value); applyGoals(await window.kayn.setGoalTarget(m.key, Number.isFinite(x) ? x : null)); });
+    return h("label", { class: "goal-target small" }, h("span", {}, m.label), h("span", { class: "muted" }, m.better === "-" ? "≤" : "≥"), input, m.unit.trim());
+  })));
+}
+
+/** Accueil : l'objectif principal en une ligne. */
+function renderHomeGoal(v: GV): void {
+  const g = v.goals.find((x) => x.main);
+  const m = g?.metrics[0];
+  $("home-goal").hidden = !m;
+  if (!m) return;
+  $("home-goal-text").textContent = `★ ${m.label} : ${m.since.n ? `${fmtNum(m.since.value, m.unit)} sur ${m.since.n} partie(s)` : "pas encore de partie"} · cible ${fmtNum(m.target, m.unit)} · avant ${fmtNum(m.before.value, m.unit)}`;
+}
+
+function applyGoals(v: GV): void { renderGoals(v); renderGoalSettings(v); renderHomeGoal(v); }
+async function loadGoals(): Promise<void> { applyGoals(await window.kayn.getGoals()); }
+$("goals-restart").addEventListener("click", async () => applyGoals(await window.kayn.restartGoals()));
+$("home-goal").addEventListener("click", () => selectTab("analysis"));
+void loadGoals();
+window.setInterval(() => void loadGoals(), 120_000);
 
 // ---------- Champions exclus ----------
 

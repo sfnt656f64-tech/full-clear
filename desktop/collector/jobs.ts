@@ -8,6 +8,7 @@
 //   myOldMatch    idem pour une partie d'une saison précédente
 //   myMastery     ta maîtrise de champion (points, tous champions), une fois par jour et par compte
 //   myReread      relecture (v6) d'une de tes parties : chronologie complète (carte, objectifs)
+//   myDetail      détail anonyme d'une partie enregistrée avant la v8 (partie + chronologie : analyses poussées)
 //   myDamage      complète une partie enregistrée avant la v7 : tes dégâts aux champions (la partie seule)
 //   myRefresh     relecture d'une partie enregistrée avant la v4 (participation aux kills), une seule fois
 import { SEASON_START } from "../../scripts/riot/season.ts";
@@ -15,6 +16,7 @@ import { parseRiotId } from "../../scripts/riot/config.ts";
 import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
 import type { CollectorStore } from "./store.ts";
 import { damageOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
+import { cleanDetail, packDetail } from "./detail.ts";
 import { META_LABELS, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
 
 export const QUEUE_SOLO_DUO = 420;
@@ -55,6 +57,7 @@ export function scheduleAccounts(ctx: JobContext, riotIds: string[], force = fal
     scheduleMastery(ctx, puuid, riotId);
     scheduleReread(ctx, puuid, riotId);
     scheduleDamage(ctx, puuid, riotId);
+    scheduleDetail(ctx, puuid, riotId);
   }
   scheduleRefresh(ctx, riotIds);
 }
@@ -79,6 +82,15 @@ function scheduleReread(ctx: JobContext, puuid: string, riotId: string): void {
   if (!todo.length) return;
   ctx.store.tx(() => {
     for (const matchId of todo) ctx.store.enqueue("myReread", `myReread:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId, prio: PRIORITY.mineOld });
+  });
+}
+
+/** Parties sans détail (avant la v8) : relues une fois (partie + chronologie). */
+function scheduleDetail(ctx: JobContext, puuid: string, riotId: string): void {
+  const todo = ctx.store.gamesWithoutDetail(riotId);
+  if (!todo.length) return;
+  ctx.store.tx(() => {
+    for (const matchId of todo) ctx.store.enqueue("myDetail", `myDetail:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId, prio: PRIORITY.mineOld });
   });
 }
 
@@ -170,11 +182,14 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
   // Chronologie absente pour certaines parties anciennes : or et CS à 15 min restent vides.
   const t = await ctx.api.get<TimelineV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}/timeline`, prio, { allow404: true });
   const g = summarizeMyGame(m, t, p.puuid, p.riotId);
-  if (g) ctx.store.putGame(g);
+  if (!g) return;
+  ctx.store.putGame(g);
+  // Détail anonyme (aucun PUUID ni pseudo) pour les analyses poussées.
+  ctx.store.putDetail(p.matchId, p.riotId, packDetail(cleanDetail(p.riotId, m as never, t as never, p.puuid)));
 };
 
 export const HANDLERS: Record<string, Handler> = {
-  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage,
+  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage, myDetail: myMatch,
   metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
 };
 
@@ -188,6 +203,7 @@ export const JOB_LABELS: Record<string, string> = {
   myMastery: "Ma maîtrise de champion",
   myReread: "Mes parties : relecture pour l'analyse",
   myDamage: "Mes parties : dégâts (radar)",
+  myDetail: "Mes parties : détail pour l'analyse",
   myRefresh: "Mes parties : participation aux kills (mise à jour)",
   ...META_LABELS,
 };

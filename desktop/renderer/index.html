@@ -29,6 +29,8 @@
       <p id="client-account" class="muted small" hidden></p>
     </section>
 
+    <button id="home-goal" type="button" class="summary-line" hidden><span id="home-goal-text"></span><span class="muted small">Objectifs ›</span></button>
+
     <section>
       <h2>Ton top 3</h2>
       <div id="top3"><p class="muted small">Calcul…</p></div>
@@ -60,6 +62,11 @@
 
   <!-- ===================== Analyse ===================== -->
   <main id="tab-analysis" class="tab" role="tabpanel" hidden>
+    <section id="goals-sec">
+      <h2>Mes objectifs (jungle)</h2>
+      <p id="goals-head" class="small muted"></p>
+      <div id="goals"></div>
+    </section>
     <section class="an-filters">
       <div class="an-grid">
         <label>Champion <select id="af-champ"></select></label>
@@ -207,6 +214,14 @@
       </div>
       <p id="sc-error" class="warn-text small" hidden></p>
       <p class="muted small">Clique sur une combinaison puis appuie sur la nouvelle (Ctrl, Alt et/ou Maj + une lettre, un chiffre ou F1–F24). Échap pour annuler. « Masquer / afficher » est aussi dans le menu clic droit de l'icône.</p>
+    </section>
+
+    <section>
+      <h2>Objectifs</h2>
+      <p id="goals-start" class="small"></p>
+      <div id="goals-targets" class="goal-targets"></div>
+      <div class="row"><button id="goals-restart" type="button">Repartir d'aujourd'hui</button></div>
+      <p class="muted small">Le suivi compare tes parties de jungle depuis la date de départ avec celles des 4 semaines d'avant (ou tes 20 dernières parties d'avant s'il y en a moins). Rien n'est conclu sous 20 parties.</p>
     </section>
 
     <section>

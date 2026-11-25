@@ -227,3 +227,19 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .lg { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin: 0 2px 0 8px; }
 .lg-main { background: var(--blue); } .lg-cmp { background: var(--warn); } .lg-avg { background: var(--muted); } .lg-game { background: var(--blue); }
 .lg-med { border-top: 2px dashed var(--muted); height: 0; }
+
+/* Objectifs */
+.goal { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.goal.main { border-color: var(--warn); }
+.goal h3 { margin: 0 0 6px; }
+.goal-metric { margin-bottom: 8px; }
+.goal-label { font-size: 13px; }
+.goal-vals { color: var(--muted); }
+.goal-vals b { color: var(--text); font-weight: 600; }
+.weeks { width: 100%; max-width: 280px; height: 44px; display: block; margin-top: 4px; }
+.wk { fill: var(--muted); } .wk.good { fill: var(--ok); }
+.goal-targets { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.goal-target { display: grid; grid-template-columns: 1fr 14px 70px 20px; gap: 6px; align-items: center; }
+.goal-target input { font: inherit; color: var(--text); background: #2a2a3a; border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; width: 70px; }
+#home-goal { margin-bottom: 12px; }
+.goal-section { margin: 10px 0 6px; font-size: 13px; }

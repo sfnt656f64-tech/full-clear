@@ -41,3 +41,4 @@
 .radar-grid { fill: none; stroke: var(--line); stroke-width: 1; }
 .radar-median { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
 .radar-shape.s-main { fill: rgba(91,140,255,.3); stroke: var(--blue); stroke-width: 1.5; }
+.grp.neutral { border-color: var(--muted); }

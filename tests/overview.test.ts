@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { championTable, evolution, filterGames, MetaRef, overview, percentile, type OverviewFilter } from "../desktop/analysis/overview";
+import { championTable, evolution, filterGames, gameRank, MetaRef, overview, percentile, type OverviewFilter } from "../desktop/analysis/overview";
+import { analyseGame, METRICS } from "../desktop/analysis/analysis";
 import type { AnalysisGame, MetaMetricRow } from "../desktop/analysis/analysis";
 
 const DAY = 86_400_000;
@@ -82,5 +83,30 @@ describe("évolution et tableau", () => {
     expect(t.map((r) => [r.championId, r.games, r.values.cs10])).toEqual([[141, 4, 60], [233, 3, 70]]);
     expect(t[0].medians.cs10).not.toBeNull(); // assez de méta sur Kayn
     expect(t[1].medians.cs10).toBeNull();
+  });
+});
+
+describe("référence de la même saison", () => {
+  const ref = new MetaRef(new Map([["JUNGLE", meta(141, 100)]]), 2026);
+  const opp = { cs10: 60, cs15: 100, gold15: 6000, kills15: 1, assists15: 1, teamKills15: 10, objTeam: 4, objMine: 2, deaths15: 2, kills: 5, assists: 5, teamKills: 25, deaths: 5, durationS: 1800, damage: 10000, teamDamage: 50000 };
+  it("2025 : comparé à l'adversaire direct de la même partie, jamais à la méta 2026", () => {
+    const old = game({ season: 2025, cs10: 55, deaths15: 1, opp });
+    expect(gameRank(METRICS.find((m) => m.key === "cs10")!, old, ref, null)).toEqual({ rank: 0, kind: "opponent" }); // 55 < 60
+    expect(gameRank(METRICS.find((m) => m.key === "deaths15")!, old, ref, null)).toEqual({ rank: 100, kind: "opponent" }); // 1 mort < 2
+    expect(gameRank(METRICS.find((m) => m.key === "cs10")!, game({ season: 2026, cs10: 72 }), ref, null).kind).toBe("meta");
+    // Sans détail de la partie : pas de référence.
+    expect(gameRank(METRICS.find((m) => m.key === "cs10")!, game({ season: 2025 }), ref, null).rank).toBeNull();
+  });
+  it("vue d'ensemble : références comptées, pas de médiane Émeraude+ pour une sélection 2025", () => {
+    const o = overview([game({ season: 2025, opp }), game({ season: 2025, opp })], ref, { ...ALL, role: "JUNGLE" }, 2026);
+    expect(o.refs).toEqual({ meta: 0, opponent: 2, season: 2026 });
+    expect(o.metrics.find((m) => m.key === "cs10")!.median).toBeNull();
+    expect(o.metaWinRate).toBeNull();
+  });
+  it("partie 2025 seule : comparée à son adversaire direct", () => {
+    const a = analyseGame(game({ season: 2025, cs10: 65, opp }), [], [], ref);
+    expect(a.comparedTo).toBe("opponent");
+    const cs = a.metrics.find((m) => m.key === "cs10")!;
+    expect([cs.median, cs.rank]).toEqual([60, 100]);
   });
 });

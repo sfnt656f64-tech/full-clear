@@ -12,7 +12,9 @@ export const SHELVE_GAMES = 20;
 export const SHELVE_STATS = 50;
 export const SHELVE_WR = 50;
 
-export type PotentialGroup = "keep" | "potential" | "shelve";
+export type PotentialGroup = "keep" | "potential" | "neutral" | "shelve";
+/** Assez de parties pour juger un champion autour de la médiane (sinon « potentiel à confirmer »). */
+export const NEUTRAL_GAMES = 20;
 
 export interface PotentialEntry {
   championId: number;
@@ -54,13 +56,17 @@ export function classifyPool(p: PoolPick, radar: Radar | null): PotentialEntry {
     return { ...base, group: "keep", provisional: false, text: `Tu gagnes (${wrText}), mais tes stats sont sous la médiane${weak} : à consolider.` };
   }
   if (s >= POTENTIAL_STATS) {
-    return { ...base, group: "potential", provisional: g < KEEP_GAMES, text: `${strong || "Stats nettement au-dessus de la médiane"}, mais ${wrText} : potentiel à développer.` };
+    return { ...base, group: "potential", provisional: g < NEUTRAL_GAMES, text: `${strong || "Stats nettement au-dessus de la médiane"}, mais ${wrText} : potentiel à développer.` };
   }
   if (g >= SHELVE_GAMES && s < SHELVE_STATS && wr < SHELVE_WR) {
     return { ...base, group: "shelve", provisional: false, text: `Stats sous la médiane${weak} et ${wrText} : à mettre de côté.` };
   }
+  // Stats autour de la médiane (50 à 55) : avec assez de parties, rien de caché à développer.
+  if (s >= SHELVE_STATS && g >= NEUTRAL_GAMES) {
+    return { ...base, group: "neutral", provisional: false, text: `Stats autour de la médiane et ${wrText} : neutre, pas prioritaire.` };
+  }
   if (s >= SHELVE_STATS) {
-    return { ...base, group: "potential", provisional: true, text: `Stats autour de la médiane${strong ? ` (${strong})` : ""} et ${wrText} : potentiel à confirmer.` };
+    return { ...base, group: "potential", provisional: true, text: `Stats autour de la médiane${strong ? ` (${strong})` : ""} et ${wrText} : potentiel à confirmer (moins de ${NEUTRAL_GAMES} parties).` };
   }
   return { ...base, group: "shelve", provisional: true, text: `Stats sous la médiane${weak}, mais encore peu de parties (${g}) : à mettre de côté pour l'instant.` };
 }
@@ -75,7 +81,7 @@ export function classifyTried(t: TriedChampion, radar: Radar | null): PotentialE
   };
 }
 
-export interface PotentialGroups { keep: PotentialEntry[]; potential: PotentialEntry[]; shelve: PotentialEntry[] }
+export interface PotentialGroups { keep: PotentialEntry[]; potential: PotentialEntry[]; neutral: PotentialEntry[]; shelve: PotentialEntry[] }
 
 export function potentialGroups(pool: PoolPick[], tried: TriedChampion[], radars: Map<number, Radar | null>): PotentialGroups {
   const entries = [
@@ -84,5 +90,5 @@ export function potentialGroups(pool: PoolPick[], tried: TriedChampion[], radars
   ];
   const by = (g: PotentialGroup) => entries.filter((e) => e.group === g)
     .sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity) || (b.radar?.score ?? 0) - (a.radar?.score ?? 0));
-  return { keep: by("keep"), potential: by("potential"), shelve: by("shelve") };
+  return { keep: by("keep"), potential: by("potential"), neutral: by("neutral"), shelve: by("shelve") };
 }

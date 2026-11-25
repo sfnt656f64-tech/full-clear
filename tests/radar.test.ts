@@ -78,3 +78,18 @@ describe("classement par potentiel", () => {
     expect(g.potential.map((e) => e.championId)).toEqual([64]);
   });
 });
+
+describe("groupe neutre", () => {
+  const radar = (score: number) => ({ values: [score, score, score, score, score, score], games: 20, score });
+  it("au moins 20 parties, stats 50–55, win rate lissé sous 50 % : neutre, pas prioritaire", () => {
+    expect(classifyPool(pool(63, 48), radar(50)).group).toBe("neutral"); // Jarvan IV
+    expect(classifyPool(pool(25, 36), radar(52)).group).toBe("neutral"); // Bel'Veth
+  });
+  it("moins de 20 parties, stats 50–55 : potentiel à confirmer", () => {
+    expect(classifyPool(pool(15, 46), radar(52))).toMatchObject({ group: "potential", provisional: true });
+  });
+  it("stats ≥ 55 et win rate correct : à garder ; stats ≥ 55 et win rate moyen : potentiel", () => {
+    expect(classifyPool(pool(26, 55), radar(55)).group).toBe("keep"); // Nocturne
+    expect(classifyPool(pool(26, 49), radar(56)).group).toBe("potential");
+  });
+});

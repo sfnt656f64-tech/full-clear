@@ -21,9 +21,13 @@ import { champByKey } from "../src/data/champions";
 import { metaStats } from "./meta/meta-stats.ts";
 import type { AnalysisView, MetaView, OverviewView, RecoView } from "./ipc.ts";
 import { readAllMyEvents, readAnalysisGames, readMetaMetrics, readMyEvents } from "./analysis/read.ts";
-import { analyseGame, type MetaMetricRow } from "./analysis/analysis.ts";
+import { analyseGame, type MetaMetricRow, type Values } from "./analysis/analysis.ts";
 import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "./analysis/overview.ts";
 import { radarOf } from "./analysis/radar.ts";
+import { DEFAULT_GOALS, gameMetrics, goalsView, type GameMetrics, type GoalsView } from "./analysis/goals.ts";
+import { unpackDetail } from "./collector/detail.ts";
+import { opponentValues } from "./analysis/opponent.ts";
+import { DatabaseSync } from "node:sqlite";
 import { potentialGroups, type PotentialGroups } from "./reco/potential.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
@@ -495,13 +499,15 @@ function metaRef(roles: string[]): MetaRef {
   if (!metaMetricsCache || Date.now() - metaMetricsCache.at > 5 * 60_000) metaMetricsCache = { at: Date.now(), byRole: new Map() };
   const patches = readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch);
   for (const r of roles) if (!metaMetricsCache.byRole.has(r)) metaMetricsCache.byRole.set(r, readMetaMetrics(dbFile(), patches, r));
-  return new MetaRef(metaMetricsCache.byRole);
+  // Saison de la méta (16.x → 2026) : les parties d'une autre saison sont comparées à l'adversaire direct.
+  const season = patches[0] ? 2010 + Number(patches[0].split(".")[0]) : null;
+  return new MetaRef(metaMetricsCache.byRole, season);
 }
 
 /** Vue d'ensemble selon les filtres (champions exclus toujours écartés). */
 function getOverviewView(raw: unknown, compareRaw?: unknown): OverviewView {
   const filter = cleanFilter(raw);
-  const all = readAnalysisGames(dbFile(), -1, excludedKeys());
+  const all = analysisGames(excludedKeys());
   const games = filterGames(all, filter);
   const ref = metaRef([...new Set(games.map((g) => g.role))]);
   // Champions proposés : ceux joués avec les autres filtres (rôle, période, compte).
@@ -525,6 +531,57 @@ function getOverviewView(raw: unknown, compareRaw?: unknown): OverviewView {
   };
 }
 
+/**
+ * Détail anonyme de tes parties, relu quand le nombre de parties change : mesures des objectifs (jungle) et
+ * mesures de ton adversaire direct dans chaque partie (référence des saisons sans méta).
+ */
+let detailCache: { count: number; metrics: (GameMetrics & { key: string })[]; opp: Map<string, Values | null> } | null = null;
+function details(): NonNullable<typeof detailCache> {
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(dbFile(), { readOnly: true });
+    db.exec("pragma busy_timeout = 2000");
+    const count = (db.prepare("select count(*) n from my_detail").get() as { n: number }).n;
+    if (detailCache?.count === count) return detailCache;
+    const metrics: (GameMetrics & { key: string })[] = [];
+    const opp = new Map<string, Values | null>();
+    for (const r of db.prepare("select match_id, account, data from my_detail").all() as { match_id: string; account: string; data: Uint8Array }[]) {
+      const d = unpackDetail(r.data);
+      const key = `${r.match_id}|${r.account}`;
+      opp.set(key, opponentValues(d));
+      const m = gameMetrics(d);
+      if (m) metrics.push({ ...m, key });
+    }
+    detailCache = { count, metrics, opp };
+    return detailCache;
+  } catch {
+    return detailCache ?? { count: 0, metrics: [], opp: new Map() }; // table pas encore créée (avant la v8)
+  } finally {
+    db?.close();
+  }
+}
+
+function myGameMetrics(): GameMetrics[] {
+  const excluded = new Set(excludedKeys());
+  return details().metrics.filter((m) => !excluded.has(m.championId));
+}
+
+/** Tes parties pour l'onglet Analyse, avec les mesures de ton adversaire direct. */
+function analysisGames(excluded: number[]): ReturnType<typeof readAnalysisGames> {
+  const opp = details().opp;
+  return analysisGames(excluded).map((g) => ({ ...g, opp: opp.get(`${g.matchId}|${g.account}`) ?? null }));
+}
+
+/** Début du suivi : fixé au premier affichage (début de la journée), puis gardé dans les réglages. */
+function getGoalsView(): GoalsView {
+  if (settings.goals.startMs == null) {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    settings.goals.startMs = d.getTime();
+    saveSettings(settingsFile, settings);
+  }
+  return goalsView(myGameMetrics(), settings.goals.startMs, DEFAULT_GOALS, settings.goals.targets);
+}
+
 /** Radar d'un deuxième champion (mêmes filtres), pour la comparaison. */
 function compareOf(forChamps: ReturnType<typeof readAnalysisGames>, raw: unknown, current: number | null): OverviewView["compare"] {
   if (typeof raw !== "number" || raw === current) return null;
@@ -534,14 +591,13 @@ function compareOf(forChamps: ReturnType<typeof readAnalysisGames>, raw: unknown
 
 /** Onglet « Analyse », partie par partie : les 30 dernières parties selon les filtres, analyse de celle demandée. */
 function getAnalysisView(key: string | null, rawFilter?: unknown): AnalysisView {
-  const all = readAnalysisGames(dbFile(), -1, excludedKeys());
+  const all = analysisGames(excludedKeys());
   const games = filterGames(all, rawFilter ? cleanFilter(rawFilter) : ANY_FILTER).slice(0, 30);
   const list = games.map((g) => ({ key: `${g.matchId}|${g.account}`, championId: g.championId, win: g.win, kda: `${g.kills}/${g.deaths}/${g.assists}`, startMs: g.startMs, role: g.role }));
   const game = games.find((g) => `${g.matchId}|${g.account}` === key) ?? games[0];
   if (!game) return { games: list, selected: null, analysis: null };
-  const patches = readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch);
-  const analysis = analyseGame(game, readMyEvents(dbFile(), game.matchId, game.account), games, readMetaMetrics(dbFile(), patches, game.role));
   const ref = metaRef([game.role]);
+  const analysis = analyseGame(game, readMyEvents(dbFile(), game.matchId, game.account), games, ref);
   const same = all.filter((g) => g.championId === game.championId && g.role === game.role);
   return { games: list, selected: `${game.matchId}|${game.account}`, analysis, radar: { game: radarOf([game], ref, 1), average: radarOf(same, ref) } };
 }
@@ -551,7 +607,7 @@ function getAnalysisView(key: string | null, rawFilter?: unknown): AnalysisView 
  * Champions joués 5 à 9 fois : seulement s'ils ont de très bonnes stats.
  */
 function potentialByRole(reco: ReturnType<typeof recommend>, excluded: number[]): Record<string, PotentialGroups> {
-  const all = readAnalysisGames(dbFile(), -1, excluded);
+  const all = analysisGames(excluded);
   const season = Math.max(0, ...all.map((g) => g.season ?? 0));
   const recent = all.filter((g) => (g.season ?? 0) >= season - 1);
   const out: Record<string, PotentialGroups> = {};
@@ -689,6 +745,22 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
   ipcMain.handle(IPC.getAnalysis, (_e, key: unknown, filter: unknown) => getAnalysisView(typeof key === "string" ? key : null, filter));
   ipcMain.handle(IPC.getOverview, (_e, filter: unknown, compare: unknown) => getOverviewView(filter, compare));
+  ipcMain.handle(IPC.getGoals, () => getGoalsView());
+  ipcMain.handle(IPC.restartGoals, () => {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    settings.goals.startMs = d.getTime();
+    saveSettings(settingsFile, settings);
+    return getGoalsView();
+  });
+  ipcMain.handle(IPC.setGoalTarget, (_e, key: unknown, value: unknown) => {
+    const known = DEFAULT_GOALS.flatMap((g) => g.metrics.map((m) => m.key));
+    if (typeof key === "string" && known.includes(key)) {
+      if (typeof value === "number" && Number.isFinite(value)) settings.goals.targets[key] = value;
+      else delete settings.goals.targets[key];
+      saveSettings(settingsFile, settings);
+    }
+    return getGoalsView();
+  });
   ipcMain.handle(IPC.importRunes, async () => {
     const page = draft?.runePage;
     if (!page) return { ok: false, message: "Pas de page de runes à importer pour l'instant." };
