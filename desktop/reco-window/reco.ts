@@ -193,7 +193,7 @@ function renderProgression(): void {
       el("div", { class: "name" }, champName(e.championId), e.flag === "progress" ? el("span", { class: "tag-prov" }, "choisi") : "", el("span", { class: "pscore" }, ` · potentiel ${f1(e.score.total)}`)),
       el("div", { class: "facts" },
         `force à maîtrise égale ${f1(e.force.adjusted)} % `, e.force.mixMeasured ? "" : el("span", { class: "tag-prov", title: "Part de débutants tirée de son groupe de difficulté : moins de 100 parties avec maîtrise sur ce champion" }, "à confirmer"),
-        ` (brut ${f1(e.force.raw)} % ± ${f1(e.force.margin)} sur ${nf(e.force.games)} parties) · accord avec tes axes forts ${sg(e.fit.value)} ± ${f1(e.fit.margin)} pts de win rate · difficulté Riot ${e.difficulty}/10`,
+        ` (brut ${f1(e.force.raw)} % ± ${f1(e.force.margin)} sur ${nf(e.force.games)} parties → corrigé de maîtrise ${f1(e.force.equal)} % → rapproché de 50 % selon les parties : ${f1(e.force.adjusted)} %) · accord avec tes axes forts ${sg(e.fit.value)} ± ${f1(e.fit.margin)} pts de win rate · difficulté Riot ${e.difficulty}/10`,
         e.ceiling.measurable ? ` · plafond ${sg(e.ceiling.delta)} ± ${f1(e.ceiling.margin)} (info)` : " · plafond non mesurable (info)"),
       el("div", { class: "small muted" }, e.score.mine
         ? `Toi : ${e.score.mine.games} parties, stats ${f1(e.score.mine.stats)} → ${f1(e.score.mine.shrunk)} rapprochées de 50 selon leur marge, poids ${Math.round(e.score.mine.weight * 100)} % (potentiel seul ${f1(e.score.potential)})${e.score.mine.games < 20 ? " · moins de 20 parties" : ""}`

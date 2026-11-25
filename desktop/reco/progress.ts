@@ -24,9 +24,9 @@ export const DEFAULT_TAU = 2.5;
 /**
  * Rapport « 1 point de stats = r points de win rate » pour mettre ton score de stats sur l'échelle de la force.
  * Non calibrable proprement (la méta ne garde pas les joueurs) : partie par partie, la pente est de 0,63, gonflée
- * par l'issue de la partie (majorant). 1 par défaut ; le classement est vérifié avec 0,5 et 2.
+ * par l'issue de la partie : c'est un majorant. On retient donc 0,5 (le pool conseillé est le même avec 0,5 et 1).
  */
-export const DEFAULT_STATS_RATIO = 1;
+export const DEFAULT_STATS_RATIO = 0.5;
 
 /** Ton score de stats rapproché de 50 selon sa marge : 50 + (s − 50) × τ² / (τ² + (marge / 1,96)²). */
 export function shrinkStats(score: number, margin: number, tau = DEFAULT_TAU): number {
@@ -131,6 +131,8 @@ export interface Force {
   /** Effet de la part de débutants : win rate attendu avec la maîtrise des joueurs du champion, moins celui avec la
    *  maîtrise moyenne du groupe (négatif : beaucoup de débutants, ce qui tire le win rate brut vers le bas). */
   mix: number;
+  /** Corrigé de la maîtrise (brut − effet de la maîtrise), avant d'être rapproché de 50 %. */
+  equal: number;
   /** Force à maîtrise égale = brut − effet de la maîtrise, puis rapprochée de 50 % selon le nombre de parties. */
   adjusted: number;
   /** Part de débutants mesurée sur le champion lui-même (sinon tirée de son groupe : « à confirmer »). */
@@ -149,7 +151,7 @@ export function forceAtEqualMastery(meta: Rate, champRows: MasteryRow[], groupRo
   const mix = expected(mixC) - expected(sg);
   const raw = pct(meta);
   const eq = raw - mix;
-  return { raw, games: meta.n, margin: wilson(meta.w, meta.n), mix, adjusted: (eq * meta.n + 50 * K_FORCE) / (meta.n + K_FORCE), mixMeasured: champRows.length >= MIX_MEASURED_MIN };
+  return { raw, games: meta.n, margin: wilson(meta.w, meta.n), mix, equal: eq, adjusted: (eq * meta.n + 50 * K_FORCE) / (meta.n + K_FORCE), mixMeasured: champRows.length >= MIX_MEASURED_MIN };
 }
 
 export interface Ceiling { delta: number; margin: number; games: number; measurable: boolean }

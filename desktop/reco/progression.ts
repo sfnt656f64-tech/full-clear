@@ -64,7 +64,8 @@ export function progression(inp: ProgressInputs): Progression {
     const flag = inp.flags.get(c) ?? null;
     if (flag === "notForMe") { notForMe.push(c); continue; }
     const my = inp.mine.get(c);
-    if (isComfort(c, inp.played, inp.points) && flag !== "progress") {
+    // Confort (jungle) : seulement des champions que tu as joués en jungle ; sinon, candidat comme les autres.
+    if (isComfort(c, inp.played, inp.points) && flag !== "progress" && (my?.games ?? 0) > 0) {
       const games = inp.played.get(c) ?? 0, pts = inp.points.get(c) ?? 0;
       comfort.push({ championId: c, games: my?.games ?? 0, wins: my?.wins ?? 0, stats: my?.radar?.score ?? null, margin: my?.radar?.margin ?? null, flag,
         reason: games >= COMFORT_GAMES ? `${games} parties classées sur deux saisons` : `${Math.round(pts / 1000)} k points de maîtrise` });
@@ -81,6 +82,8 @@ export function progression(inp: ProgressInputs): Progression {
     const mine = my?.radar?.score != null ? { stats: my.radar.score, margin: my.radar.margin ?? 20, games: my.games } : null;
     candidates.push({ championId: c, score: potentialScore(parts, mine, { tau: inp.tau, ratio: inp.ratio }), force, fit, ceiling: parts.ceiling, difficulty: inp.difficulty(c), flag });
   }
+  // « Je veux progresser dessus » d'abord (il prend une des 2 places du pool de progression, même classé plus bas),
+  // puis le score.
   candidates.sort((a, b) => (b.flag === "progress" ? 1 : 0) - (a.flag === "progress" ? 1 : 0) || b.score.total - a.score.total);
   comfort.sort((a, b) => b.games - a.games);
   return { candidates, comfort, notForMe };

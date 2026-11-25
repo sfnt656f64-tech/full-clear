@@ -61,15 +61,17 @@ describe("potentiel de progression", () => {
 
   it("score pondéré 55 / 45 (durée d'apprentissage à 0 % pour l'instant)", () => {
     expect(WEIGHTS).toEqual({ force: 0.55, fit: 0.45, learning: 0 });
-    const parts = { force: { raw: 55, games: 1000, margin: 3, mix: 0, adjusted: 54, mixMeasured: true }, fit: { value: 0, margin: 1, games: 1000, axes: [] }, curve: { points: [], plateau: 50, reach: 0, games: [3, 7] as [number, number], n: 0, own: false }, ceiling: { delta: 0, margin: 10, games: 0, measurable: false } };
+    const parts = { force: { raw: 55, games: 1000, margin: 3, mix: 0, equal: 55, adjusted: 54, mixMeasured: true }, fit: { value: 0, margin: 1, games: 1000, axes: [] }, curve: { points: [], plateau: 50, reach: 0, games: [3, 7] as [number, number], n: 0, own: false }, ceiling: { delta: 0, margin: 10, games: 0, measurable: false } };
     const s = potentialScore(parts);
     expect(s.force).toBe(70);
     expect(s.fit).toBe(50);
     expect(s.total).toBeCloseTo(0.55 * 70 + 0.45 * 50, 5); // durée d'apprentissage à 0 %
     // Tes résultats sur le champion : moitié-moitié à 20 parties.
     // Marge nulle : pas de rapprochement ; marge large : rapproché de 50.
-    const m = potentialScore(parts, { stats: 42, margin: 0, games: 20 });
+    const m = potentialScore(parts, { stats: 42, margin: 0, games: 20 }, { ratio: 1 });
     expect(m.mine).toMatchObject({ score: 10, games: 20, weight: 0.5 });
+    // Rapport par défaut : 0,5 (la pente partie par partie, 0,63, est un majorant).
+    expect(potentialScore(parts, { stats: 42, margin: 0, games: 20 }).mine!.score).toBe(30);
     expect(potentialScore(parts, { stats: 62, margin: 18, games: 7 }).mine!.shrunk).toBeLessThan(51);
     // Rapport stats → win rate : 2 fois plus fort, 2 fois plus d'écart.
     expect(potentialScore(parts, { stats: 45, margin: 0, games: 20 }, { ratio: 2 }).mine!.score).toBe(0);
