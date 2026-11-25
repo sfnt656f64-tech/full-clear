@@ -8,6 +8,7 @@ import type { Recommendations } from "./reco/recommend.ts";
 import type { GameAnalysis } from "./analysis/analysis.ts";
 import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./analysis/overview.ts";
 import type { Radar } from "./analysis/radar.ts";
+import type { Heat } from "./data/engine.ts";
 import type { PotentialGroups } from "./reco/potential.ts";
 import type { GoalsView } from "./analysis/goals.ts";
 export type { GoalsView };
@@ -21,8 +22,8 @@ export interface OverviewView {
   evolution: { by: "month" | "patch"; points: EvolutionPoint[] };
   /** « Tous les champions » : tes champions comparés entre eux. */
   table: ChampionRow[] | null;
-  /** Carte de chaleur : [x, y, 0 kill | 1 mort | 2 assist, minute]. */
-  points: [number, number, number, number][];
+  /** Carte de chaleur, déjà regroupée par case (au lieu de milliers de points). */
+  heat: Heat;
   /** Radar de la sélection, et d'un champion à comparer (mêmes filtres). */
   radar: Radar | null;
   compare: { championId: number; radar: Radar | null } | null;

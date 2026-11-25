@@ -243,3 +243,8 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .goal-target input { font: inherit; color: var(--text); background: #2a2a3a; border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; width: 70px; }
 #home-goal { margin-bottom: 12px; }
 .goal-section { margin: 10px 0 6px; font-size: 13px; }
+
+/* Chargement (calcul en cours dans le moteur) : la fenêtre reste utilisable */
+#tab-analysis { position: relative; }
+#tab-analysis.loading::before { content: "Calcul…"; position: sticky; top: 44px; display: block; z-index: 2; margin: 0 auto 8px; width: max-content; padding: 4px 12px; border-radius: 12px; background: #2a2a3a; border: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+#tab-analysis.loading #an-overview, #tab-analysis.loading #an-game-view { opacity: .55; transition: opacity .15s; }

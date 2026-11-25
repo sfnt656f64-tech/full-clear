@@ -117,7 +117,11 @@ function render(): void {
 }
 
 async function reload(): Promise<void> {
-  view = await window.kayn.getRecommendations();
+  // Premier chargement : indicateur pendant le calcul (dans le moteur, la fenêtre reste utilisable).
+  if (!view) $("summary").textContent = "Calcul des recommandations…";
+  const v = await window.kayn.getRecommendations().catch((e) => { console.error(e); return null; });
+  if (!v) return;
+  view = v;
   $("summary").textContent = view.patches.length
     ? `Méta : ${nf(view.metaMatches)} partie(s) Émeraude+ en ${view.patches.join(" et ")}`
     : "Pas encore de méta";

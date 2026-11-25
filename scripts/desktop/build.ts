@@ -25,6 +25,8 @@ await Promise.all([
   build({ ...common, entryPoints: [resolve(SRC, "main.ts")], outfile: resolve(OUT, "main.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "preload.ts")], outfile: resolve(OUT, "preload.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "collector/collector-main.ts")], outfile: resolve(OUT, "collector.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
+  // Moteur de données (worker du processus principal) : tous les calculs lourds, hors du fil de l'interface.
+  build({ ...common, entryPoints: [resolve(SRC, "data/engine-worker.ts")], outfile: resolve(OUT, "engine-worker.cjs"), platform: "node", format: "cjs" }),
   build({ ...common, entryPoints: [resolve(SRC, "preload-overlay.ts")], outfile: resolve(OUT, "preload-overlay.cjs"), platform: "node", format: "cjs", external: ["electron"] }),
   build({ ...common, entryPoints: [resolve(SRC, "renderer/renderer.ts")], outfile: resolve(OUT, "renderer/renderer.js"), platform: "browser", format: "iife" }),
   build({ ...common, entryPoints: [resolve(SRC, "meta-window/meta.ts")], outfile: resolve(OUT, "meta-window/meta.js"), platform: "browser", format: "iife" }),

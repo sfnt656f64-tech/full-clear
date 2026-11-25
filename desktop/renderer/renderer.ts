@@ -2,6 +2,7 @@
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
 import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
+import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
@@ -511,20 +512,34 @@ const champName = (id: number) => champByKey(id)?.name ?? `#${id}`;
 try { const saved = JSON.parse(localStorage.getItem("anFilter") ?? "null"); if (saved && typeof saved === "object") anFilterSel = { ...anFilterSel, ...saved }; } catch { /* rien */ }
 for (const img of document.querySelectorAll<HTMLImageElement>(".an-map-bg")) img.src = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/map/map11.png`;
 
-/** Recharge selon la vue choisie. */
+/** Recharge selon la vue choisie. Pendant le calcul : indicateur de chargement ; seule la dernière demande compte. */
+let anRequest = 0;
 async function loadAnalysis(key: string | null): Promise<void> {
   try { localStorage.setItem("anFilter", JSON.stringify(anFilterSel)); } catch { /* rien */ }
   $("an-overview").hidden = anViewMode !== "overview";
   $("an-game-view").hidden = anViewMode !== "game";
-  if (anViewMode === "overview") {
-    ov = await window.kayn.getOverview(anFilterSel, compareId);
-    renderFilters();
-    renderOverview();
-  } else {
-    if (!ov) { ov = await window.kayn.getOverview(anFilterSel); renderFilters(); }
-    anView = await window.kayn.getAnalysis(key, anFilterSel);
-    anKey = anView.selected;
-    renderAnalysis();
+  const req = ++anRequest;
+  const box = $("tab-analysis");
+  box.classList.add("loading");
+  try {
+    if (anViewMode === "overview") {
+      const v = await window.kayn.getOverview(anFilterSel, compareId);
+      if (req !== anRequest) return; // une demande plus récente est partie entre-temps
+      ov = v;
+      renderFilters();
+      renderOverview();
+    } else {
+      const [o, a] = await Promise.all([ov ? Promise.resolve(ov) : window.kayn.getOverview(anFilterSel, compareId), window.kayn.getAnalysis(key, anFilterSel)]);
+      if (req !== anRequest) return;
+      if (!ov) { ov = o; renderFilters(); }
+      anView = a;
+      anKey = anView.selected;
+      renderAnalysis();
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    if (req === anRequest) box.classList.remove("loading");
   }
 }
 
@@ -639,22 +654,26 @@ function drawHeat(): void {
   canvas.width = size * dpr; canvas.height = size * dpr;
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const pts = (ov?.points ?? []).filter(([, , k, m]) => k !== 2
-    && (heatKinds === "both" || (heatKinds === "kills" ? k === 0 : k === 1))
-    && (heatTime === "all" || (heatTime === "early" ? m < 15 : m >= 15)));
+  const heat = ov?.heat;
+  if (!heat) return;
+  // Le moteur envoie déjà le nombre d'événements par case : on étale chaque case (noyau gaussien).
   const G = 96, R = 3, SIG = 1.6;
-  const kg = new Float32Array(G * G), dg = new Float32Array(G * G);
-  for (const [x, y, k] of pts) {
-    const gx = (x / MAP_SIZE) * G, gy = (1 - y / MAP_SIZE) * G;
-    const grid = k === 0 ? kg : dg;
-    for (let j = Math.floor(gy) - R; j <= Math.floor(gy) + R; j++) {
-      for (let i = Math.floor(gx) - R; i <= Math.floor(gx) + R; i++) {
+  const spread = (flat: number[]) => {
+    const grid = new Float32Array(G * G);
+    for (let n = 0; n < flat.length; n += 2) {
+      const idx = flat[n], count = flat[n + 1];
+      const cx = idx % G, cy = Math.floor(idx / G);
+      for (let j = cy - R; j <= cy + R; j++) for (let i = cx - R; i <= cx + R; i++) {
         if (i < 0 || j < 0 || i >= G || j >= G) continue;
-        const d2 = (i + 0.5 - gx) ** 2 + (j + 0.5 - gy) ** 2;
-        grid[j * G + i] += Math.exp(-d2 / (2 * SIG * SIG));
+        grid[j * G + i] += count * Math.exp(-((i - cx) ** 2 + (j - cy) ** 2) / (2 * SIG * SIG));
       }
     }
-  }
+    return grid;
+  };
+  const pick = (g: { early: number[]; late: number[] }) => (heatTime === "all" ? [...g.early, ...g.late] : g[heatTime]);
+  const kCells = heatKinds === "deaths" ? [] : pick(heat.kills);
+  const dCells = heatKinds === "kills" ? [] : pick(heat.deaths);
+  const kg = spread(kCells), dg = spread(dCells);
   const nz = [...kg, ...dg].filter((v) => v > 0.01).sort((p, q) => p - q);
   const top = nz.length ? nz[Math.floor(nz.length * 0.9)] : 1;
   const small = document.createElement("canvas");
@@ -672,8 +691,8 @@ function drawHeat(): void {
   sctx.putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
-  const kills = pts.filter((p) => p[2] === 0).length, deaths = pts.filter((p) => p[2] === 1).length;
-  $("ov-heat-note").textContent = `${kills} kill(s) en vert, ${deaths} mort(s) en rouge. Plus la couleur est vive, plus il y en a au même endroit.`;
+  const sum = (flat: number[]) => flat.reduce((n, v, i) => (i % 2 ? n + v : n), 0);
+  $("ov-heat-note").textContent = `${sum(kCells)} kill(s) en vert, ${sum(dCells)} mort(s) en rouge. Plus la couleur est vive, plus il y en a au même endroit.`;
 }
 function pressGroup(attr: string, b: HTMLButtonElement): void {
   for (const x of document.querySelectorAll(`[${attr}]`)) x.setAttribute("aria-pressed", String(x === b));
@@ -905,11 +924,9 @@ function periodBars(m: GV["goals"][number]["metrics"][number], per: string): Ele
 /** Réglages : début du suivi et cibles. */
 function renderGoalSettings(v: GV): void {
   $("goals-start").textContent = `Suivi depuis le ${new Date(v.startMs).toLocaleDateString("fr-FR")}.`;
-  $("goals-targets").replaceChildren(...v.goals.flatMap((g) => g.metrics.filter((m) => !m.info).map((m) => {
-    const input = h("input", { type: "number", step: m.unit === " %" ? "1" : "0.1", value: String(m.target), "aria-label": `Cible : ${m.label}` }) as HTMLInputElement;
-    input.addEventListener("change", async () => { const x = Number(input.value); applyGoals(await window.kayn.setGoalTarget(m.key, Number.isFinite(x) ? x : null)); });
-    return h("label", { class: "goal-target small" }, h("span", {}, m.label), h("span", { class: "muted" }, m.better === "-" ? "≤" : "≥"), input, m.unit.trim());
-  })));
+  // Champs créés une seule fois, mis à jour sur place (jamais pendant la saisie).
+  syncTargetInputs($("goals-targets"), v.goals.flatMap((g) => g.metrics.filter((m) => !m.info).map((m) => ({ key: m.key, label: m.label, better: m.better, unit: m.unit, target: m.target }))),
+    (key, value) => void window.kayn.setGoalTarget(key, value).then(applyGoals));
 }
 
 /** Accueil : l'objectif principal en une ligne. */
@@ -959,7 +976,8 @@ const nf1 = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 1,
 
 /** Les 3 meilleurs champions de ton pool en jungle et au milieu (score de la vue « Champions recommandés »). */
 async function renderTop3(): Promise<void> {
-  const r = await window.kayn.getRecommendations();
+  const r = await window.kayn.getRecommendations().catch(() => null);
+  if (!r) return;
   const rows = r.roles.map((role) => {
     const top = role.pool.slice(0, 3);
     return h("div", { class: "top3-row" },
