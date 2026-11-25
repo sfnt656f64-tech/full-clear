@@ -9,7 +9,7 @@ const $ = (id: string) => document.getElementById(id)!;
 beforeAll(async () => {
   const html = readFileSync(resolve(import.meta.dirname, "../index.html"), "utf8");
   document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>")).replace(/<script[\s\S]*?<\/script>/g, "");
-  history.replaceState(null, "", "/kayn-sim/#draft=en-Ornn.Sejuani.Galio.Aphelios.Braum~al-Jax.Orianna.Ezreal.Inconnu~src-live");
+  history.replaceState(null, "", "/full-clear/#draft=en-Ornn.Sejuani.Galio.Aphelios.Braum~al-Jax.Orianna.Ezreal.Inconnu~src-live");
   await import("../src/main");
 });
 

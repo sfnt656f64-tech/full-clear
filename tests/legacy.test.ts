@@ -59,6 +59,15 @@ describe("modèle — identique à la page d'origine", () => {
   });
 });
 
+/**
+ * Seule différence voulue avec la page d'origine : les bottes par défaut, quand elles sont proposées en
+ * alternative, ne répètent plus « alternative : par défaut … » (mêmes choix, même ordre).
+ */
+const newBootsWording = (boots: [string, string][]) => boots.map(([k, t]): [string, string] => [k, t
+  .replace("alternative : par défaut en bleu : ", "alternative, le choix habituel en bleu : ")
+  .replace("alternative : par défaut en rouge (rester en bottes de base jusqu'aux 2 items)", "alternative, le choix habituel en rouge : rester en bottes de base jusqu'aux 2 items")
+  .replace("par défaut en rouge (rester en bottes de base jusqu'aux 2 items)", "par défaut en rouge : rester en bottes de base jusqu'aux 2 items")]);
+
 describe("moteur de draft — identique à la page d'origine", () => {
   it(`${legacy.drafts.length} drafts (4 exemples + 80 aléatoires) × 2 moments × 3 choix de forme`, () => {
     for (const d of legacy.drafts) {
@@ -69,7 +78,7 @@ describe("moteur de draft — identique à la page d'origine", () => {
       const { E: _e, A: _a, ...x } = rep!.analysis;
       expect({ ...x, sc: r6(x.sc), shields: r6(x.shields), adShare: r6(x.adShare), apShare: r6(x.apShare) }, ctx).toEqual(d.out.analysis);
       expect(rep!.form, ctx).toBe(d.out.form);
-      expect(rep!.boots, ctx).toEqual(d.out.boots);
+      expect(rep!.boots, ctx).toEqual(newBootsWording(d.out.boots as [string, string][]));
       expect(rep!.build, ctx).toEqual(d.out.build);
       expect(rep!.notes, ctx).toEqual(d.out.notes);
       expect(rep!.simBuild, ctx).toEqual(d.out.simBuild);

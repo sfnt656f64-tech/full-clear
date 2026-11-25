@@ -11,7 +11,7 @@ export interface RiotConfig {
   siteUrl: string;
 }
 
-export const DEFAULT_SITE_URL = "https://sfnt656f64-tech.github.io/kayn-sim/";
+export const DEFAULT_SITE_URL = "https://sfnt656f64-tech.github.io/full-clear/";
 export const LOCAL_SITE_URL = "http://localhost:5173/";
 
 /** « Nom#TAG » → [nom, tag]. Le nom peut contenir des espaces ; le tag est après le dernier #. */

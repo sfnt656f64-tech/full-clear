@@ -2,7 +2,7 @@
 
 Ce guide installe le projet sur ton PC pour utiliser **l'application de bureau** (draft et overlay en jeu),
 **`npm run stats`** (tes parties) et, en secours, **`npm run live`**. Le site lui-même n'a besoin d'aucune
-installation : https://sfnt656f64-tech.github.io/kayn-sim/
+installation : https://sfnt656f64-tech.github.io/full-clear/
 
 Compte environ 15 minutes. Il te faut Windows 10 ou 11, et ta clé personnelle Riot
 (sur https://developer.riotgames.com, dans la page de ton application).
@@ -49,12 +49,12 @@ git --version
 
 ```powershell
 cd $HOME\Documents
-git clone https://github.com/sfnt656f64-tech/kayn-sim.git
-cd kayn-sim
+git clone https://github.com/sfnt656f64-tech/full-clear.git
+cd full-clear
 npm ci
 ```
 
-Le projet est maintenant dans `Documents\kayn-sim`. `npm ci` installe les dépendances (une minute environ).
+Le projet est maintenant dans `Documents\full-clear`. `npm ci` installe les dépendances (une minute environ).
 
 ## 4. Créer le fichier `.env` (ta clé)
 
@@ -88,7 +88,7 @@ npm run stats
   et le relancer : rien n'est perdu.
 - Les lancements suivants ne téléchargent que les nouvelles parties : quelques secondes.
 - À la fin, un résumé s'affiche et le rapport s'ouvre dans ton navigateur
-  (fichier `Documents\kayn-sim\.cache\riot\rapport.html`).
+  (fichier `Documents\full-clear\.cache\riot\rapport.html`).
 
 Options :
 
@@ -131,7 +131,7 @@ Le premier lancement télécharge les outils d'empaquetage (quelques minutes). L
 
    ```powershell
    New-Item -ItemType Directory -Force "$env:APPDATA\full-clear" | Out-Null
-   Copy-Item "$HOME\Documents\kayn-sim\.env" "$env:APPDATA\full-clear\.env"
+   Copy-Item "$HOME\Documents\full-clear\.env" "$env:APPDATA\full-clear\.env"
    ```
 
    L'appli n'y lit que `RIOT_ID` (pour vérifier que le compte connecté au client est le tien) et, s'il est
@@ -202,7 +202,7 @@ npm run live -- --watch
 ## 8. Mettre à jour plus tard
 
 ```powershell
-cd $HOME\Documents\kayn-sim
+cd $HOME\Documents\full-clear
 git pull
 npm ci
 ```
