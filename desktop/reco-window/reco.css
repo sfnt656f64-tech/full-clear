@@ -42,3 +42,14 @@
 .radar-median { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
 .radar-shape.s-main { fill: rgba(91,140,255,.3); stroke: var(--blue); stroke-width: 1.5; }
 .grp.neutral { border-color: var(--muted); }
+
+/* Saison du profil, tendances, pool conseillé */
+.season-pick { display: inline-flex; gap: 4px; margin: 0 0 6px; }
+.season-pick button { font-size: 12px; padding: 2px 10px; color: var(--muted); }
+.season-pick button[aria-pressed="true"] { border-color: var(--blue); color: var(--text); }
+.trend.up { color: var(--ok); } .trend.down { color: var(--red); }
+.advice { background: var(--panel); border: 1px solid var(--warn); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+.advice h2 { margin: 0 0 6px; font-size: 14px; }
+.advice-list { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.advice-list li { display: flex; gap: 8px; align-items: center; max-width: 360px; }
+.advice-ic { width: 36px; height: 36px; border-radius: 6px; }

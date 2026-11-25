@@ -1,7 +1,8 @@
 // Fenêtre « Champions recommandés » : mon pool (classé par score) et « À essayer », en jungle et au milieu.
 import { champByKey } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
-import type { KaynApi, RecoView } from "../ipc.ts";
+import type { KaynApi, MetaTrend, RecoView } from "../ipc.ts";
+import { wilson } from "../reco/pool-advice.ts";
 import type { PlayProfile, PoolPick, RoleReco, TryPick } from "../reco/recommend.ts";
 import { learningLabel } from "../reco/recommend.ts";
 import { ROLE_LABELS } from "../stats/my-stats.ts";
@@ -36,8 +37,26 @@ const STYLE_LABEL: Record<PlayProfile["style"], string> = { early: "joueur d'ear
 
 let view: RecoView | null = null;
 let role = "JUNGLE";
+/** Saison du profil affiché (la saison en cours par défaut). */
+let profileKey: string | null = null;
 
-function renderProfile(p: PlayProfile): void {
+/** « 57 % ± 13 » : win rate et marge à 95 %. */
+const wrPm = (wr: number, games: number) => `${nf(wr)} % ± ${nf(wilson(Math.round((wr / 100) * games), games))}`;
+/** Tendance entre les deux derniers patchs, avec la marge : flèche, et « dans la marge » si l'écart n'est pas net. */
+function trendEl(t: MetaTrend | undefined): HTMLElement {
+  if (!t) return el("span", { class: "trend muted", title: "Moins de 30 parties sur l'un des deux derniers patchs" }, " · tendance : –");
+  const m = Math.hypot(wilson(Math.round((t.latest.winRate / 100) * t.latest.games), t.latest.games), wilson(Math.round((t.previous.winRate / 100) * t.previous.games), t.previous.games));
+  const sure = Math.abs(t.delta) > m;
+  const arrow = t.delta >= 0.5 ? "↑" : t.delta <= -0.5 ? "↓" : "→";
+  return el("span", { class: `trend${sure ? (t.delta > 0 ? " up" : " down") : " muted"}`, title: `${t.latest.patch} : ${nf(t.latest.winRate, 1)} % sur ${t.latest.games} parties · ${t.previous.patch} : ${nf(t.previous.winRate, 1)} % sur ${t.previous.games} parties · marge de l'écart ± ${nf(m, 1)}` },
+    ` · ${arrow} ${t.delta >= 0 ? "+" : "−"}${nf(Math.abs(t.delta), 1)} pt${sure ? "" : " (dans la marge)"}`);
+}
+
+function renderProfile(r: RoleReco): void {
+  const opts = r.profiles;
+  const sel = opts.find((o) => o.key === profileKey) ?? opts[0];
+  if (!sel) { $("profile").replaceChildren(el("p", { class: "muted" }, "Pas de partie dans ce rôle.")); return; }
+  const p = sel.profile;
   const facts: (Node | string)[] = [];
   const fact = (label: string, value: string, title = "") => facts.push(el("span", title ? { title } : {}, `${label} `, el("b", {}, value)));
   if (p.kp15 != null) fact("Participation aux kills avant 15 min", `${nf(p.kp15)} %`, p.metaKp15 != null ? `Moyenne Émeraude+ du rôle : ${nf(p.metaKp15)} %` : "");
@@ -47,17 +66,23 @@ function renderProfile(p: PlayProfile): void {
   if (p.gold15 != null) fact("Or à 15 min", nf(p.gold15), p.metaGold15 != null ? `Moyenne Émeraude+ du rôle : ${nf(p.metaGold15)}` : "");
   if (p.short.games) fact("Parties courtes (< 25 min)", `${nf(p.short.winRate)} % sur ${p.short.games}`);
   if (p.long.games) fact("longues (≥ 32 min)", `${nf(p.long.winRate)} % sur ${p.long.games}`);
+  const picker = el("span", { class: "season-pick" }, ...opts.map((o) => {
+    const b = el("button", { type: "button", "aria-pressed": String(o === sel) }, o.label);
+    b.addEventListener("click", () => { profileKey = o.key; render(); });
+    return b;
+  }));
   $("profile").replaceChildren(
-    el("h2", {}, `Ton profil ${role === "JUNGLE" ? "en jungle" : "au milieu"} (${p.games} parties, saison en cours et précédente)`, el("span", { class: "style-tag" }, STYLE_LABEL[p.style])),
-    p.games ? el("div", { class: "facts" }, ...facts) : el("p", { class: "muted" }, "Pas de partie dans ce rôle sur les deux dernières saisons."),
+    el("h2", {}, `Ton profil ${role === "JUNGLE" ? "en jungle" : "au milieu"} · ${sel.label} (${p.games} parties)`, p.games >= 20 ? el("span", { class: "style-tag" }, STYLE_LABEL[p.style]) : el("span", { class: "style-tag" }, "style : moins de 20 parties")),
+    picker,
+    p.games ? el("div", { class: "facts" }, ...facts) : el("p", { class: "muted" }, "Pas de partie dans ce rôle sur cette saison."),
   );
 }
 
 /** Carte d'un champion classé par potentiel : mini-radar, phrase d'explication, et score du pool s'il y est. */
 function potentialCard(e: PotentialEntry, pick: PoolPick | undefined): HTMLElement {
   const facts = pick
-    ? `${pick.games} parties · ${nf(pick.winRate)} % (lissé ${nf(pick.adjustedWinRate, 1)} %) · KDA ${nf(pick.kda, 1)}${pick.masteryPoints ? ` · ${nf(Math.round(pick.masteryPoints / 1000))} k pts` : ""}`
-    : `${e.games} parties · ${nf(e.winRate ?? 0)} % de victoires`;
+    ? `${pick.games} parties · ${wrPm(pick.winRate, pick.games)} (lissé ${nf(pick.adjustedWinRate, 1)} %) · KDA ${nf(pick.kda, 1)}${pick.masteryPoints ? ` · ${nf(Math.round(pick.masteryPoints / 1000))} k pts` : ""}`
+    : `${e.games} parties · ${wrPm(e.winRate ?? 0, e.games)} de victoires`;
   const radar = e.radar
     ? el("div", { class: "mini-radar", title: `Stats de jeu : ${nf(e.radar.score ?? 0)} (50 = médiane Émeraude+), sur ${e.radar.games} parties` },
       radarSvg([{ values: e.radar.values, cls: "s-main", name: champName(e.championId) }], { size: 58, labels: false }))
@@ -66,7 +91,7 @@ function potentialCard(e: PotentialEntry, pick: PoolPick | undefined): HTMLEleme
     portrait(e.championId),
     el("div", {},
       el("div", { class: "name" }, champName(e.championId), ...prov(e.provisional), ...(pick ? [el("span", { class: "pscore", title: "Score du pool (proche d'un win rate attendu)" }, ` · score ${nf(pick.score, 1)}`)] : [])),
-      el("div", { class: "facts" }, facts)),
+      el("div", { class: "facts" }, facts, el("span", { class: "muted" }, " · méta"), trendEl(view?.trends?.[role]?.[e.championId]))),
     radar,
     el("p", { class: "ptext" }, e.text),
     ...(pick ? [breakdown(pick)] : []));
@@ -89,7 +114,7 @@ function tryCard(t: TryPick, i: number): HTMLElement {
     portrait(t.championId),
     el("div", {},
       el("div", { class: "name" }, champName(t.championId), ...prov(t.provisional)),
-      el("div", { class: "facts" }, `méta ${nf(t.meta.winRate, 1)} % (${nf(t.meta.games)}) · ${learningLabel(t.learning)}`, ...similar)),
+      el("div", { class: "facts" }, `méta ${wrPm(t.meta.winRate, t.meta.games)} (${nf(t.meta.games)} parties)`, trendEl(view?.trends?.[role]?.[t.championId]), ` · ${learningLabel(t.learning)}`, ...similar)),
     el("div", { class: "score", title: "Score de recommandation sur 100" }, nf(t.score), el("small", {}, "/ 100")),
     reasons(t.reasons));
 }
@@ -103,7 +128,8 @@ function render(): void {
   }));
   const r: RoleReco | undefined = view.roles.find((x) => x.role === role);
   if (!r) return;
-  renderProfile(r.profile);
+  renderProfile(r);
+  renderAdvice();
   const groups = view.potential?.[role] ?? { keep: [], potential: [], neutral: [], shelve: [] };
   const pickOf = new Map(r.pool.map((p) => [p.championId, p]));
   const EMPTY = { keep: "Aucun champion pour l'instant.", potential: "Aucun champion pour l'instant.", neutral: "Aucun.", shelve: "Aucun : rien à écarter." } as const;
@@ -114,6 +140,17 @@ function render(): void {
   const moved = new Set(groups.potential.map((e) => e.championId));
   const tryList = r.tryList.filter((t) => !moved.has(t.championId));
   $("try").replaceChildren(...(tryList.length ? tryList.map(tryCard) : [el("li", { class: "empty" }, "Pas encore assez de méta pour proposer des champions : la collecte continue en arrière-plan.")]));
+}
+
+/** Pool conseillé : 2 ou 3 champions complémentaires, la part de tes parties qu'ils couvrent, et pourquoi le resserrer. */
+function renderAdvice(): void {
+  const a = view?.advice?.[role];
+  if (!a || !a.picks.length) { $("advice").replaceChildren(); $("advice").hidden = true; return; }
+  $("advice").hidden = false;
+  $("advice").replaceChildren(
+    el("h2", {}, "Pool conseillé", a.fromMeta ? el("span", { class: "tag-prov" }, "d'après la méta") : ""),
+    el("ol", { class: "advice-list" }, ...a.picks.map((p) => el("li", {}, portrait(p.championId, "advice-ic"), el("div", {}, el("b", {}, champName(p.championId)), ...prov(p.provisional), el("div", { class: "small muted" }, p.why.join(" · ")))))),
+    el("p", { class: "small" }, a.text));
 }
 
 async function reload(): Promise<void> {

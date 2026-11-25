@@ -57,8 +57,10 @@ describe("classement par potentiel", () => {
   });
   it("potentiel : très bonnes stats, win rate moyen ou peu de parties", () => {
     expect(classifyPool(pool(40, 48), radar(62)).group).toBe("potential");
-    expect(classifyPool(pool(12, 56), radar(62)).group).toBe("potential");
-    expect(classifyPool(pool(12, 56), radar(62)).text).toContain("potentiel à développer");
+    expect(classifyPool(pool(12, 48), radar(62))).toMatchObject({ group: "potential", provisional: true });
+    expect(classifyPool(pool(12, 48), radar(62)).text).toContain("potentiel à développer");
+    // Bon win rate lissé : « À garder », à confirmer sous 20 parties.
+    expect(classifyPool(pool(12, 56), radar(62))).toMatchObject({ group: "keep", provisional: true });
   });
   it("à mettre de côté : beaucoup de parties, stats et win rate sous la médiane", () => {
     const e = classifyPool(pool(30, 46), radar(42));
@@ -91,5 +93,32 @@ describe("groupe neutre", () => {
   it("stats ≥ 55 et win rate correct : à garder ; stats ≥ 55 et win rate moyen : potentiel", () => {
     expect(classifyPool(pool(26, 55), radar(55)).group).toBe("keep"); // Nocturne
     expect(classifyPool(pool(26, 49), radar(56)).group).toBe("potential");
+  });
+});
+
+describe("règles sans trou", () => {
+  const radar = (score: number) => ({ values: [score, score, score, score, score, score], games: 20, score });
+  const axes = (v: number[]) => ({ values: v, games: 20, score: v.reduce((a, b) => a + b) / v.length });
+  it("Volibear (28 parties, 50,4 % lissé, stats 47) : neutre, avec les axes faibles cités", () => {
+    const e = classifyPool(pool(28, 50.4), axes([40, 52, 45, 44, 55, 49]));
+    expect(e.group).toBe("neutral");
+    expect(e.provisional).toBe(false);
+    expect(e.text).toContain("Farm (40,0)");
+    expect(e.text).not.toContain("peu de parties");
+  });
+  it("Nocturne (19 parties, 50,85 % lissé, stats 54,6) : potentiel à confirmer, pas « À garder » (seuil 51 %)", () => {
+    expect(classifyPool(pool(19, 50.85), radar(54.6))).toMatchObject({ group: "potential", provisional: true });
+  });
+  it("« à consolider » cite toujours au moins un axe", () => {
+    expect(classifyPool(pool(60, 54), axes([48, 55, 44, 50, 46, 52])).text).toContain("à consolider sur Teamfight (44,0) et Survie (46,0)");
+  });
+  it("chaque combinaison tombe dans un groupe", () => {
+    for (const wr of [45, 49.9, 50, 50.5, 51, 55]) for (const st of [40, 49.9, 50, 54.9, 55, 60]) for (const g of [10, 19, 20, 60]) {
+      const e = classifyPool(pool(g, wr), radar(st));
+      expect(["keep", "potential", "neutral", "shelve"]).toContain(e.group);
+      expect(e.provisional).toBe(g < 20);
+      if (g < 20) expect(e.text).toMatch(/confirmer/);
+      else expect(e.text).not.toMatch(/peu de parties|moins de 20/);
+    }
   });
 });

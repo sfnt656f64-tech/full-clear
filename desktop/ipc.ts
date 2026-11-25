@@ -10,6 +10,10 @@ import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./an
 import type { Radar } from "./analysis/radar.ts";
 import type { Heat } from "./data/engine.ts";
 import type { PotentialGroups } from "./reco/potential.ts";
+import type { PoolAdvice } from "./reco/pool-advice.ts";
+
+/** Tendance d'un champion entre les deux derniers patchs (méta Émeraude+). */
+export interface MetaTrend { delta: number; latest: { patch: string; winRate: number; games: number }; previous: { patch: string; winRate: number; games: number } }
 import type { GoalsView } from "./analysis/goals.ts";
 export type { GoalsView };
 
@@ -45,6 +49,10 @@ export interface RecoView extends Recommendations {
   patches: string[];
   /** Classement par potentiel et radars de tes champions, par rôle. */
   potential: Record<string, PotentialGroups>;
+  /** Pool conseillé, par rôle. */
+  advice: Record<string, PoolAdvice>;
+  /** Tendance entre les deux derniers patchs, par rôle puis par champion. */
+  trends: Record<string, Record<number, MetaTrend>>;
 }
 
 /** Méta calculée pour la fenêtre « Méta ». */

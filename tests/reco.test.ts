@@ -133,11 +133,12 @@ describe("à essayer", () => {
 
 describe("profil et style", () => {
   it("participation aux kills avant et après 15 min", () => {
-    const p = playProfile(games(KAYN, 6, 4), "JUNGLE", { kp15: 40, gold15: 5800 });
+    const p = playProfile(games(KAYN, 12, 8), "JUNGLE", { kp15: 40, gold15: 5800 });
     expect(p.kp15).toBeCloseTo(((2 + 3) / 8) * 100);              // 62,5 %
     expect(p.kpLate).toBeCloseTo(((5 + 7 - 5) / (25 - 8)) * 100); // 41 %
     expect(p.killShare).toBeCloseTo(20);
-    expect(p.style).toBe("early"); // participe et gagne de l'or bien plus que la moyenne avant 15 min
+    expect(p.style).toBe("early"); // 20 parties : participe et gagne de l'or bien plus que la moyenne avant 15 min
+    expect(playProfile(games(KAYN, 6, 4), "JUNGLE", { kp15: 40, gold15: 5800 }).style).toBe("balanced"); // moins de 20 parties : pas de conclusion
   });
 
   it("parties sans relecture (participation inconnue) ignorées", () => {

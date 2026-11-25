@@ -18,6 +18,9 @@ import { recommend } from "../reco/recommend.ts";
 import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "../reco/draft-pick.ts";
 import { laneRows, roleShares, type Lane, type LaneRow, type RoleShares } from "../reco/lanes.ts";
 import { potentialGroups, type PotentialGroups } from "../reco/potential.ts";
+import { compoStrengths, poolAdvice, type PoolAdvice } from "../reco/pool-advice.ts";
+import { metaStyles } from "../reco/recommend.ts";
+import type { MetaTrend } from "../ipc.ts";
 import { guidePage, metaPage, type RecommendedPage } from "../runes/rune-page.ts";
 import { gamePlan, type GamePlan } from "../coach/game-plan.ts";
 import { statBuild, type StatBuild } from "../coach/stat-build.ts";
@@ -259,7 +262,40 @@ export class Engine {
       const patches = this.patches(RECO_PATCHES);
       const input = this.recentMeta();
       const reco = recommend({ myGames: readMyGames(this.dbFile), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(this.dbFile), metaMatches: input.matches, excluded, myMastery: readMyMastery(this.dbFile) });
-      return { ...reco, patches, potential: this.potential(reco, excluded) };
+      const potential = this.potential(reco, excluded);
+      const styles = metaStyles(input.parts);
+      const all = this.analysisGames(excluded);
+      const season = Math.max(0, ...all.map((g) => g.season ?? 0));
+      const advice: Record<string, PoolAdvice> = {};
+      const trends: Record<string, Record<number, MetaTrend>> = {};
+      for (const r of reco.roles) {
+        const earlyIndex = new Map<number, number>();
+        for (const [k, st] of styles) { const [id, role] = k.split("|"); if (role === r.role) earlyIndex.set(Number(id), st.early); }
+        advice[r.role] = poolAdvice({
+          role: r.role, groups: potential[r.role], pool: r.pool, tryList: r.tryList,
+          myGames: all.filter((g) => g.role === r.role && g.season === season).map((g) => ({ championId: g.championId, win: g.win })),
+          earlyIndex, compo: this.cached(`compo:${r.role}`, META_TTL, () => compoStrengths(input.parts, r.role)),
+        });
+        trends[r.role] = this.trends(r.role);
+      }
+      return { ...reco, patches, potential, advice, trends };
+    });
+  }
+
+/** Win rate de chaque champion sur les deux derniers patchs (au moins 30 parties sur chacun). */
+  private trends(role: string): Record<number, MetaTrend> {
+    return this.cached(`trends:${role}`, META_TTL, () => {
+      const [p0, p1] = this.patches(2);
+      if (!p0 || !p1) return {};
+      const stats = (p: string) => this.cached(`statsPatch:${p}`, META_TTL, () => metaStats(readMeta(this.dbFile, [p])));
+      const prev = new Map(stats(p1).filter((m) => m.role === role).map((m) => [m.championId, m]));
+      const out: Record<number, MetaTrend> = {};
+      for (const m of stats(p0)) {
+        const o = prev.get(m.championId);
+        if (m.role !== role || !o || m.games < 30 || o.games < 30) continue;
+        out[m.championId] = { delta: m.winRate - o.winRate, latest: { patch: p0, winRate: m.winRate, games: m.games }, previous: { patch: p1, winRate: o.winRate, games: o.games } };
+      }
+      return out;
     });
   }
 
