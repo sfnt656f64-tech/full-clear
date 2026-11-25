@@ -8,12 +8,13 @@
 //   myOldMatch    idem pour une partie d'une saison précédente
 //   myMastery     ta maîtrise de champion (points, tous champions), une fois par jour et par compte
 //   myReread      relecture (v6) d'une de tes parties : chronologie complète (carte, objectifs)
+//   myDamage      complète une partie enregistrée avant la v7 : tes dégâts aux champions (la partie seule)
 //   myRefresh     relecture d'une partie enregistrée avant la v4 (participation aux kills), une seule fois
 import { SEASON_START } from "../../scripts/riot/season.ts";
 import { parseRiotId } from "../../scripts/riot/config.ts";
 import { PRIORITY, type RiotScheduler } from "./scheduler.ts";
 import type { CollectorStore } from "./store.ts";
-import { summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
+import { damageOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "./my-games.ts";
 import { META_LABELS, metaLeague, metaMatch, metaPlayer, metaTimeline } from "./meta-jobs.ts";
 
 export const QUEUE_SOLO_DUO = 420;
@@ -53,6 +54,7 @@ export function scheduleAccounts(ctx: JobContext, riotIds: string[], force = fal
     refreshIds(ctx, puuid, riotId, force);
     scheduleMastery(ctx, puuid, riotId);
     scheduleReread(ctx, puuid, riotId);
+    scheduleDamage(ctx, puuid, riotId);
   }
   scheduleRefresh(ctx, riotIds);
 }
@@ -79,6 +81,24 @@ function scheduleReread(ctx: JobContext, puuid: string, riotId: string): void {
     for (const matchId of todo) ctx.store.enqueue("myReread", `myReread:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId, prio: PRIORITY.mineOld });
   });
 }
+
+/** Parties sans dégâts (avant la v7) : relecture légère, une fois par partie. */
+function scheduleDamage(ctx: JobContext, puuid: string, riotId: string): void {
+  const todo = ctx.store.gamesWithoutDamage(riotId);
+  if (!todo.length) return;
+  ctx.store.tx(() => {
+    for (const matchId of todo) ctx.store.enqueue("myDamage", `myDamage:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId });
+  });
+}
+
+const myDamage: Handler = async (ctx, p: { matchId: string; puuid: string; riotId: string }) => {
+  const m = await ctx.api.get<MatchV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}`, PRIORITY.mineOld, { allow404: true });
+  const me = m?.info.participants.find((x) => x.puuid === p.puuid);
+  if (!m || !me) return;
+  const mates = m.info.participants.filter((x) => me.teamId == null || x.teamId === me.teamId);
+  const d = damageOf(me, mates);
+  ctx.store.setDamage(p.matchId, p.riotId, d.damage, d.teamDamage);
+};
 
 /** Parties enregistrées avant la v4 : relues une fois, en priorité basse (clé unique : jamais deux fois). */
 function scheduleRefresh(ctx: JobContext, riotIds: string[]): void {
@@ -154,7 +174,7 @@ const myMatch: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
 };
 
 export const HANDLERS: Record<string, Handler> = {
-  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch,
+  account, myMatchIds, myHistoryIds, myMatch, myOldMatch: myMatch, myRefresh: myMatch, myMastery, myReread: myMatch, myDamage,
   metaLeague: metaLeague as Handler, metaPlayer: metaPlayer as Handler, metaMatch: metaMatch as Handler, metaTimeline: metaTimeline as Handler,
 };
 
@@ -167,6 +187,7 @@ export const JOB_LABELS: Record<string, string> = {
   myOldMatch: "Mes parties (anciennes saisons)",
   myMastery: "Ma maîtrise de champion",
   myReread: "Mes parties : relecture pour l'analyse",
+  myDamage: "Mes parties : dégâts (radar)",
   myRefresh: "Mes parties : participation aux kills (mise à jour)",
   ...META_LABELS,
 };

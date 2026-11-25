@@ -53,6 +53,9 @@ export interface MyGame {
   cs10?: number | null;
   objTeam?: number | null;
   objMine?: number | null;
+  /** Tes dégâts aux champions et ceux de ton équipe (v7). */
+  damage?: number | null;
+  teamDamage?: number | null;
   events?: { t: number; kind: "kill" | "death" | "assist"; x: number; y: number; otherChamp: number }[] | null;
   items: number[];
   /** Page de runes : style principal, secondaire, runes choisies, fragments. */
@@ -60,7 +63,7 @@ export interface MyGame {
 }
 
 /** Version du schéma (PRAGMA user_version). */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /**
  * v3 : données de méta, anonymes (aucun PUUID ni pseudo).
@@ -237,6 +240,13 @@ export class CollectorStore {
       );
       create index my_events_game on my_events (match_id, account);
       pragma user_version = 6;`));
+    // v7 : dégâts aux champions (axe Teamfight du radar). Tes parties déjà enregistrées sont complétées par une
+    // relecture légère (la partie seule, sans chronologie).
+    if (v < 7) this.tx(() => this.db.exec(`
+      alter table meta_parts add column damage integer;
+      alter table my_games add column damage integer;
+      alter table my_games add column team_damage integer;
+      pragma user_version = 7;`));
     // Travaux interrompus par une fermeture : à refaire.
     this.db.prepare("update jobs set status = 'pending' where status = 'running'").run();
     this.st = {
@@ -248,8 +258,10 @@ export class CollectorStore {
       clearPayload: this.db.prepare("update jobs set payload = '{}' where id = ?"),
       hasMeta: this.db.prepare("select 1 from meta_games where match_id = ?"),
       putMetaGame: this.db.prepare("insert or ignore into meta_games (match_id, patch, start_ms, duration_s, tier, remake) values (?, ?, ?, ?, ?, ?)"),
-      putMetaPart: this.db.prepare(`insert or ignore into meta_parts (match_id, participant_id, team, champion_id, role, win, kills, deaths, assists, items, perks)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      putMetaPart: this.db.prepare(`insert or ignore into meta_parts (match_id, participant_id, team, champion_id, role, win, kills, deaths, assists, items, perks, damage)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+      putDamage: this.db.prepare("update my_games set damage = ?, team_damage = ? where match_id = ? and account = ?"),
+      toDamage: this.db.prepare("select match_id from my_games where account = ? and damage is null and remake = 0 order by start_ms desc"),
       putBuild: this.db.prepare("insert or replace into meta_builds (match_id, participant_id, champion_id, role, win, items) values (?, ?, ?, ?, ?, ?)"),
       putEarly: this.db.prepare("update meta_parts set kills15 = ?, assists15 = ?, team_kills15 = ?, gold15 = ? where match_id = ? and participant_id = ?"),
       metaTeams: this.db.prepare("select participant_id, team from meta_parts where match_id = ?"),
@@ -356,6 +368,7 @@ export class CollectorStore {
   putGame(g: MyGame): void {
     this.tx(() => {
       this.putGameRow(g);
+      if (g.damage !== undefined) this.st.putDamage.run(g.damage, g.teamDamage ?? null, g.matchId, g.account);
       // Chronologie lue : CS à 10 min, objectifs, tes événements (remplacés).
       if (g.events) {
         this.st.putMyTimeline.run(g.cs10 ?? null, g.objTeam ?? null, g.objMine ?? null, g.matchId, g.account);
@@ -363,6 +376,15 @@ export class CollectorStore {
         for (const e of g.events) this.st.putMyEvent.run(g.matchId, g.account, e.t, e.kind, Math.round(e.x), Math.round(e.y), e.otherChamp);
       }
     });
+  }
+
+/** Tes parties sans dégâts (v7), à compléter. */
+  gamesWithoutDamage(account: string): string[] {
+    return (this.st.toDamage.all(account) as { match_id: string }[]).map((r) => r.match_id);
+  }
+
+  setDamage(matchId: string, account: string, damage: number | null, teamDamage: number | null): void {
+    this.st.putDamage.run(damage, teamDamage, matchId, account);
   }
 
   /** Tes parties à relire pour la v6 (les plus récentes d'abord). */
@@ -415,7 +437,7 @@ export class CollectorStore {
       this.st.putMetaGame.run(g.matchId, g.patch, g.startMs, g.durationS, tier, g.remake ? 1 : 0);
       for (const p of g.parts) {
         this.st.putMetaPart.run(g.matchId, p.participantId, p.team, p.championId, p.role, p.win ? 1 : 0, p.kills, p.deaths, p.assists,
-          JSON.stringify(p.items), p.perks ? JSON.stringify(p.perks) : null);
+          JSON.stringify(p.items), p.perks ? JSON.stringify(p.perks) : null, p.damage ?? null);
       }
     });
   }

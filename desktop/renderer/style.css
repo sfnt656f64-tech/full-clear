@@ -210,3 +210,20 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .ov-table button.link { padding: 0; color: var(--text); text-decoration: none; font-size: 12px; }
 .ov-table button.link:hover { text-decoration: underline; }
 #an-overview .an-map img { opacity: .45; }
+
+/* Radar */
+.radar-box { display: flex; justify-content: center; }
+.radar { width: 100%; max-width: 320px; height: auto; }
+.radar.mini { width: 64px; height: 64px; }
+.radar-grid { fill: none; stroke: var(--line); stroke-width: 1; }
+.radar-median { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.radar-shape { stroke-width: 2; }
+.radar-shape.s-main { fill: rgba(91,140,255,.25); stroke: var(--blue); }
+.radar-shape.s-cmp { fill: rgba(231,176,75,.2); stroke: var(--warn); }
+.radar-shape.s-avg { fill: rgba(154,151,171,.15); stroke: var(--muted); }
+.radar-dot.s-main { fill: var(--blue); } .radar-dot.s-cmp { fill: var(--warn); } .radar-dot.s-avg { fill: var(--muted); }
+.radar-label { fill: var(--text); font-size: 11px; }
+.radar.mini .radar-shape { stroke-width: 1.5; }
+.lg { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin: 0 2px 0 8px; }
+.lg-main { background: var(--blue); } .lg-cmp { background: var(--warn); } .lg-avg { background: var(--muted); } .lg-game { background: var(--blue); }
+.lg-med { border-top: 2px dashed var(--muted); height: 0; }

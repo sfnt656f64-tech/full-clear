@@ -26,7 +26,7 @@ function withDb<T>(dbFile: string, fallback: T, fn: (db: DatabaseSync) => T): T 
 export function readAnalysisGames(dbFile: string, limit: number, excluded: number[]): AnalysisGame[] {
   return withDb(dbFile, [], (db) => {
     const rows = db.prepare(`select g.match_id, g.account, g.start_ms, g.duration_s, g.patch, g.season, g.champion_id, g.role, g.win, g.kills, g.deaths, g.assists,
-        g.cs, g.gold15, g.cs15, g.cs10, g.team_kills, g.kills15, g.assists15, g.team_kills15, g.obj_team, g.obj_mine,
+        g.cs, g.gold15, g.cs15, g.cs10, g.team_kills, g.kills15, g.assists15, g.team_kills15, g.obj_team, g.obj_mine, g.damage, g.team_damage,
         (select count(*) from my_events e where e.match_id = g.match_id and e.account = g.account and e.kind = 'death' and e.t < ${MIN15}) deaths15
       from my_games g where g.timeline_v6 = 1 and g.remake = 0 and g.champion_id not in (${excluded.map(() => "?").join(",") || "0"})
       order by g.start_ms desc limit ?`).all(...excluded, limit) as Record<string, number | string | null>[];
@@ -36,6 +36,7 @@ export function readAnalysisGames(dbFile: string, limit: number, excluded: numbe
       cs: Number(r.cs), gold15: r.gold15 as number | null, cs15: r.cs15 as number | null, cs10: r.cs10 as number | null,
       teamKills: r.team_kills as number | null, kills15: r.kills15 as number | null, assists15: r.assists15 as number | null, teamKills15: r.team_kills15 as number | null,
       objTeam: r.obj_team as number | null, objMine: r.obj_mine as number | null, deaths15: Number(r.deaths15),
+      damage: r.damage as number | null, teamDamage: r.team_damage as number | null,
     }));
   });
 }
@@ -67,13 +68,16 @@ export function readMetaMetrics(dbFile: string, patches: string[], role: string)
   return withDb(dbFile, [], (db) => {
     const marks = patches.map(() => "?").join(",");
     return (db.prepare(`select p.champion_id, p.win, p.cs10, p.cs15, p.gold15, p.deaths15, p.kills15, p.assists15, p.team_kills15, p.obj_team, p.obj_mine,
-        p.kills, p.assists, (select sum(q.kills) from meta_parts q where q.match_id = p.match_id and q.team = p.team) team_kills
+        p.kills, p.assists, p.deaths, g.duration_s, p.damage,
+        (select sum(q.kills) from meta_parts q where q.match_id = p.match_id and q.team = p.team) team_kills,
+        (select sum(q.damage) from meta_parts q where q.match_id = p.match_id and q.team = p.team) team_damage
       from meta_parts p join meta_games g on g.match_id = p.match_id
       where g.remake = 0 and g.patch in (${marks}) and p.role = ? and p.cs10 is not null`).all(...patches, role) as Record<string, number | null>[])
       .map((r) => ({
         championId: Number(r.champion_id), win: !!r.win, cs10: r.cs10, cs15: r.cs15, gold15: r.gold15, deaths15: r.deaths15,
         kills15: r.kills15, assists15: r.assists15, teamKills15: r.team_kills15, objTeam: r.obj_team, objMine: r.obj_mine,
         kills: Number(r.kills), assists: Number(r.assists), teamKills: r.team_kills,
+        deaths: Number(r.deaths), durationS: Number(r.duration_s), damage: r.damage, teamDamage: r.team_damage,
       }));
   });
 }

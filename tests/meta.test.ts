@@ -40,7 +40,7 @@ describe("réduction d'une partie de méta", () => {
     expect(g).toMatchObject({ matchId: "EUW1_1", patch: "16.23", remake: false });
     expect(g.parts).toHaveLength(10);
     expect(g.parts[0]).toEqual({
-      participantId: 1, team: 100, championId: 141, role: "JUNGLE", win: true, kills: 3, deaths: 2, assists: 4,
+      participantId: 1, team: 100, championId: 141, role: "JUNGLE", win: true, kills: 3, deaths: 2, assists: 4, damage: null,
       items: [6699, 1101, 3047], perks: { primary: 8100, sub: 8300, selections: [8128, 8143, 8138, 8135, 8347, 8304], shards: [5008, 5008, 5011] },
     });
     expect(JSON.stringify(g)).not.toContain("puuid");

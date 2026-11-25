@@ -23,6 +23,8 @@ import type { AnalysisView, MetaView, OverviewView, RecoView } from "./ipc.ts";
 import { readAllMyEvents, readAnalysisGames, readMetaMetrics, readMyEvents } from "./analysis/read.ts";
 import { analyseGame, type MetaMetricRow } from "./analysis/analysis.ts";
 import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "./analysis/overview.ts";
+import { radarOf } from "./analysis/radar.ts";
+import { potentialGroups, type PotentialGroups } from "./reco/potential.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -282,10 +284,8 @@ function getRecoView(): RecoView {
   if (recoCache && recoCache.key === key && Date.now() - recoCache.at < 60_000) return recoCache.view;
   const patches = readMetaPatches(dbFile()).slice(0, RECO_PATCHES).map((p) => p.patch);
   const input = readMeta(dbFile(), patches);
-  const view: RecoView = {
-    ...recommend({ myGames: readMyGames(dbFile()), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(dbFile()), metaMatches: input.matches, excluded, myMastery: readMyMastery(dbFile()) }),
-    patches,
-  };
+  const reco = recommend({ myGames: readMyGames(dbFile()), meta: metaStats(input), metaParts: input.parts, mastery: readMetaMastery(dbFile()), metaMatches: input.matches, excluded, myMastery: readMyMastery(dbFile()) });
+  const view: RecoView = { ...reco, patches, potential: potentialByRole(reco, excluded) };
   recoCache = { at: Date.now(), key, view };
   return view;
 }
@@ -499,7 +499,7 @@ function metaRef(roles: string[]): MetaRef {
 }
 
 /** Vue d'ensemble selon les filtres (champions exclus toujours écartés). */
-function getOverviewView(raw: unknown): OverviewView {
+function getOverviewView(raw: unknown, compareRaw?: unknown): OverviewView {
   const filter = cleanFilter(raw);
   const all = readAnalysisGames(dbFile(), -1, excludedKeys());
   const games = filterGames(all, filter);
@@ -519,7 +519,17 @@ function getOverviewView(raw: unknown): OverviewView {
     evolution: evolution(games),
     table: filter.championId == null ? championTable(games, ref) : null,
     points,
+    radar: radarOf(games, ref),
+    compare: compareOf(forChamps, compareRaw, filter.championId),
+    compareOptions: [...counts.entries()].filter(([, n]) => n >= 5).sort((a, b) => b[1] - a[1]).map(([id]) => id),
   };
+}
+
+/** Radar d'un deuxième champion (mêmes filtres), pour la comparaison. */
+function compareOf(forChamps: ReturnType<typeof readAnalysisGames>, raw: unknown, current: number | null): OverviewView["compare"] {
+  if (typeof raw !== "number" || raw === current) return null;
+  const gs = forChamps.filter((g) => g.championId === raw);
+  return { championId: raw, radar: radarOf(gs, metaRef([...new Set(gs.map((g) => g.role))])) };
 }
 
 /** Onglet « Analyse », partie par partie : les 30 dernières parties selon les filtres, analyse de celle demandée. */
@@ -531,7 +541,31 @@ function getAnalysisView(key: string | null, rawFilter?: unknown): AnalysisView 
   if (!game) return { games: list, selected: null, analysis: null };
   const patches = readMetaPatches(dbFile()).slice(0, 3).map((p) => p.patch);
   const analysis = analyseGame(game, readMyEvents(dbFile(), game.matchId, game.account), games, readMetaMetrics(dbFile(), patches, game.role));
-  return { games: list, selected: `${game.matchId}|${game.account}`, analysis };
+  const ref = metaRef([game.role]);
+  const same = all.filter((g) => g.championId === game.championId && g.role === game.role);
+  return { games: list, selected: `${game.matchId}|${game.account}`, analysis, radar: { game: radarOf([game], ref, 1), average: radarOf(same, ref) } };
+}
+
+/**
+ * Classement par potentiel : radar de chaque champion (saison en cours et précédente, dans le rôle) et groupes.
+ * Champions joués 5 à 9 fois : seulement s'ils ont de très bonnes stats.
+ */
+function potentialByRole(reco: ReturnType<typeof recommend>, excluded: number[]): Record<string, PotentialGroups> {
+  const all = readAnalysisGames(dbFile(), -1, excluded);
+  const season = Math.max(0, ...all.map((g) => g.season ?? 0));
+  const recent = all.filter((g) => (g.season ?? 0) >= season - 1);
+  const out: Record<string, PotentialGroups> = {};
+  for (const role of reco.roles) {
+    const inRole = recent.filter((g) => g.role === role.role);
+    const ref = metaRef([role.role]);
+    const byChamp = new Map<number, typeof inRole>();
+    for (const g of inRole) (byChamp.get(g.championId) ?? byChamp.set(g.championId, []).get(g.championId)!).push(g);
+    const radars = new Map([...byChamp].map(([id, gs]) => [id, radarOf(gs, ref)]));
+    const inPool = new Set(role.pool.map((p) => p.championId));
+    const tried = [...byChamp].filter(([id, gs]) => !inPool.has(id) && gs.length >= 5).map(([id, gs]) => ({ championId: id, games: gs.length, wins: gs.filter((g) => g.win).length }));
+    out[role.role] = potentialGroups(role.pool, tried, radars);
+  }
+  return out;
 }
 
 /** Méta calculée, gardée une minute (le calcul relit toute la base). */
@@ -654,7 +688,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getMeta, (_e, scope: unknown) => getMetaView(Number(scope)));
   ipcMain.handle(IPC.openRecoWindow, () => showRecoWindow());
   ipcMain.handle(IPC.getAnalysis, (_e, key: unknown, filter: unknown) => getAnalysisView(typeof key === "string" ? key : null, filter));
-  ipcMain.handle(IPC.getOverview, (_e, filter: unknown) => getOverviewView(filter));
+  ipcMain.handle(IPC.getOverview, (_e, filter: unknown, compare: unknown) => getOverviewView(filter, compare));
   ipcMain.handle(IPC.importRunes, async () => {
     const page = draft?.runePage;
     if (!page) return { ok: false, message: "Pas de page de runes à importer pour l'instant." };

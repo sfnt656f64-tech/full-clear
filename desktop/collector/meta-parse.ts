@@ -21,6 +21,7 @@ export interface MetaMatchV5 {
       win: boolean;
       gameEndedInEarlySurrender?: boolean;
       kills: number; deaths: number; assists: number;
+      totalDamageDealtToChampions?: number;
       item0: number; item1: number; item2: number; item3: number; item4: number; item5: number; item6: number;
       perks?: {
         statPerks?: { offense: number; flex: number; defense: number };
@@ -39,6 +40,8 @@ export interface MetaPart {
   kills: number;
   deaths: number;
   assists: number;
+  /** Dégâts aux champions (part des dégâts de l'équipe : axe Teamfight). */
+  damage?: number | null;
   /** Inventaire final (hors trinket). */
   items: number[];
   /** Page de runes : principal, secondaire, 6 runes, 3 fragments. */
@@ -73,6 +76,7 @@ export function summarizeMetaMatch(m: MetaMatchV5): MetaGame {
         kills: p.kills,
         deaths: p.deaths,
         assists: p.assists,
+        damage: p.totalDamageDealtToChampions ?? null,
         items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5].filter((i) => i > 0),
         perks: styles.length >= 2 && sp
           ? { primary: styles[0].style, sub: styles[1].style, selections: styles.flatMap((s) => s.selections.map((x) => x.perk)), shards: [sp.offense, sp.flex, sp.defense] }

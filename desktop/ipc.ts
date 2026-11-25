@@ -7,6 +7,8 @@ import type { MetaPatchInfo } from "./meta/read.ts";
 import type { Recommendations } from "./reco/recommend.ts";
 import type { GameAnalysis } from "./analysis/analysis.ts";
 import type { ChampionRow, EvolutionPoint, Overview, OverviewFilter } from "./analysis/overview.ts";
+import type { Radar } from "./analysis/radar.ts";
+import type { PotentialGroups } from "./reco/potential.ts";
 
 /** Vue d'ensemble de l'onglet « Analyse ». */
 export interface OverviewView {
@@ -19,17 +21,28 @@ export interface OverviewView {
   table: ChampionRow[] | null;
   /** Carte de chaleur : [x, y, 0 kill | 1 mort | 2 assist, minute]. */
   points: [number, number, number, number][];
+  /** Radar de la sélection, et d'un champion à comparer (mêmes filtres). */
+  radar: Radar | null;
+  compare: { championId: number; radar: Radar | null } | null;
+  /** Champions comparables (au moins 5 parties avec les filtres hors champion). */
+  compareOptions: number[];
 }
 
 /** Onglet « Analyse » : tes dernières parties relues, et l'analyse de celle choisie. */
 export interface AnalysisView {
+  /** Radar de la partie choisie, et ta moyenne sur ce champion dans ce rôle. */
+  radar?: { game: Radar | null; average: Radar | null };
   games: { key: string; championId: number; win: boolean; kda: string; startMs: number; role: string }[];
   selected: string | null;
   analysis: GameAnalysis | null;
 }
 
 /** Champions recommandés (fenêtre « Champions recommandés »), avec les patchs de méta utilisés. */
-export interface RecoView extends Recommendations { patches: string[] }
+export interface RecoView extends Recommendations {
+  patches: string[];
+  /** Classement par potentiel et radars de tes champions, par rôle. */
+  potential: Record<string, PotentialGroups>;
+}
 
 /** Méta calculée pour la fenêtre « Méta ». */
 export interface MetaView {
@@ -112,7 +125,7 @@ export interface KaynApi {
   openRecoWindow(): Promise<void>;
   /** Analyse d'une partie (clé « matchId|compte »), ou de la dernière. */
   getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
-  getOverview(filter: OverviewFilter): Promise<OverviewView>;
+  getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Importe la page de runes recommandée de la draft en cours dans le client. */
   importRunes(): Promise<{ ok: boolean; message: string }>;
   getRecommendations(): Promise<RecoView>;

@@ -1,6 +1,7 @@
 // Fenêtre d'état. Pas d'accès à Node : tout passe par window.kayn (preload.ts).
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
+import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
 import { DDRAGON_VERSION } from "../../src/data/version";
@@ -502,6 +503,7 @@ let ov: Awaited<ReturnType<typeof window.kayn.getOverview>> | null = null;
 let heatKinds: "both" | "kills" | "deaths" = "both";
 let heatTime: "all" | "early" | "late" = "all";
 let tableSort = { key: "games", asc: false };
+let compareId: number | null = null;
 const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 const fmtNum = (n: number | null, unit: string) => (n == null ? "–" : `${n.toLocaleString("fr-FR", { maximumFractionDigits: unit === " %" || Math.abs(n) >= 100 ? 0 : 1 })}${unit}`);
 const champName = (id: number) => champByKey(id)?.name ?? `#${id}`;
@@ -515,7 +517,7 @@ async function loadAnalysis(key: string | null): Promise<void> {
   $("an-overview").hidden = anViewMode !== "overview";
   $("an-game-view").hidden = anViewMode !== "game";
   if (anViewMode === "overview") {
-    ov = await window.kayn.getOverview(anFilterSel);
+    ov = await window.kayn.getOverview(anFilterSel, compareId);
     renderFilters();
     renderOverview();
   } else {
@@ -593,10 +595,35 @@ function renderOverview(): void {
   const item = (m: (typeof o.metrics)[number]) => h("li", {}, h("b", {}, m.label), ` : ${fmtNum(m.mine, m.unit)}${m.median != null ? ` (méd. ${fmtNum(m.median, m.unit)})` : ""} · mieux que ${Math.round(m.rank ?? 0)} %`);
   $("ov-strengths").replaceChildren(...(o.strengths.length ? o.strengths.map(item) : [h("li", { class: "muted" }, "Rien de nettement au-dessus de la médiane.")]));
   $("ov-weaknesses").replaceChildren(...(o.weaknesses.length ? o.weaknesses.map(item) : [h("li", { class: "muted" }, "Rien de nettement en dessous de la médiane.")]));
+  renderRadar();
   drawHeat();
   renderEvolution();
   renderTable();
 }
+
+/** Radar de la sélection (et d'un champion à comparer), sur la médiane Émeraude+ du rôle. */
+function renderRadar(): void {
+  const v = ov!;
+  const sel = $<HTMLSelectElement>("ov-compare");
+  sel.replaceChildren(h("option", { value: "" }, "—"), ...v.compareOptions.filter((id) => id !== v.filter.championId).map((id) => h("option", { value: String(id) }, champName(id))));
+  sel.value = v.compare ? String(v.compare.championId) : "";
+  const name = v.filter.championId != null ? champName(v.filter.championId) : "Ta sélection";
+  const series: RadarSeries[] = [];
+  if (v.radar) series.push({ values: v.radar.values, cls: "s-main", name });
+  if (v.compare?.radar) series.push({ values: v.compare.radar.values, cls: "s-cmp", name: champName(v.compare.championId) });
+  const box = $("ov-radar");
+  if (!v.radar) { box.replaceChildren(h("p", { class: "small muted" }, "Il faut au moins 5 parties relues pour tracer le profil.")); $("ov-radar-note").textContent = ""; return; }
+  box.replaceChildren(radarSvg(series, { size: 220, labels: true }));
+  $("ov-radar-note").replaceChildren(h("span", { class: "lg lg-main" }), ` ${name} (${v.radar.games} parties)`,
+    v.compare ? h("span", {}, h("span", { class: "lg lg-cmp" }), ` ${champName(v.compare.championId)}${v.compare.radar ? ` (${v.compare.radar.games} parties)` : " : moins de 5 parties"}`) : "",
+    h("span", {}, h("span", { class: "lg lg-med" }), " médiane Émeraude+ du rôle"),
+    h("br"), "Chaque axe : ta position « mieux que X % » face aux joueurs Émeraude+ du même rôle. Survole un point pour le détail.");
+}
+$<HTMLSelectElement>("ov-compare").addEventListener("change", (e) => {
+  const v = (e.target as HTMLSelectElement).value;
+  compareId = v ? Number(v) : null;
+  void loadAnalysis(anKey);
+});
 
 /**
  * Carte de chaleur : densité des kills et des morts sur une grille (noyau gaussien), normalisée par une valeur
@@ -728,7 +755,7 @@ function renderAnalysis(): void {
   const v = anView;
   const has = !!v?.analysis;
   $("an-empty").hidden = has;
-  for (const id of ["an-map-sec", "an-metrics-sec", "an-focus-sec"]) $(id).hidden = !has;
+  for (const id of ["an-map-sec", "an-metrics-sec", "an-focus-sec", "an-radar-sec"]) $(id).hidden = !has;
   const sel = $<HTMLSelectElement>("an-game");
   sel.replaceChildren(...(v?.games ?? []).map((g) => h("option", { value: g.key },
     `${new Date(g.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} · ${champName(g.championId)} (${ROLE_SHORT[g.role] ?? g.role}) · ${g.win ? "Victoire" : "Défaite"} · ${g.kda}`)));
@@ -750,6 +777,10 @@ function renderAnalysis(): void {
     map.append(dot);
   }
 
+  const rs: RadarSeries[] = [];
+  if (v.radar?.average) rs.push({ values: v.radar.average.values, cls: "s-avg", name: `Ta moyenne (${v.radar.average.games} parties)` });
+  if (v.radar?.game) rs.push({ values: v.radar.game.values, cls: "s-main", name: "Cette partie" });
+  $("an-radar").replaceChildren(radarSvg(rs, { size: 200, labels: true }));
   $("an-metrics").replaceChildren(...a.metrics.map((m) => metricRow(m.label, m.mine, m.unit, m.rank, m.median)));
   applyBars();
   $("an-ref").textContent = a.comparedTo === "champion"

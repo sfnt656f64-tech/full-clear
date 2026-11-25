@@ -5,6 +5,8 @@ import type { KaynApi, RecoView } from "../ipc.ts";
 import type { PlayProfile, PoolPick, RoleReco, TryPick } from "../reco/recommend.ts";
 import { learningLabel } from "../reco/recommend.ts";
 import { ROLE_LABELS } from "../stats/my-stats.ts";
+import type { PotentialEntry } from "../reco/potential.ts";
+import { radarSvg } from "../ui/radar-svg.ts";
 
 declare global {
   interface Window { kayn: KaynApi }
@@ -51,19 +53,23 @@ function renderProfile(p: PlayProfile): void {
   );
 }
 
-function poolCard(p: PoolPick, i: number): HTMLElement {
-  const meta = p.meta ? `méta ${nf(p.meta.winRate, 1)} % (${nf(p.meta.games)})` : "méta : pas de données";
-  const seasons = p.seasons.map((s) => `${s.games} en ${s.season}`).join(", ");
-  return el("li", { class: `card${i < 3 ? " top" : ""}` },
-    el("span", { class: "rank" }, String(i + 1)),
-    portrait(p.championId),
+/** Carte d'un champion classé par potentiel : mini-radar, phrase d'explication, et score du pool s'il y est. */
+function potentialCard(e: PotentialEntry, pick: PoolPick | undefined): HTMLElement {
+  const facts = pick
+    ? `${pick.games} parties · ${nf(pick.winRate)} % (lissé ${nf(pick.adjustedWinRate, 1)} %) · KDA ${nf(pick.kda, 1)}${pick.masteryPoints ? ` · ${nf(Math.round(pick.masteryPoints / 1000))} k pts` : ""}`
+    : `${e.games} parties · ${nf(e.winRate ?? 0)} % de victoires`;
+  const radar = e.radar
+    ? el("div", { class: "mini-radar", title: `Stats de jeu : ${nf(e.radar.score ?? 0)} (50 = médiane Émeraude+), sur ${e.radar.games} parties` },
+      radarSvg([{ values: e.radar.values, cls: "s-main", name: champName(e.championId) }], { size: 58, labels: false }))
+    : el("div", { class: "mini-radar none", title: "Moins de 5 parties relues : pas encore de radar" }, "–");
+  return el("li", { class: "card pcard" },
+    portrait(e.championId),
     el("div", {},
-      el("div", { class: "name" }, champName(p.championId), ...prov(p.provisional)),
-      el("div", { class: "facts", title: `Parties par saison : ${seasons}` },
-        `${p.games} parties · ${nf(p.winRate)} % (lissé ${nf(p.adjustedWinRate, 1)} %) · KDA ${nf(p.kda, 1)}${p.masteryPoints ? ` · ${nf(Math.round(p.masteryPoints / 1000))} k pts` : ""} · ${meta}`)),
-    el("div", { class: "score", title: "Score de classement (proche d'un win rate attendu)" }, nf(p.score, 1), el("small", {}, "score")),
-    reasons(p.reasons),
-    breakdown(p));
+      el("div", { class: "name" }, champName(e.championId), ...prov(e.provisional), ...(pick ? [el("span", { class: "pscore", title: "Score du pool (proche d'un win rate attendu)" }, ` · score ${nf(pick.score, 1)}`)] : [])),
+      el("div", { class: "facts" }, facts)),
+    radar,
+    el("p", { class: "ptext" }, e.text),
+    ...(pick ? [breakdown(pick)] : []));
 }
 
 /** Calcul du score en clair : la somme des 4 termes. */
@@ -98,8 +104,16 @@ function render(): void {
   const r: RoleReco | undefined = view.roles.find((x) => x.role === role);
   if (!r) return;
   renderProfile(r.profile);
-  $("pool").replaceChildren(...(r.pool.length ? r.pool.map(poolCard) : [el("li", { class: "empty" }, "Aucun champion avec au moins 10 parties dans ce rôle (les autres sont dans « À essayer »).")]));
-  $("try").replaceChildren(...(r.tryList.length ? r.tryList.map(tryCard) : [el("li", { class: "empty" }, "Pas encore assez de méta pour proposer des champions : la collecte continue en arrière-plan.")]));
+  const groups = view.potential?.[role] ?? { keep: [], potential: [], shelve: [] };
+  const pickOf = new Map(r.pool.map((p) => [p.championId, p]));
+  const EMPTY = { keep: "Aucun champion pour l'instant.", potential: "Aucun champion pour l'instant.", shelve: "Aucun : rien à écarter." } as const;
+  for (const g of ["keep", "potential", "shelve"] as const) {
+    $(`g-${g}`).replaceChildren(...(groups[g].length ? groups[g].map((e) => potentialCard(e, pickOf.get(e.championId))) : [el("li", { class: "empty" }, EMPTY[g])]));
+  }
+  // « À essayer » : sans les champions passés en « Potentiel à développer ».
+  const moved = new Set(groups.potential.map((e) => e.championId));
+  const tryList = r.tryList.filter((t) => !moved.has(t.championId));
+  $("try").replaceChildren(...(tryList.length ? tryList.map(tryCard) : [el("li", { class: "empty" }, "Pas encore assez de méta pour proposer des champions : la collecte continue en arrière-plan.")]));
 }
 
 async function reload(): Promise<void> {

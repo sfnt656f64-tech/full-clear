@@ -20,6 +20,7 @@ export interface MatchV5 {
       win: boolean;
       gameEndedInEarlySurrender?: boolean;
       kills: number; deaths: number; assists: number;
+      totalDamageDealtToChampions?: number;
       totalMinionsKilled: number; neutralMinionsKilled: number;
       visionScore: number;
       item0: number; item1: number; item2: number; item3: number; item4: number; item5: number; item6: number;
@@ -67,6 +68,12 @@ export function early15(t: TimelineV5 | null, participantId: number, team: Set<n
   return { kills15, assists15, teamKills15 };
 }
 
+/** Tes dégâts aux champions et ceux de ton équipe (part des dégâts : axe Teamfight). */
+export function damageOf(p: { totalDamageDealtToChampions?: number }, mates: { totalDamageDealtToChampions?: number }[]): { damage: number | null; teamDamage: number | null } {
+  if (p.totalDamageDealtToChampions == null) return { damage: null, teamDamage: null };
+  return { damage: p.totalDamageDealtToChampions, teamDamage: mates.reduce((n, x) => n + (x.totalDamageDealtToChampions ?? 0), 0) };
+}
+
 function timelineExtras(t: TimelineV5, pid: number, team: number, m: MatchV5): Pick<MyGame, "cs10" | "objTeam" | "objMine" | "events"> {
   const champOf = new Map(m.info.participants.map((x) => [x.participantId, x.championId]));
   const o = objectives(t, pid, team);
@@ -104,6 +111,7 @@ export function summarizeMyGame(m: MatchV5, t: TimelineV5 | null, puuid: string,
     vision: p.visionScore,
     ...(m.info.gameDuration >= 15 * 60 ? at15(t, p.participantId) : { gold15: null, cs15: null }),
     teamKills: mates.reduce((n, x) => n + x.kills, 0),
+    ...damageOf(p, mates),
     // Chronologie (v6) : CS à 10 min, objectifs, tes kills / morts / assists (positions ; l'autre participant
     // n'est gardé que par son champion).
     ...(t ? timelineExtras(t, p.participantId, p.teamId ?? (p.participantId <= 5 ? 100 : 200), m) : {}),

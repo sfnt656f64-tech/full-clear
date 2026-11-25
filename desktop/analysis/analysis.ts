@@ -8,17 +8,21 @@ export interface AnalysisGame {
   gold15: number | null; cs15: number | null; cs10: number | null;
   teamKills: number | null; kills15: number | null; assists15: number | null; teamKills15: number | null;
   objTeam: number | null; objMine: number | null; deaths15: number;
+  /** Tes dégâts aux champions et ceux de ton équipe (v7), null si pas encore relus. */
+  damage?: number | null; teamDamage?: number | null;
 }
 export interface MyEventRow { t: number; kind: "kill" | "death" | "assist"; x: number; y: number; otherChamp: number }
 export interface MetaMetricRow {
   championId: number; win: boolean; cs10: number | null; cs15: number | null; gold15: number | null; deaths15: number | null;
   kills15: number | null; assists15: number | null; teamKills15: number | null; objTeam: number | null; objMine: number | null;
-  /** Toute la partie (participation après 15 min). */
+  /** Toute la partie (participation après 15 min, morts par 10 min, part des dégâts). */
   kills?: number; assists?: number; teamKills?: number | null;
+  deaths?: number; durationS?: number; damage?: number | null; teamDamage?: number | null;
 }
 
 type Values = Pick<AnalysisGame, "cs10" | "cs15" | "gold15" | "kills15" | "assists15" | "teamKills15" | "objTeam" | "objMine"> & {
   deaths15: number | null; kills?: number; assists?: number; teamKills?: number | null;
+  deaths?: number; durationS?: number; damage?: number | null; teamDamage?: number | null;
 };
 
 export interface Metric {
@@ -47,6 +51,10 @@ export const METRICS: Metric[] = [
   { key: "obj", label: "Participation aux objectifs", better: "+", group: "objectives", unit: " %",
     value: (v) => (v.objTeam && v.objMine != null ? (v.objMine / v.objTeam) * 100 : null) },
   { key: "deaths15", label: "Morts avant 15 min", better: "-", group: null, unit: "", value: (v) => v.deaths15 },
+  { key: "deathsPer10", label: "Morts par 10 min", better: "-", group: null, unit: "",
+    value: (v) => (v.deaths != null && v.durationS ? (v.deaths / v.durationS) * 600 : null) },
+  { key: "dmgShare", label: "Part des dégâts de l'équipe", better: "+", group: null, unit: " %",
+    value: (v) => (v.damage != null && v.teamDamage ? (v.damage / v.teamDamage) * 100 : null) },
 ];
 
 /** Parties de méta minimales sur ton champion pour s'y comparer (sinon : tout le rôle). */
