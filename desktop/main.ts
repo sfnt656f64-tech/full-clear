@@ -20,7 +20,7 @@ import { EngineClient } from "./data/engine-client.ts";
 import { findChamp } from "../src/data/champions";
 import { IPC, type AppState, type Navigation } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
-import { buildOverlayView, type OverlayView } from "./next-item.ts";
+import { buildPlanView, type OverlayView , type MatchChampions } from "./next-item.ts";
 import { pregameTips, tipsAt } from "./coach/pregame.ts";
 import { planTips } from "./coach/game-plan.ts";
 import { SHOP } from "./next-item.ts";
@@ -153,14 +153,18 @@ function stopCoach(): void {
   coach = null;
 }
 
-/** Build statistique (autre champion que Kayn) : demandé au moteur quand la situation change, la vue suit. */
+/** Champions de la partie (aucune autre donnée du jeu : ni or, ni items, ni événements). */
+const championsOf = (snap: LiveSnapshot): MatchChampions => ({ me: snap.me.champion, allies: snap.allies, enemies: snap.enemies.map((e) => e.champion) });
+
+/** Build statistique (autre champion que Kayn) : calculé une fois d'après les champions de la partie. */
 let stat: { key: string; value: StatBuild | null } = { key: "", value: null };
 function requestStatBuild(snap: LiveSnapshot): void {
   const pos = draft && Date.now() - draftAt < DRAFT_MAX_AGE && ALL_ROLES_POS.has(draft.me.position) ? draft.me.position : null;
-  const key = JSON.stringify([snap.me.champion, pos, snap.enemies]);
+  const m = championsOf(snap);
+  const key = JSON.stringify([m, pos]);
   if (key === stat.key) return;
   stat = { key, value: stat.value };
-  engine.call("statBuild", snap, pos).then((value) => {
+  engine.call("statBuild", m, pos).then((value) => {
     if (stat.key !== key) return;
     stat = { key, value };
     updateLive();
@@ -169,7 +173,7 @@ function requestStatBuild(snap: LiveSnapshot): void {
 
 function updateLive(): void {
   if (liveSnap) requestStatBuild(liveSnap);
-  liveView = liveSnap ? buildOverlayView(liveSnap, settings.formChoice, SHOP, stat.value) : null;
+  liveView = liveSnap ? buildPlanView(championsOf(liveSnap), settings.formChoice, SHOP, stat.value) : null;
   if (liveView && coach && settings.overlay.tips) liveView.tips = tipsAt(coach.tips, Date.now() - coach.start);
   overlay.update(liveView);
   pushState();

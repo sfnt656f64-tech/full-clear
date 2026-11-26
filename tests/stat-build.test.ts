@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { statBuild, MIN_GAMES } from "../desktop/coach/stat-build";
-import { buildOverlayView, SHOP, type EnemyItems } from "../desktop/next-item";
+import { buildPlanView, SHOP } from "../desktop/next-item";
 import type { MetaBuildRow, MetaPartRow } from "../desktop/meta/meta-stats";
-import type { LiveSnapshot } from "../desktop/live-client";
 import { champ } from "../src/data/champions";
 
 const VI = champ("Vi").key!;
-const NO_ITEMS: EnemyItems = { armorStackers: 0, healers: 0, adShare: null };
 
 /** Vi jungle : Black Cleaver → Sundered Sky → Sterak's, Plated Steelcaps (ou Mercury), Scorchclaw ; parfois Mortal Reminder, Randuin, Spirit Visage. */
 function parts(n = 100): MetaPartRow[] {
@@ -16,7 +14,7 @@ function parts(n = 100): MetaPartRow[] {
   }));
 }
 const builds: MetaBuildRow[] = Array.from({ length: 10 }, () => ({ championId: VI, role: "JUNGLE", win: true, items: [6610, 3071, 3047, 3053] }));
-const input = (over = {}) => ({ parts: parts(), builds, role: "JUNGLE", enemies: [], enemyItems: NO_ITEMS, shop: SHOP, ...over });
+const input = (over = {}) => ({ parts: parts(), builds, role: "JUNGLE", enemies: [], shop: SHOP, ...over });
 
 describe("build statistique (autres champions)", () => {
   it("ordre du core d'après les chronologies, bottes après le premier item, familier le plus joué", () => {
@@ -48,19 +46,25 @@ describe("build statistique (autres champions)", () => {
     expect(statBuild(input({ parts: parts(MIN_GAMES - 1) }))).toBeNull();
   });
 
-  it("overlay : un autre champion que Kayn suit le build statistique", () => {
-    const snap: LiveSnapshot = { gold: 3200, level: 9, me: { champion: "Vi", items: [1101, 6610] }, allies: [], enemies: [] };
-    const v = buildOverlayView(snap, "auto", SHOP, statBuild(input()));
+  it("« si… alors… » : alternatives jouées sur ce champion, écrites avant la partie", () => {
+    const b = statBuild(input())!;
+    expect(b.ifThen.length).toBeGreaterThan(0);
+    expect(b.ifThen.every((t) => t.startsWith("Si "))).toBe(true);
+  });
+
+  it("overlay : un autre champion que Kayn suit le build statistique complet", () => {
+    const m = { me: "Vi", allies: [], enemies: [] };
+    const v = buildPlanView(m, "auto", SHOP, statBuild(input()));
     expect(v.source).toBe("meta");
-    expect(v.next?.item.id).toBe("3047");
+    expect(v.build.map((t) => t.id).slice(0, 4)).toEqual(["6610", "3047", "3071", "3053"]);
+    expect(v.starter?.id).toBe("1101");
     expect(v.champion).toBe("Vi");
-    const none = buildOverlayView(snap, "auto", SHOP, null);
+    const none = buildPlanView(m, "auto", SHOP, null);
     expect(none.source).toBe("none");
-    expect(none.next).toBeNull();
+    expect(none.build).toEqual([]);
   });
 
   it("Kayn garde son modèle", () => {
-    const v = buildOverlayView({ gold: 0, level: 1, me: { champion: "Kayn", items: [] }, allies: [], enemies: [] }, "auto", SHOP, null);
-    expect(v.source).toBe("kayn");
+    expect(buildPlanView({ me: "Kayn", allies: [], enemies: [] }, "auto", SHOP, null).source).toBe("kayn");
   });
 });

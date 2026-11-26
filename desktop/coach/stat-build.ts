@@ -4,14 +4,16 @@
 //   - ordre du core : la suite des 3 premiers items terminés la plus fréquente (chronologies, champions de ton
 //     pool) ; sinon, les items les plus présents en fin de partie ;
 //   - bottes, familier (jungle) et items suivants : les plus joués.
-// Adapté à la composition, mais seulement parmi les items que les joueurs utilisent vraiment sur ce champion :
-//   - anti-soins si l'équipe adverse se soigne (champions, ou vol de vie en items) ;
+// Adapté à la composition de la DRAFT (champions seulement, jamais ce qui se passe en jeu : règles Riot), parmi les
+// items que les joueurs utilisent vraiment sur ce champion :
+//   - anti-soins si l'équipe adverse se soigne ;
 //   - bottes et item défensif selon les dégâts adverses (physiques / magiques).
+// Plus des règles « si… alors… » écrites avant la partie, que tu appliques toi-même en jeu.
 import itemIndex from "../../src/data/generated/item-index.json";
 import { STARTERS } from "../../src/data/starters";
 import type { Champion } from "../../src/data/types";
 import type { MetaBuildRow, MetaPartRow } from "../meta/meta-stats.ts";
-import type { EnemyItems, Shop } from "../next-item.ts";
+import type { Shop } from "../next-item.ts";
 
 export interface StatBuild {
   /** Bottes puis items terminés, dans l'ordre d'achat conseillé (identifiants Data Dragon). */
@@ -22,6 +24,8 @@ export interface StatBuild {
   games: number;
   /** Ajustements à la composition, en clair. */
   reasons: string[];
+  /** Règles écrites avant la partie (« si… alors… ») : c'est toi qui les appliques, l'appli ne lit rien en jeu. */
+  ifThen: string[];
 }
 
 /** Items terminés pris en compte (au moins cette part des parties). */
@@ -52,7 +56,6 @@ export interface StatBuildInput {
   builds: MetaBuildRow[];
   role: string;
   enemies: (Champion | null)[];
-  enemyItems: EnemyItems;
   shop: Shop;
 }
 
@@ -75,8 +78,8 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
   const known = input.enemies.filter((c): c is Champion => !!c);
   const phys = known.filter((c) => c.damage === "physical").length;
   const mag = known.filter((c) => c.damage === "magic").length;
-  const adShare = input.enemyItems.adShare ?? (phys + mag ? phys / (phys + mag) : 0.5);
-  const healers = known.filter((c) => c.heals).length + input.enemyItems.healers;
+  const adShare = phys + mag ? phys / (phys + mag) : 0.5;
+  const healers = known.filter((c) => c.heals).length;
 
   // Anti-soins : seulement un item que les joueurs prennent sur ce champion.
   if (healers >= 2 && !legend.some((id) => ANTI_HEAL.has(id))) {
@@ -112,5 +115,16 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
   const starter = input.role === "JUNGLE"
     ? ranked(input.parts.flatMap((p) => p.items.map(String).filter((i) => STARTER_MAIN.has(i)).slice(0, 1).map((i) => STARTER_MAIN.get(i)!)))[0]?.id ?? null
     : null;
-  return { ids, starter, games: n, reasons };
+  // Si… alors… : alternatives jouées sur ce champion, à appliquer toi-même selon ce que tu vois en partie.
+  const name = (id: string) => input.shop[id]?.name ?? id;
+  const ifThen: string[] = [];
+  const gw = items.find((x) => ANTI_HEAL.has(x.id));
+  if (gw && !ids.includes(gw.id)) ifThen.push(`Si leurs soins pèsent plus que prévu (vol de vie, soigneurs) : ${name(gw.id)} plus tôt.`);
+  const arm = items.find((x) => (input.shop[x.id]?.armor ?? 0) >= 30 && !ids.includes(x.id));
+  const mr = items.find((x) => (input.shop[x.id]?.mr ?? 0) >= 30 && !ids.includes(x.id));
+  if (arm) ifThen.push(`Si leur menace principale fait des dégâts physiques (elle a pris de l'avance) : ${name(arm.id)}.`);
+  if (mr) ifThen.push(`Si leur menace principale fait des dégâts magiques : ${name(mr.id)}.`);
+  if (boots !== BOOTS_ARMOR && usedBoots.has(BOOTS_ARMOR)) ifThen.push(`Si leurs auto-attaqueurs prennent l'avance : ${name(BOOTS_ARMOR)} à la place de tes bottes.`);
+  if (boots !== BOOTS_MR && usedBoots.has(BOOTS_MR)) ifThen.push(`Si leur contrôle ou leurs mages te gênent : ${name(BOOTS_MR)} à la place de tes bottes.`);
+  return { ids, starter, games: n, reasons, ifThen: ifThen.slice(0, 3) };
 }

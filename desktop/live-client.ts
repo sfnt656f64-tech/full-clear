@@ -1,5 +1,6 @@
 // API en jeu « Live Client Data » (https://127.0.0.1:2999), ouverte par le jeu pendant une partie.
-// Elle ne donne que ce que le joueur voit déjà : son or, et le tableau des scores (champions, items).
+// On n'en garde que les CHAMPIONS de la partie (ceux de la draft, affichés à l'écran de chargement) et le fait d'être
+// en partie : ni or, ni niveau, ni items, ni kills. L'appli ne réagit jamais à ce qui se passe en jeu (règles Riot).
 //
 // Confidentialité : /playerlist contient le Riot ID de chaque joueur. Il sert uniquement, dans
 // toLiveSnapshot(), à te reconnaître (comparaison avec ton propre Riot ID), puis il est jeté :
@@ -10,17 +11,14 @@ import { localGet } from "./lcu.ts";
 export const LIVE_PORT = 2999;
 
 export interface LiveSnapshot {
-  gold: number;
-  level: number;
   /** Identifiant Data Dragon de ton champion (ex. "Kayn"), ou null s'il n'est pas reconnu. */
-  me: { champion: string | null; items: number[] };
+  me: { champion: string | null };
   allies: (string | null)[];
-  enemies: { champion: string | null; items: number[] }[];
+  enemies: { champion: string | null }[];
 }
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
-const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 
 /** « game_character_displayname_MonkeyKing » → « MonkeyKing », sinon le nom affiché (localisé). */
 export function championOf(p: Obj): string | null {
@@ -29,18 +27,6 @@ export function championOf(p: Obj): string | null {
   if (byRaw?.id) return byRaw.id;
   const byName = typeof p.championName === "string" ? findChamp(p.championName) : undefined;
   return byName?.id ?? null;
-}
-
-/** Items de l'inventaire (un identifiant par exemplaire), hors objets sans numéro. */
-export function itemsOf(p: Obj): number[] {
-  const out: number[] = [];
-  for (const it of Array.isArray(p.items) ? p.items : []) {
-    if (!isObj(it)) continue;
-    const id = num(it.itemID);
-    const n = Math.min(10, Math.max(1, Math.trunc(num(it.count)) || 1));
-    if (id) for (let i = 0; i < n; i++) out.push(Math.trunc(id));
-  }
-  return out;
 }
 
 const idOf = (p: Obj): string[] =>
@@ -56,11 +42,9 @@ export function toLiveSnapshot(active: unknown, players: unknown): LiveSnapshot 
   if (!me) return null; // spectateur, ou API pas encore prête
   const team = me.team;
   return {
-    gold: Math.floor(num(active.currentGold)),
-    level: Math.trunc(num(active.level)),
-    me: { champion: championOf(me), items: itemsOf(me) },
+    me: { champion: championOf(me) },
     allies: list.filter((p) => p !== me && p.team === team).map(championOf),
-    enemies: list.filter((p) => p.team !== team).map((p) => ({ champion: championOf(p), items: itemsOf(p) })),
+    enemies: list.filter((p) => p.team !== team).map((p) => ({ champion: championOf(p) })),
   };
 }
 

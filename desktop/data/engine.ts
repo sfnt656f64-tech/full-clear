@@ -25,7 +25,7 @@ import type { MetaTrend } from "../ipc.ts";
 import { guidePage, metaPage, type RecommendedPage } from "../runes/rune-page.ts";
 import { gamePlan, type GamePlan } from "../coach/game-plan.ts";
 import { statBuild, type StatBuild } from "../coach/stat-build.ts";
-import { readEnemyItems, SHOP } from "../next-item.ts";
+import { SHOP, type MatchChampions } from "../next-item.ts";
 import { readAllMyEvents, readAnalysisGames, readMetaDuels, readMetaMetrics, readMyEvents } from "../analysis/read.ts";
 import { analyseGame, type AnalysisGame, type DuelValues, type MetaMetricRow, type Values } from "../analysis/analysis.ts";
 import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "../analysis/overview.ts";
@@ -35,7 +35,6 @@ import { unpackDetail } from "../collector/detail.ts";
 import { myDuelValues, opponentValues } from "../analysis/opponent.ts";
 import type { DraftSnapshot } from "../champ-select.ts";
 import type { ChampLite, DraftView } from "../draft-view.ts";
-import type { LiveSnapshot } from "../live-client.ts";
 import type { AnalysisView, MetaView, OverviewView, PoolGoal, ProgressionView, RecoView, TrackEntry } from "../ipc.ts";
 import ddChamps from "../../src/data/generated/champions.json";
 import { METRICS as ALL_METRICS } from "../analysis/analysis.ts";
@@ -569,11 +568,11 @@ export class Engine {
   // ---------- En jeu ----------
 
   /** Build statistique de ton champion (autre que Kayn) ; `draftPosition` : ton poste de la draft de cette partie. */
-  statBuild(snap: LiveSnapshot, draftPosition: string | null): StatBuild | null {
-    const ch = snap.me.champion ? findChamp(snap.me.champion) : undefined;
+  /** Build statistique d'après les champions de la partie seulement (jamais l'état de la partie). */
+  statBuild(m: MatchChampions, draftPosition: string | null): StatBuild | null {
+    const ch = m.me ? findChamp(m.me) : undefined;
     if (!ch?.key || ch.id === "Kayn") return null;
-    const enemies = snap.enemies.map((e) => (e.champion ? findChamp(e.champion) ?? null : null));
-    const enemyItems = readEnemyItems(snap.enemies, enemies, SHOP);
+    const enemies = m.enemies.map((e) => (e ? findChamp(e) ?? null : null));
     const fromDraft = draftPosition ? ALL_ROLES[draftPosition] : undefined;
     const meta = this.recentMeta();
     const rows = meta.parts.filter((p) => p.championId === ch.key);
@@ -584,6 +583,6 @@ export class Engine {
       role = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     }
     if (!role) return null;
-    return statBuild({ parts: rows.filter((r) => r.role === role), builds: meta.builds.filter((b) => b.championId === ch.key && b.role === role), role, enemies, enemyItems, shop: SHOP });
+    return statBuild({ parts: rows.filter((r) => r.role === role), builds: meta.builds.filter((b) => b.championId === ch.key && b.role === role), role, enemies, shop: SHOP });
   }
 }

@@ -291,16 +291,11 @@ function renderLive(s: AppState): void {
     : "En jeu · overlay affiché";
   const body: Child[] = [];
   const v = l.view;
-  if (v) {
-    if (!v.next) body.push(h("p", { class: "ok-text" }, "Build terminé."));
-    else {
-      const n = v.next;
-      body.push(h("div", { class: "next" }, icon(n.item.icon, n.item.name), h("div", {},
-        h("b", {}, `${n.rank ? "Prochain" : "Départ"} : ${n.item.name}`),
-        h("div", { class: "small" }, n.missingGold ? h("span", { class: "gold" }, `${n.missingGold} po manquants (or : ${v.gold})`) : h("span", { class: "ok-text" }, "achetable maintenant"),
-          n.component ? ` · en attendant : ${n.component.name}` : ""))));
-    }
-    if (v.reasons.length) body.push(h("p", { class: "muted small" }, `Build ajusté : ${v.reasons.join(" ; ")}.`));
+  if (v && v.source !== "none") {
+    body.push(h("div", { class: "next" }, ...v.build.map((t) => icon(t.icon, t.name))));
+    body.push(h("p", { class: "small" }, [v.starter ? `Départ : ${v.starter.name}` : "", ...v.build.map((t, i) => `${i + 1}. ${t.name}`)].filter(Boolean).join(" · ")));
+    if (v.reasons.length) body.push(h("p", { class: "muted small" }, `Selon la draft : ${v.reasons.join(" ; ")}.`));
+    if (v.ifThen.length) body.push(h("p", { class: "muted small" }, `Si… alors… : ${v.ifThen.join(" ")}`));
   }
   $("live-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
   $<HTMLInputElement>("overlay-on").checked = l.overlayEnabled;
