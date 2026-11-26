@@ -18,24 +18,25 @@ export const RANKED_READY = new Set<Stage>(["readyToTest", "toConfirm", "confirm
 export function progressPriority(
   queueId: number,
   p: { tracking: { championId: number; stage: Stage; text: string }[]; comfort: ComfortEntry[]; notForMe: number[] },
-): Pick<DraftPickInput, "priority" | "blocked" | "rule"> {
+): Pick<DraftPickInput, "priority" | "blocked" | "rule" | "ruleShort"> {
   const blocked = [...p.notForMe];
   const label = (t: { stage: Stage; text: string }) => `${STAGE_LABEL[t.stage]} : ${t.text.replace(/\.$/, "")}`;
   const tracking = p.tracking.filter((t) => !blocked.includes(t.championId));
   if (queueId !== 0 && !RANKED_QUEUES.has(queueId)) {
     return {
-      blocked, rule: `${QUEUE_NAMES[queueId] ?? "Partie hors classée"} (file lue dans le client) : tes champions de progression d'abord (les 3 que cette draft favorise le plus, sur ${tracking.length}), puis ton meilleur choix habituel.`,
-      priority: tracking.map((t) => ({ championId: t.championId, group: 0, tag: "Progression", why: `Champion de progression (${STAGE_LABEL[t.stage]}) : en normale, c'est le moment de le jouer.` })),
+      blocked, ruleShort: "Normale : tes champions de progression d'abord.", rule: `${QUEUE_NAMES[queueId] ?? "Partie hors classée"} (file lue dans le client) : tes champions de progression d'abord (les 3 que cette draft favorise le plus, sur ${tracking.length}), puis ton meilleur choix habituel.`,
+      priority: tracking.map((t) => ({ championId: t.championId, group: 0, tag: "Progression", short: "Champion de progression : joue-le en normale.", why: `Champion de progression (${STAGE_LABEL[t.stage]}) : en normale, c'est le moment de le jouer.` })),
     };
   }
   const ok = tracking.filter((t) => RANKED_READY.has(t.stage));
   blocked.push(...tracking.filter((t) => !RANKED_READY.has(t.stage)).map((t) => t.championId));
   const comfort = p.comfort.find((c) => c.flag !== "notForMe" && !blocked.includes(c.championId));
   const priority = ok.length
-    ? ok.map((t) => ({ championId: t.championId, group: 0, tag: "Progression", why: `Prêt pour la classée (${label(t)}).` }))
-    : comfort ? [{ championId: comfort.championId, group: 0, tag: "Confort", why: `Ton champion de confort (${comfort.games} parties) : aucun champion de progression au stade « Prêt à tester », « À confirmer » ou « Confirmé ».` }] : [];
+    ? ok.map((t) => ({ championId: t.championId, group: 0, tag: "Progression", short: "Prêt pour la classée.", why: `Prêt pour la classée (${label(t)}).` }))
+    : comfort ? [{ championId: comfort.championId, group: 0, tag: "Confort", short: "Ton champion de confort : aucun autre n'est prêt.", why: `Ton champion de confort (${comfort.games} parties) : aucun champion de progression au stade « Prêt à tester », « À confirmer » ou « Confirmé ».` }] : [];
   return {
     blocked, priority,
+    ruleShort: queueId ? "Classée : seulement tes champions prêts, sinon ton confort." : "File inconnue : règles de la classée.",
     rule: `${queueId ? `${QUEUE_NAMES[queueId]} (file lue dans le client)` : "File inconnue : règles de la classée, par prudence"} : seulement tes champions de progression prêts (« Prêt à tester », « À confirmer », « Confirmé »), sinon ton champion de confort ; jamais un champion « Retour en normale conseillé » ou pas encore prêt.`,
   };
 }

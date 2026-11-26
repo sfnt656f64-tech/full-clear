@@ -109,17 +109,3 @@ describe("plan de partie : premier gank et objectif cohérents", () => {
     expect(s.objectives.join(" ")).not.toMatch(/premier gank/);
   });
 });
-
-describe("overlay : plan de partie écrit en draft", () => {
-  it("lignes courtes : départ, « si… alors… », objectif, rappels sans chiffres", async () => {
-    const { strategyTips } = await import("../desktop/coach/strategy");
-    const tips = strategyTips({
-      provisional: false, ours: {} as never, theirs: {} as never, power: [], enemyJungler: null,
-      winCondition: { summary: "", ifThen: ["Si A : B.", "Si C : D.", "Si E : F."] },
-      path: ["Départ côté top (Red Buff), pour finir ton premier tour de camps côté bot, près de ton premier gank (contrairement à la majorité : 61 % des joueurs Émeraude+ de ton champion commencent côté bot)."],
-      objectives: ["Dragon d'abord."],
-      reminders: [{ key: "cs10", text: "CS à 10 min : finis tes camps entre deux actions plutôt que d'attendre. (CS à 10 min : 68,6 sur tes 20 dernières parties, cible ≥ 72.)" }],
-    });
-    expect(tips).toEqual(["Départ côté top (Red Buff).", "Si A : B.", "Si C : D.", "Dragon d'abord.", "CS à 10 min : finis tes camps entre deux actions plutôt que d'attendre."]);
-  });
-});

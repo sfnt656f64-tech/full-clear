@@ -52,7 +52,18 @@ export function compoStrengths(parts: MetaPartRow[], role: string): Map<number, 
   return out;
 }
 
-export interface AdvicePick { championId: number; why: string[]; fromMeta: boolean; provisional: boolean }
+export interface AdvicePick { championId: number; why: string[]; fromMeta: boolean; provisional: boolean; /** Une ligne courte, sans chiffre. */ short: string }
+
+/** « Dégâts magiques, différents des autres » : fragments courts, 12 mots au plus. */
+function oneLine(parts: string[]): string {
+  let out = "";
+  for (const p of parts) {
+    const next = out ? `${out}, ${p}` : p;
+    if (next.split(/\s+/).length > 12) break;
+    out = next;
+  }
+  return out ? `${out[0].toUpperCase()}${out.slice(1)}.` : "";
+}
 
 export interface PoolAdvice {
   picks: AdvicePick[];
@@ -122,11 +133,12 @@ export function poolAdvice(input: AdviceInput): PoolAdvice {
       // Au-delà de 2 champions, seulement si le 3ᵉ apporte quelque chose de différent.
       if (chosen.length >= 2 && !best.why.length) break;
       const head = best.e.group === "keep" ? `À garder (${best.e.games} parties)` : `Potentiel (${best.e.games} parties)`;
-      chosen.push({ championId: best.e.championId, fromMeta: false, provisional: best.e.provisional, why: [head, ...(chosen.length ? best.why : [`ton meilleur choix : ${damageLabel(best.t.c)}, style ${STYLE_LABEL[best.t.style]}`])] });
+      const tail = chosen.length ? best.why : [`ton meilleur choix : ${damageLabel(best.t.c)}, style ${STYLE_LABEL[best.t.style]}`];
+      chosen.push({ championId: best.e.championId, fromMeta: false, provisional: best.e.provisional, why: [head, ...tail], short: oneLine(tail) || best.e.short });
       left.splice(left.indexOf(best.e), 1);
     }
   } else {
-    for (const t of input.tryList.slice(0, 3)) chosen.push({ championId: t.championId, fromMeta: true, provisional: t.provisional, why: t.reasons.slice(0, 2) });
+    for (const t of input.tryList.slice(0, 3)) chosen.push({ championId: t.championId, fromMeta: true, provisional: t.provisional, why: t.reasons.slice(0, 2), short: t.short });
   }
 
   const ids = new Set(chosen.map((c) => c.championId));

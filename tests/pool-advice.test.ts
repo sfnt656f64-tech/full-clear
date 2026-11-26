@@ -5,7 +5,7 @@ import type { PoolPick } from "../desktop/reco/recommend";
 import { champ } from "../src/data/champions";
 
 const K = (id: string) => champ(id).key!;
-const entry = (id: string, group: "keep" | "potential", score: number, games = 40): PotentialEntry => ({ championId: K(id), group, games, winRate: 52, radar: null, text: "", provisional: false, score });
+const entry = (id: string, group: "keep" | "potential", score: number, games = 40): PotentialEntry => ({ championId: K(id), group, games, winRate: 52, radar: null, text: "", short: "", provisional: false, score });
 const pick = (id: string): PoolPick => ({ championId: K(id), role: "JUNGLE", score: 55, games: 40, weightedGames: 40, winRate: 55, adjustedWinRate: 52, masteryPoints: 0,
   breakdown: { winRate: 52, meta: 0, games: 3, mastery: 0 }, kda: 3, meta: null, seasons: [], reasons: [], provisional: false });
 
@@ -24,7 +24,7 @@ describe("pool conseillé", () => {
 
   it("trop peu de champions joués dans le rôle : proposés d'après la méta, et c'est signalé", () => {
     const groups = { keep: [], potential: [], neutral: [], shelve: [] };
-    const tryList = [{ championId: K("Ahri"), role: "MIDDLE", score: 70, meta: { games: 400, winRate: 52 }, similarTo: [], learning: { games: null, novice: null, expert: null }, tried: null, reasons: ["Proche de Kayn"], provisional: false }];
+    const tryList = [{ championId: K("Ahri"), role: "MIDDLE", score: 70, meta: { games: 400, winRate: 52 }, similarTo: [], learning: { games: null, novice: null, expert: null }, tried: null, reasons: ["Proche de Kayn"], short: "Proche de Kayn.", provisional: false }];
     const a = poolAdvice({ role: "MIDDLE", groups, pool: [], tryList, myGames: [], earlyIndex: new Map(), compo: new Map() });
     expect(a.fromMeta).toBe(true);
     expect(a.picks.map((p) => p.championId)).toEqual([K("Ahri")]);

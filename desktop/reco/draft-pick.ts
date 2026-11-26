@@ -69,6 +69,8 @@ export interface DraftPick {
   /** Rang dans ton pool (1 = meilleur), null hors pool. */
   poolRank: number | null;
   reasons: string[];
+  /** Pourquoi il est proposé, en une ligne courte et sans chiffre (la vue principale ; reasons : les détails). */
+  short: string;
   provisional: boolean;
   /** Mode « Progresser » : étiquette (champion de progression, confort). */
   tag?: string;
@@ -80,8 +82,9 @@ export interface DraftPicks {
   list: DraftPick[];
   /** Champion hors pool nettement meilleur pour cette draft, sinon null. */
   offPool: DraftPick | null;
-  /** Mode « Progresser » : règle appliquée selon la file (affichée au-dessus des choix). */
+  /** Mode « Progresser » : règle appliquée selon la file (détails) et en une ligne (vue principale). */
   rule?: string;
+  ruleShort?: string;
 }
 
 export interface DraftPickInput {
@@ -101,10 +104,11 @@ export interface DraftPickInput {
   /** Méta trop maigre : tout est provisoire. */
   provisional?: boolean;
   /** Mode « Progresser » : champions mis en tête (par groupe), avec leur étiquette et leur raison. */
-  priority?: { championId: number; group: number; tag: string; why: string }[];
+  priority?: { championId: number; group: number; tag: string; why: string; short?: string }[];
   /** Champions jamais proposés (« Pas pour moi », pas prêts pour la classée). */
   blocked?: number[];
   rule?: string;
+  ruleShort?: string;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -170,7 +174,7 @@ function evaluate(input: DraftPickInput, championId: number, base: number, poolR
   const synergy = clamp(allies.reduce((s, e) => s + e.effect, 0), -TOTAL_CAP, TOTAL_CAP);
   const damage = damageBonus(c, need);
 
-  const r: { w: number; text: string }[] = [];
+  const r: { w: number; text: string; short: string }[] = [];
   // Cité seulement si l'écart avec le win rate habituel dépasse la marge d'erreur (sinon : pas de conclusion).
   const cite = (e: PairEffect) => e.games >= PAIR_MIN_GAMES && Math.abs(e.effect) >= PAIR_MIN_EFFECT
     && Math.abs(e.winRate - e.base) > wilson(Math.round((e.winRate / 100) * e.games), e.games);
@@ -179,23 +183,25 @@ function evaluate(input: DraftPickInput, championId: number, base: number, poolR
     return lane ? `${name(id)} (${LANE_LABELS[lane].toLowerCase()})` : name(id);
   };
   for (const e of enemies.filter(cite)) {
-    r.push({ w: Math.abs(e.effect), text: e.effect > 0
+    r.push({ w: Math.abs(e.effect), short: e.effect > 0 ? `Bon contre ${name(e.championId)}.` : `Difficile contre ${name(e.championId)}.`, text: e.effect > 0
       ? `Bon contre ${who(e.championId)} : ${pm(e)} en Émeraude+, contre ${nf(e.base)} % d'habitude.`
       : `Difficile contre ${who(e.championId)} : ${pm(e)} en Émeraude+, contre ${nf(e.base)} % d'habitude.` });
   }
   for (const e of allies.filter(cite)) {
-    r.push({ w: Math.abs(e.effect), text: e.effect > 0
+    r.push({ w: Math.abs(e.effect), short: e.effect > 0 ? `Va bien avec ${name(e.championId)}.` : `Va mal avec ${name(e.championId)}.`, text: e.effect > 0
       ? `Bonne synergie avec ${name(e.championId)} : ${pm(e)}, contre ${nf(e.base)} % d'habitude.`
       : `Va mal avec ${name(e.championId)} : ${pm(e)}, contre ${nf(e.base)} % d'habitude.` });
   }
-  if (need && damage > 0) r.push({ w: damage, text: `Ton équipe manque de dégâts ${DMG_LABEL[need]} : ${c.name} en apporte.` });
-  if (need && damage < 0) r.push({ w: -damage, text: `Ton équipe a déjà surtout des dégâts ${DMG_LABEL[need === "magic" ? "physical" : "magic"]}, comme ${c.name}.` });
-  const reasons = r.sort((a, b) => b.w - a.w).slice(0, 2).map((x) => x.text);
+  if (need && damage > 0) r.push({ w: damage, short: `Apporte les dégâts ${DMG_LABEL[need]} qui manquent.`, text: `Ton équipe manque de dégâts ${DMG_LABEL[need]} : ${c.name} en apporte.` });
+  if (need && damage < 0) r.push({ w: -damage, short: `Encore des dégâts ${DMG_LABEL[need === "magic" ? "physical" : "magic"]}, comme ton équipe.`, text: `Ton équipe a déjà surtout des dégâts ${DMG_LABEL[need === "magic" ? "physical" : "magic"]}, comme ${c.name}.` });
+  const sorted = r.sort((a, b) => b.w - a.w);
+  const reasons = sorted.slice(0, 2).map((x) => x.text);
+  const short = sorted[0]?.short ?? (poolRank === 1 ? "Ton meilleur champion dans ce rôle." : poolRank != null ? "Dans ton pool, rien de net dans cette draft." : "Rien de net dans cette draft.");
   if (poolRank != null && reasons.length < 2) reasons.push(poolRank === 1 ? "Ton meilleur champion dans ce rôle." : `N° ${poolRank} de ton pool.`);
 
   return {
     championId, inPool: poolRank != null, base, score: base + counter + synergy + damage, counter, synergy, damage, poolRank,
-    reasons, provisional: !!input.provisional || metaProvisional,
+    reasons, short, provisional: !!input.provisional || metaProvisional,
   };
 }
 
@@ -215,6 +221,7 @@ export function draftPicks(input: DraftPickInput): DraftPicks {
     const d = evaluate(input, x.championId, base, inPool?.rank ?? null, need, inPool ? inPool.p.provisional : !m || m.games < 200);
     if (!d) return [];
     d.tag = x.tag;
+    d.short = x.short ?? d.short;
     d.reasons = [x.why, ...d.reasons.filter((r) => !/^Ton meilleur champion|^N° d+ de ton pool/.test(r)).slice(0, 2)];
     return [{ d, group: x.group }];
   // Entre champions prioritaires : d'abord le groupe, puis l'effet de cette draft (contres, synergies, dégâts) ; 3 au plus.
@@ -243,10 +250,11 @@ export function draftPicks(input: DraftPickInput): DraftPicks {
   }
   const bar = (list[0]?.score ?? -Infinity) + OFF_POOL_MARGIN;
   if (offPool && offPool.score >= bar) {
+    offPool.short = list.length ? "Hors de ton pool, mais nettement mieux ici." : "Aucun champion de ton pool disponible.";
     offPool.reasons = [...offPool.reasons.slice(0, 2), list.length
       ? `Hors de ton pool : ${nf(offPool.score - list[0].score, 1)} point(s) de mieux que ton meilleur choix ici.`
       : "Aucun champion de ton pool disponible dans ce rôle : meilleur choix de la méta pour cette draft."];
   } else offPool = null;
 
-  return { role: input.role, myTurn: input.myTurn, list, offPool, ...(input.rule ? { rule: input.rule } : {}) };
+  return { role: input.role, myTurn: input.myTurn, list, offPool, ...(input.rule ? { rule: input.rule, ruleShort: input.ruleShort } : {}) };
 }

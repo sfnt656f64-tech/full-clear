@@ -5,7 +5,7 @@ import { champByKey } from "../../src/data/champions";
 import type { Detail } from "../collector/detail.ts";
 import { METRICS, type AnalysisGame, type Metric } from "./analysis.ts";
 import { gameRank, type MetaRef } from "./overview.ts";
-import type { GameMetrics } from "./goals.ts";
+import { compensated, type GameMetrics } from "./goals.ts";
 
 const MIN = 60_000;
 const n = (v: unknown) => (typeof v === "number" ? v : 0);
@@ -27,7 +27,13 @@ const OUTCOME_LINKED = new Set(["kpLate", "dmgShare"]);
 
 export interface VsLine { key: string; label: string; unit: string; mine: number | null; opp: number | null; better: boolean | null; outcomeLinked: boolean; /** Écart (une seule valeur, ta perspective). */ diff: boolean }
 export interface GoalLine { key: string; label: string; value: string; target: string; met: boolean | null }
-export interface Moment { t: number; time: string; kind: "death" | "kill" | "objective-ours" | "objective-theirs"; text: string }
+export interface Moment {
+  t: number; time: string; kind: "death" | "kill" | "objective-ours" | "objective-theirs"; text: string;
+  /** Mort : qui t'a tué, seul ou non, et l'objectif adverse pris dans la minute suivante. Objectif : son nom. */
+  killer?: number; solo?: boolean; objAfter?: string; label?: string;
+  /** Objectif adverse : sans contrepartie (même règle que l'objectif de la semaine). */
+  uncompensated?: boolean;
+}
 export interface AverageLine { key: string; label: string; unit: string; game: number; average: number; games: number; better: boolean }
 
 export interface PostGame {
@@ -48,6 +54,96 @@ export interface PostGame {
   strength: string;
   /** Courbe de chaque point à travailler (même ordre que work), null si pas assez de parties. */
   curves: (WorkCurve | null)[];
+  /** Vue simple, en haut : ce qui a marché, le point à travailler et un moment de cette partie, une consigne. */
+  /** well : null quand rien n'est net (ni face à l'adversaire, ni face à ta propre habitude) : la ligne est retirée. */
+  top: { well: string | null; point: string; moment: string | null; next: string };
+}
+
+const POINT: Record<string, string> = {
+  cs10: "Camps à 10 min", cs15: "Camps à 15 min", gd10: "Or à 10 min", xd10: "Expérience à 10 min", gd15: "Or à 15 min",
+  kp15: "Présence sur les kills avant 15 min", deaths15: "Morts avant 15 min", solo15: "Morts seul avant 15 min",
+  obj15: "Objectifs pris avant 15 min", unc15: "Objectifs laissés gratuits avant 15 min",
+};
+const NEXT: Record<string, string> = {
+  cs10: "Finis tes camps entre deux actions.", cs15: "Finis tes camps entre deux actions.",
+  gd10: "Garde ton tour de camps, gank seulement une lane gagnable.", gd15: "Garde ton tour de camps, gank seulement une lane gagnable.",
+  xd10: "Garde ton tour de camps, gank seulement une lane gagnable.",
+  kp15: "Après ton tour de camps, rejoins la lane qui se bat.", deaths15: "Avant 15 min, ne combats pas seul sans vision.",
+  solo15: "Avant tes premiers objets, refuse les duels seul.", obj15: "Une minute avant chaque objectif, pose ta vision.",
+  unc15: "Objectif perdu → prends tout de suite l'autre côté.",
+};
+const minute = (t: number) => Math.max(1, Math.round(t / MIN));
+
+/**
+ * Haut de l'analyse : trois lignes courtes, sans chiffre technique. « Bien » décrit cette partie face à ton vis-à-vis
+ * (un fait, pas une conclusion) ; le point à travailler vient de tes dernières parties (net, marge comprise), illustré
+ * par un moment de cette partie s'il y en a un ; une seule consigne pour la prochaine partie.
+ */
+/** Ce que tu as fait mieux que d'habitude (pour « Mieux que d'habitude : … »). */
+const HABIT: Record<string, string> = {
+  cs10: "plus de camps à 10 min", cs15: "plus de camps à 15 min", gd10: "meilleur écart d'or à 10 min",
+  gd15: "meilleur écart d'or à 15 min", xd10: "meilleur écart d'expérience à 10 min",
+  kp15: "plus présent sur les kills avant 15 min", deaths15: "moins de morts avant 15 min",
+  solo15: "moins de morts seul avant 15 min", obj15: "plus d'objectifs pris avant 15 min",
+  unc15: "moins d'objectifs laissés gratuits avant 15 min",
+};
+
+/**
+ * Cette partie face à ta propre habitude : la mesure où elle sort nettement de ta plage habituelle, du bon côté. Net :
+ * au-delà de ta moyenne de plus de 1,96 écart-type (intervalle de prédiction d'une partie, sur au moins 20 parties
+ * précédentes dans ce rôle et cette saison). Sinon null : la ligne est retirée.
+ */
+export function habitLine(game: AnalysisGame, recent: AnalysisGame[]): string | null {
+  const best = METRICS.filter((m) => HABIT[m.key]).flatMap((m) => {
+    const v = m.value(game);
+    const xs = recent.slice(0, WORK_GAMES).map((h) => m.value(h)).filter((x): x is number => x != null);
+    if (v == null || xs.length < WORK_GAMES) return [];
+    const mean = xs.reduce((s, x) => s + x, 0) / xs.length;
+    const sd = Math.sqrt(xs.reduce((s, x) => s + (x - mean) ** 2, 0) / (xs.length - 1));
+    if (!sd) return [];
+    const z = ((m.better === "+" ? v - mean : mean - v) / sd) / Math.sqrt(1 + 1 / xs.length);
+    return z > 1.96 ? [{ key: m.key, z }] : [];
+  }).sort((a, b) => b.z - a.z)[0];
+  return best ? `Mieux que d'habitude : ${HABIT[best.key]}.` : null;
+}
+
+export function plainTop(vs: VsLine[], moments: Moment[], workKey: string | null, oppName: string, habit: string | null = null): PostGame["top"] {
+  const v = new Map(vs.map((x) => [x.key, x]));
+  /** « que Zac », « qu'Amumu ». */
+  const que = /^[aeiouyéèêh]/i.test(oppName) ? `qu'${oppName}` : `que ${oppName}`;
+  const WELL: [string, (x: VsLine) => string | null][] = [
+    ["gd15", (x) => (x.better ? `Plus d'or ${que} à 15 min.` : null)],
+    ["gd10", (x) => (x.better ? `Plus d'or ${que} à 10 min.` : null)],
+    ["cs10", (x) => (x.better ? `Plus de camps ${que} à 10 min.` : null)],
+    ["xd10", (x) => (x.better ? `Plus d'expérience ${que} à 10 min.` : null)],
+    ["kp15", (x) => (x.better ? `Présent sur plus de kills ${que} avant 15 min.` : null)],
+    ["deaths15", (x) => (x.better ? `Moins de morts ${que} avant 15 min.` : null)],
+    ["solo15", (x) => (x.mine === 0 ? "Jamais tué seul avant 15 min." : null)],
+    ["obj15", (x) => (x.better ? "Ton équipe prend plus d'objectifs avant 15 min." : null)],
+    ["unc15", (x) => (x.mine === 0 ? "Aucun objectif laissé gratuit avant 15 min." : null)],
+  ];
+  // Face à l'adversaire d'abord ; sinon face à ton habitude (si l'écart est net) ; sinon pas de ligne.
+  const well = WELL.map(([k, f]) => (v.get(k) ? f(v.get(k)!) : null)).find((x): x is string => !!x) ?? habit;
+  if (!workKey) return { well, point: "Aucun point net à travailler sur tes dernières parties.", moment: null, next: "Garde tes objectifs de la semaine." };
+  const early = moments.filter((m) => m.t < 15 * MIN);
+  const deaths = early.filter((m) => m.kind === "death");
+  let moment: string | null = null;
+  const x = v.get(workKey);
+  if (workKey === "unc15" || workKey === "obj15") {
+    const free = early.find((m) => m.kind === "objective-theirs" && m.uncompensated);
+    moment = free ? `À ${minute(free.t)} min, ils prennent ${free.label === "larve du Néant" ? "les larves" : `le ${free.label}`} sans contrepartie.` : "Cette partie : aucun objectif laissé gratuit avant 15 min.";
+  } else if (workKey === "deaths15" || workKey === "solo15") {
+    const d = deaths.find((m) => m.objAfter) ?? deaths.find((m) => workKey !== "solo15" || m.solo);
+    moment = !d ? "Cette partie : aucune mort de ce type avant 15 min."
+      : d.objAfter ? `À ${minute(d.t)} min, tu meurs juste avant leur ${d.objAfter === "larve du Néant" ? "prise des larves" : d.objAfter}.`
+      : `À ${minute(d.t)} min, ${champByKey(d.killer ?? 0)?.name ?? "un adversaire"} te tue${d.solo ? " seul" : ""}.`;
+  } else if (x && x.better === false) {
+    moment = workKey.startsWith("cs") ? `À ${workKey === "cs15" ? 15 : 10} min, moins de camps ${que}.`
+      : workKey === "xd10" ? `À 10 min, ${oppName} a plus d'expérience que toi.`
+      : workKey.startsWith("gd") ? `À ${workKey === "gd15" ? 15 : 10} min, ${oppName} a plus d'or que toi.`
+      : workKey === "kp15" ? `Avant 15 min, ${oppName} est sur plus de kills que toi.` : null;
+  } else if (x && x.better) moment = "Cette partie : mieux sur ce point, continue.";
+  return { well, point: POINT[workKey] ?? workKey, moment, next: NEXT[workKey] ?? "Garde tes objectifs de la semaine." };
 }
 
 /** Moyenne glissante sur 10 parties, sur tes 30 dernières parties dans ce rôle, avec ta cible. */
@@ -106,7 +202,7 @@ export function keyMoments(d: Detail): Moment[] {
     if (e.type === "CHAMPION_KILL" && n(e.victimId) === pid) {
       const helpers = ((e.assistingParticipantIds as number[] | undefined) ?? []).length;
       const enemyObj = objs.find((o) => n(o.killerTeamId) !== team && n(o.timestamp) > t && n(o.timestamp) - t <= MIN);
-      out.push({ t, time: mmss(t), kind: "death", text: `Mort, tué par ${name(champOf.get(n(e.killerId)) ?? 0)}${helpers ? ` avec ${helpers} autre${helpers > 1 ? "s" : ""}` : " en 1 contre 1"}${enemyObj ? ` — ils prennent ${OBJ_LABEL[String(enemyObj.monsterType)] ?? "un objectif"} à ${mmss(n(enemyObj.timestamp))}` : ""}.` });
+      out.push({ t, time: mmss(t), kind: "death", killer: champOf.get(n(e.killerId)) ?? 0, solo: !helpers, objAfter: enemyObj ? OBJ_LABEL[String(enemyObj.monsterType)] ?? "un objectif" : undefined, text: `Mort, tué par ${name(champOf.get(n(e.killerId)) ?? 0)}${helpers ? ` avec ${helpers} autre${helpers > 1 ? "s" : ""}` : " en 1 contre 1"}${enemyObj ? ` — ils prennent ${OBJ_LABEL[String(enemyObj.monsterType)] ?? "un objectif"} à ${mmss(n(enemyObj.timestamp))}` : ""}.` });
     } else if (e.type === "CHAMPION_KILL" && n(e.killerId) === pid) {
       out.push({ t, time: mmss(t), kind: "kill", text: `Kill sur ${name(champOf.get(n(e.victimId)) ?? 0)}.` });
     } else if (e.type === "ELITE_MONSTER_KILL" && n(e.killerTeamId) > 0) {
@@ -115,7 +211,8 @@ export function keyMoments(d: Detail): Moment[] {
       const ours = n(e.killerTeamId) === team;
       const sub = String(e.monsterSubType ?? "").replace(/_DRAGON$/, "");
       const label = type === "DRAGON" ? `dragon${DRAGON_FR[sub] ? ` ${DRAGON_FR[sub]}` : ""}` : OBJ_LABEL[type] ?? type.toLowerCase();
-      out.push({ t, time: mmss(t), kind: ours ? "objective-ours" : "objective-theirs", text: `${ours ? "Ton équipe prend" : "Ils prennent"} : ${label}${n(e.killerId) === pid ? " (par toi)" : ""}.` });
+      const teamOf = new Map(d.match.parts.map((p) => [n(p.participantId), n(p.teamId)]));
+      out.push({ t, time: mmss(t), kind: ours ? "objective-ours" : "objective-theirs", label, uncompensated: !ours && !compensated(ev, t, team, teamOf), text: `${ours ? "Ton équipe prend" : "Ils prennent"} : ${label}${n(e.killerId) === pid ? " (par toi)" : ""}.` });
     }
   }
   return out;
@@ -172,12 +269,14 @@ export function postGame(x: PostGameInput): PostGame {
     });
     average = { games: x.sameChampion.length, lines };
   }
-  const { work, strength, curves } = workPoints(x.recent, x.ref, x.refName, g, x.targets);
+  const { work, strength, curves, workKeys } = workPoints(x.recent, x.ref, x.refName, g, x.targets);
+  const moments = keyMoments(x.detail);
   return {
     matchId: g.matchId, account: g.account, startMs: g.startMs, championId: g.championId, win: g.win, durationS: g.durationS, role: g.role,
     queue: x.queue, kda: `${g.kills}/${g.deaths}/${g.assists}`, opponent: opp ? n(opp.championId) : null,
-    vs, goals: g.role === "JUNGLE" ? goalLines(x.metrics, x.targets) : [], moments: keyMoments(x.detail), average, progression: x.progression,
+    vs, goals: g.role === "JUNGLE" ? goalLines(x.metrics, x.targets) : [], moments, average, progression: x.progression,
     work, strength, curves,
+    top: plainTop(vs, moments, workKeys[0] ?? null, opp ? name(n(opp.championId)) : "ton vis-à-vis", habitLine(g, x.recent)),
   };
 }
 
@@ -214,10 +313,10 @@ export function evolution(m: Metric, games: AnalysisGame[]): string {
  * et la mesure nettement au-dessus (position − marge > 50) la plus haute. Cette partie n'est qu'un exemple : aucune
  * conclusion n'en est tirée.
  */
-export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string, game: AnalysisGame, targets?: PostGameInput["targets"]): { work: string[]; strength: string; curves: (WorkCurve | null)[] } {
+export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string, game: AnalysisGame, targets?: PostGameInput["targets"]): { work: string[]; strength: string; curves: (WorkCurve | null)[]; workKeys: string[] } {
   const games = recent.slice(0, WORK_GAMES);
   if (games.length < WORK_GAMES) {
-    return { work: [`Moins de ${WORK_GAMES} parties avant celle-ci dans ce rôle (${games.length}) : pas encore de point à travailler.`], strength: `Moins de ${WORK_GAMES} parties : pas encore de point fort.`, curves: [null] };
+    return { work: [`Moins de ${WORK_GAMES} parties avant celle-ci dans ce rôle (${games.length}) : pas encore de point à travailler.`], strength: `Moins de ${WORK_GAMES} parties : pas encore de point fort.`, curves: [null], workKeys: [] };
   }
   const curve = (m: Metric) => {
     const goal = GOAL_TARGET[m.key];
@@ -242,6 +341,7 @@ export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string
   const strong = scored.filter((p) => p.rank - p.margin > 50).sort((a, b) => b.rank - a.rank);
   return {
     curves: weak.length ? weak.slice(0, 3).map((p) => curve(p.m)) : [null],
+    workKeys: weak.slice(0, 3).map((p) => p.m.key),
     work: weak.length ? weak.slice(0, 3).map((p) => line(p, "nettement sous la médiane")) : [`Aucune mesure nettement sous la médiane ${refName} sur tes ${WORK_GAMES} dernières parties (marge comprise).`],
     strength: strong.length ? line(strong[0], "nettement au-dessus de la médiane")
       : (() => {

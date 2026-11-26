@@ -65,16 +65,18 @@ export function trades(events: Ev[], team: number, teamOf: Map<number, number>, 
     if (last && last.type === e.monsterType && n(e.timestamp) - last.t < 90_000) continue;
     taken.push({ t: n(e.timestamp), type: String(e.monsterType) });
   }
-  let uncompensated = 0;
-  for (const o of taken) {
-    const w = events.filter((e) => Math.abs(n(e.timestamp) - o.t) <= MIN);
-    const obj = w.some((e) => e.type === "ELITE_MONSTER_KILL" && n(e.killerTeamId) === team);
-    const building = w.some((e) => e.type === "BUILDING_KILL" && n(e.teamId) !== team); // teamId : équipe qui perd le bâtiment
-    const kills = w.filter((e) => e.type === "CHAMPION_KILL" && n(e.killerId) > 0);
-    const ours = kills.filter((e) => teamOf.get(n(e.killerId)) === team).length;
-    if (!obj && !building && ours <= kills.length - ours) uncompensated++;
-  }
+  const uncompensated = taken.filter((o) => !compensated(events, o.t, team, teamOf)).length;
   return { ceded: taken.length, uncompensated };
+}
+
+/** Contrepartie de ton équipe dans la minute avant ou après t : un objectif, une tour (ou un inhibiteur), ou plus de kills. */
+export function compensated(events: Ev[], t: number, team: number, teamOf: Map<number, number>): boolean {
+  const w = events.filter((e) => Math.abs(n(e.timestamp) - t) <= MIN);
+  const obj = w.some((e) => e.type === "ELITE_MONSTER_KILL" && n(e.killerTeamId) === team);
+  const building = w.some((e) => e.type === "BUILDING_KILL" && n(e.teamId) !== team); // teamId : équipe qui perd le bâtiment
+  const kills = w.filter((e) => e.type === "CHAMPION_KILL" && n(e.killerId) > 0);
+  const ours = kills.filter((e) => teamOf.get(n(e.killerId)) === team).length;
+  return obj || building || ours > kills.length - ours;
 }
 
 type Num = Record<string, unknown>;

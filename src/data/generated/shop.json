@@ -1,19 +1,23 @@
 {
   "1001": {
     "name": "Boots",
+    "nameFr": "Bottes",
     "cost": 300,
     "boots": true
   },
   "1004": {
     "name": "Faerie Charm",
+    "nameFr": "Charme féérique",
     "cost": 200
   },
   "1006": {
     "name": "Rejuvenation Bead",
+    "nameFr": "Collier rafraîchissant",
     "cost": 300
   },
   "1011": {
     "name": "Giant's Belt",
+    "nameFr": "Ceinture du géant",
     "cost": 900,
     "from": [
       "1028"
@@ -22,29 +26,35 @@
   },
   "1018": {
     "name": "Cloak of Agility",
+    "nameFr": "Cape d'agilité",
     "cost": 600
   },
   "1026": {
     "name": "Blasting Wand",
+    "nameFr": "Baguette explosive",
     "cost": 850,
     "ap": 45
   },
   "1027": {
     "name": "Sapphire Crystal",
+    "nameFr": "Cristal de saphir",
     "cost": 300
   },
   "1028": {
     "name": "Ruby Crystal",
+    "nameFr": "Cristal de rubis",
     "cost": 400,
     "hp": 150
   },
   "1029": {
     "name": "Cloth Armor",
+    "nameFr": "Armure d'étoffe",
     "cost": 300,
     "armor": 15
   },
   "1031": {
     "name": "Chain Vest",
+    "nameFr": "Cotte de mailles",
     "cost": 800,
     "from": [
       "1029"
@@ -53,30 +63,36 @@
   },
   "1033": {
     "name": "Null-Magic Mantle",
+    "nameFr": "Cape de néant",
     "cost": 400,
     "mr": 20
   },
   "1036": {
     "name": "Long Sword",
+    "nameFr": "Épée longue",
     "cost": 350,
     "ad": 10
   },
   "1037": {
     "name": "Pickaxe",
+    "nameFr": "Pioche",
     "cost": 875,
     "ad": 25
   },
   "1038": {
     "name": "B. F. Sword",
+    "nameFr": "BF Glaive",
     "cost": 1300,
     "ad": 40
   },
   "1042": {
     "name": "Dagger",
+    "nameFr": "Dague",
     "cost": 250
   },
   "1043": {
     "name": "Recurve Bow",
+    "nameFr": "Arc courbe",
     "cost": 700,
     "from": [
       "1042"
@@ -84,11 +100,13 @@
   },
   "1052": {
     "name": "Amplifying Tome",
+    "nameFr": "Tome d'amplification",
     "cost": 400,
     "ap": 20
   },
   "1053": {
     "name": "Vampiric Scepter",
+    "nameFr": "Sceptre vampirique",
     "cost": 900,
     "from": [
       "1036"
@@ -98,11 +116,13 @@
   },
   "1054": {
     "name": "Doran's Shield",
+    "nameFr": "Bouclier de Doran",
     "cost": 450,
     "hp": 110
   },
   "1055": {
     "name": "Doran's Blade",
+    "nameFr": "Lame de Doran",
     "cost": 450,
     "ad": 10,
     "hp": 80,
@@ -110,12 +130,14 @@
   },
   "1056": {
     "name": "Doran's Ring",
+    "nameFr": "Anneau de Doran",
     "cost": 400,
     "ap": 18,
     "hp": 90
   },
   "1057": {
     "name": "Negatron Cloak",
+    "nameFr": "Manteau de Négatron",
     "cost": 850,
     "from": [
       "1033"
@@ -124,52 +146,63 @@
   },
   "1058": {
     "name": "Needlessly Large Rod",
+    "nameFr": "Baguette trop grosse",
     "cost": 1200,
     "ap": 65
   },
   "1082": {
     "name": "Dark Seal",
+    "nameFr": "Sceau noir",
     "cost": 350,
     "ap": 15,
     "hp": 50
   },
   "1083": {
     "name": "Cull",
+    "nameFr": "Abatteur",
     "cost": 450,
     "ad": 7
   },
   "1086": {
     "name": "Doran's Bow",
+    "nameFr": "Arc de Doran",
     "cost": 400,
     "ad": 7,
     "heal": true
   },
   "1101": {
     "name": "Scorchclaw Pup",
+    "nameFr": "Bébé Chardent",
     "cost": 450
   },
   "1102": {
     "name": "Gustwalker Hatchling",
+    "nameFr": "Bébé Saute-nuages",
     "cost": 450
   },
   "1103": {
     "name": "Mosstomper Seedling",
+    "nameFr": "Bébé Ixamandre",
     "cost": 450
   },
   "1105": {
     "name": "Mosstomper Seedling",
+    "nameFr": "Bébé Ixamandre",
     "cost": 450
   },
   "1106": {
     "name": "Gustwalker Hatchling",
+    "nameFr": "Bébé Saute-nuages",
     "cost": 450
   },
   "1107": {
     "name": "Scorchclaw Pup",
+    "nameFr": "Bébé Chardent",
     "cost": 450
   },
   "1120": {
     "name": "Doran's Helm",
+    "nameFr": "Casque de Doran",
     "cost": 450,
     "armor": 8,
     "mr": 8,
@@ -177,10 +210,12 @@
   },
   "2003": {
     "name": "Health Potion",
+    "nameFr": "Potion de soin",
     "cost": 50
   },
   "2019": {
     "name": "Steel Sigil",
+    "nameFr": "Sceau d'acier",
     "cost": 1100,
     "from": [
       "1029",
@@ -192,6 +227,7 @@
   },
   "2020": {
     "name": "The Brutalizer",
+    "nameFr": "Brutaliseur",
     "cost": 1337,
     "from": [
       "2022",
@@ -201,6 +237,7 @@
   },
   "2021": {
     "name": "Tunneler",
+    "nameFr": "Foreuse",
     "cost": 1150,
     "from": [
       "1036",
@@ -211,23 +248,28 @@
   },
   "2022": {
     "name": "Glowing Mote",
+    "nameFr": "Poussière luisante",
     "cost": 250
   },
   "2031": {
     "name": "Refillable Potion",
+    "nameFr": "Potion rechargeable",
     "cost": 150
   },
   "2051": {
     "name": "Guardian's Horn",
+    "nameFr": "Corne du gardien",
     "cost": 950,
     "hp": 150
   },
   "2055": {
     "name": "Control Ward",
+    "nameFr": "Balise de contrôle",
     "cost": 75
   },
   "2065": {
     "name": "Shurelya's Battlesong",
+    "nameFr": "Chant de guerre de Shurelya",
     "cost": 2200,
     "from": [
       "3113",
@@ -237,23 +279,28 @@
   },
   "2138": {
     "name": "Elixir of Iron",
+    "nameFr": "Élixir de fer",
     "cost": 500
   },
   "2139": {
     "name": "Elixir of Sorcery",
+    "nameFr": "Élixir de sorcellerie",
     "cost": 500
   },
   "2140": {
     "name": "Elixir of Wrath",
+    "nameFr": "Élixir de rage",
     "cost": 500,
     "heal": true
   },
   "2141": {
     "name": "Cappa Juice",
+    "nameFr": "Jus chapi-chapo",
     "cost": 300
   },
   "2420": {
     "name": "Seeker's Armguard",
+    "nameFr": "Protège-bras du savant",
     "cost": 1600,
     "from": [
       "1052",
@@ -265,6 +312,7 @@
   },
   "2421": {
     "name": "Shattered Armguard",
+    "nameFr": "Protège-bras pulvérisé",
     "cost": 1600,
     "from": [
       "1052",
@@ -276,6 +324,7 @@
   },
   "2501": {
     "name": "Overlord's Bloodmail",
+    "nameFr": "Armure sanguine",
     "cost": 3300,
     "from": [
       "2021",
@@ -286,6 +335,7 @@
   },
   "2502": {
     "name": "Unending Despair",
+    "nameFr": "Désespoir infini",
     "cost": 2800,
     "from": [
       "1031",
@@ -297,6 +347,7 @@
   },
   "2503": {
     "name": "Blackfire Torch",
+    "nameFr": "Torche noire",
     "cost": 2800,
     "from": [
       "3802",
@@ -306,6 +357,7 @@
   },
   "2504": {
     "name": "Kaenic Rookern",
+    "nameFr": "Rookern kaénique",
     "cost": 2900,
     "from": [
       "3211",
@@ -316,6 +368,7 @@
   },
   "2508": {
     "name": "Fated Ashes",
+    "nameFr": "Cendres fatidiques",
     "cost": 900,
     "from": [
       "1052"
@@ -324,6 +377,7 @@
   },
   "2510": {
     "name": "Dusk and Dawn",
+    "nameFr": "Aube et crépuscule",
     "cost": 3100,
     "from": [
       "3057",
@@ -336,6 +390,7 @@
   },
   "2512": {
     "name": "Fiendhunter Bolts",
+    "nameFr": "Chasseur de monstres",
     "cost": 2650,
     "from": [
       "3086",
@@ -344,6 +399,7 @@
   },
   "2517": {
     "name": "Endless Hunger",
+    "nameFr": "Faim insatiable",
     "cost": 3100,
     "from": [
       "3133",
@@ -355,6 +411,7 @@
   },
   "2520": {
     "name": "Bastionbreaker",
+    "nameFr": "Briseur de bastion",
     "cost": 3000,
     "from": [
       "2020",
@@ -364,6 +421,7 @@
   },
   "2522": {
     "name": "Actualizer",
+    "nameFr": "Actualisateur",
     "cost": 2800,
     "from": [
       "3802",
@@ -373,6 +431,7 @@
   },
   "2523": {
     "name": "Hexoptics C44",
+    "nameFr": "Lunettes Hextech C44",
     "cost": 2800,
     "from": [
       "1037",
@@ -383,6 +442,7 @@
   },
   "2524": {
     "name": "Bandlepipes",
+    "nameFr": "Flûtes de Bandle",
     "cost": 2300,
     "from": [
       "3067",
@@ -395,6 +455,7 @@
   },
   "2525": {
     "name": "Protoplasm Harness",
+    "nameFr": "Harnais protoplasmique",
     "cost": 2600,
     "from": [
       "3067",
@@ -404,6 +465,7 @@
   },
   "2526": {
     "name": "Whispering Circlet",
+    "nameFr": "Diadème des murmures",
     "cost": 2250,
     "from": [
       "3114",
@@ -414,6 +476,7 @@
   },
   "3003": {
     "name": "Archangel's Staff",
+    "nameFr": "Bâton de l'archange",
     "cost": 2900,
     "from": [
       "3070",
@@ -424,6 +487,7 @@
   },
   "3004": {
     "name": "Manamune",
+    "nameFr": "Manamune",
     "cost": 2900,
     "from": [
       "3070",
@@ -434,6 +498,7 @@
   },
   "3006": {
     "name": "Berserker's Greaves",
+    "nameFr": "Jambières du berzerker",
     "cost": 1100,
     "from": [
       "1001",
@@ -444,6 +509,7 @@
   },
   "3008": {
     "name": "Gluttonous Greaves",
+    "nameFr": "Jambières gloutonnes",
     "cost": 1100,
     "from": [
       "1001"
@@ -453,6 +519,7 @@
   },
   "3009": {
     "name": "Boots of Swiftness",
+    "nameFr": "Bottes de célérité",
     "cost": 1000,
     "from": [
       "1001"
@@ -461,6 +528,7 @@
   },
   "3020": {
     "name": "Sorcerer's Shoes",
+    "nameFr": "Chaussures de sorcier",
     "cost": 1100,
     "from": [
       "1001"
@@ -469,6 +537,7 @@
   },
   "3024": {
     "name": "Glacial Buckler",
+    "nameFr": "Bouclier glacial",
     "cost": 900,
     "from": [
       "1029",
@@ -479,6 +548,7 @@
   },
   "3026": {
     "name": "Guardian Angel",
+    "nameFr": "Ange gardien",
     "cost": 3200,
     "from": [
       "2019",
@@ -489,6 +559,7 @@
   },
   "3031": {
     "name": "Infinity Edge",
+    "nameFr": "Lame d'infini",
     "cost": 3500,
     "from": [
       "1038",
@@ -499,6 +570,7 @@
   },
   "3032": {
     "name": "Yun Tal Wildarrows",
+    "nameFr": "Flèches des Yun Tal",
     "cost": 3000,
     "from": [
       "1038",
@@ -509,6 +581,7 @@
   },
   "3033": {
     "name": "Mortal Reminder",
+    "nameFr": "Rappel mortel",
     "cost": 3000,
     "from": [
       "3123",
@@ -519,6 +592,7 @@
   },
   "3035": {
     "name": "Last Whisper",
+    "nameFr": "Dernier souffle",
     "cost": 1450,
     "from": [
       "1036",
@@ -528,6 +602,7 @@
   },
   "3036": {
     "name": "Lord Dominik's Regards",
+    "nameFr": "Salutations de Dominik",
     "cost": 3300,
     "from": [
       "3035",
@@ -537,6 +612,7 @@
   },
   "3041": {
     "name": "Mejai's Soulstealer",
+    "nameFr": "Voleur d'âmes de Mejai",
     "cost": 1500,
     "from": [
       "1082"
@@ -546,6 +622,7 @@
   },
   "3044": {
     "name": "Phage",
+    "nameFr": "Phage",
     "cost": 1100,
     "from": [
       "1028",
@@ -556,6 +633,7 @@
   },
   "3046": {
     "name": "Phantom Dancer",
+    "nameFr": "Danseur fantôme",
     "cost": 2650,
     "from": [
       "1042",
@@ -565,6 +643,7 @@
   },
   "3047": {
     "name": "Plated Steelcaps",
+    "nameFr": "Coques en acier",
     "cost": 1200,
     "from": [
       "1001",
@@ -575,6 +654,7 @@
   },
   "3050": {
     "name": "Zeke's Convergence",
+    "nameFr": "Convergence de Zeke",
     "cost": 2200,
     "from": [
       "3067",
@@ -587,6 +667,7 @@
   },
   "3051": {
     "name": "Hearthbound Axe",
+    "nameFr": "Hache d'Âtrinsèque",
     "cost": 1200,
     "from": [
       "1036",
@@ -597,6 +678,7 @@
   },
   "3053": {
     "name": "Sterak's Gage",
+    "nameFr": "Gage de Sterak",
     "cost": 3200,
     "from": [
       "1037",
@@ -607,6 +689,7 @@
   },
   "3057": {
     "name": "Sheen",
+    "nameFr": "Brillance",
     "cost": 900,
     "from": [
       "2022"
@@ -614,6 +697,7 @@
   },
   "3065": {
     "name": "Spirit Visage",
+    "nameFr": "Visage spirituel",
     "cost": 2700,
     "from": [
       "3211",
@@ -624,6 +708,7 @@
   },
   "3066": {
     "name": "Winged Moonplate",
+    "nameFr": "Plaque de lune ailée",
     "cost": 800,
     "from": [
       "1028"
@@ -632,6 +717,7 @@
   },
   "3067": {
     "name": "Kindlegem",
+    "nameFr": "Gemme exaltante",
     "cost": 800,
     "from": [
       "1028",
@@ -641,6 +727,7 @@
   },
   "3068": {
     "name": "Sunfire Aegis",
+    "nameFr": "Égide solaire",
     "cost": 2800,
     "from": [
       "6660",
@@ -652,10 +739,12 @@
   },
   "3070": {
     "name": "Tear of the Goddess",
+    "nameFr": "Larme de la déesse",
     "cost": 400
   },
   "3071": {
     "name": "Black Cleaver",
+    "nameFr": "Couperet noir",
     "cost": 3000,
     "from": [
       "3044",
@@ -667,6 +756,7 @@
   },
   "3072": {
     "name": "Bloodthirster",
+    "nameFr": "Soif-de-sang",
     "cost": 3400,
     "from": [
       "1038",
@@ -678,6 +768,7 @@
   },
   "3073": {
     "name": "Experimental Hexplate",
+    "nameFr": "Hexplaque expérimentale",
     "cost": 3000,
     "from": [
       "2021",
@@ -689,6 +780,7 @@
   },
   "3074": {
     "name": "Ravenous Hydra",
+    "nameFr": "Hydre vorace",
     "cost": 3300,
     "from": [
       "3077",
@@ -700,6 +792,7 @@
   },
   "3075": {
     "name": "Thornmail",
+    "nameFr": "Cotte épineuse",
     "cost": 2450,
     "from": [
       "3076",
@@ -711,6 +804,7 @@
   },
   "3076": {
     "name": "Bramble Vest",
+    "nameFr": "Armure roncière",
     "cost": 800,
     "from": [
       "1029",
@@ -720,6 +814,7 @@
   },
   "3077": {
     "name": "Tiamat",
+    "nameFr": "Tiamat",
     "cost": 1200,
     "from": [
       "1036",
@@ -729,6 +824,7 @@
   },
   "3078": {
     "name": "Trinity Force",
+    "nameFr": "Force de la trinité",
     "cost": 3333,
     "from": [
       "3057",
@@ -740,6 +836,7 @@
   },
   "3082": {
     "name": "Warden's Mail",
+    "nameFr": "Mailles du gardien",
     "cost": 1000,
     "from": [
       "1029",
@@ -749,6 +846,7 @@
   },
   "3083": {
     "name": "Warmog's Armor",
+    "nameFr": "Armure de Warmog",
     "cost": 3100,
     "from": [
       "1011",
@@ -759,6 +857,7 @@
   },
   "3084": {
     "name": "Heartsteel",
+    "nameFr": "Cœuracier",
     "cost": 3000,
     "from": [
       "1011",
@@ -769,6 +868,7 @@
   },
   "3085": {
     "name": "Runaan's Hurricane",
+    "nameFr": "Ouragan de Runaan",
     "cost": 2650,
     "from": [
       "3086",
@@ -777,6 +877,7 @@
   },
   "3086": {
     "name": "Zeal",
+    "nameFr": "Zèle",
     "cost": 1200,
     "from": [
       "1018",
@@ -785,6 +886,7 @@
   },
   "3087": {
     "name": "Statikk Shiv",
+    "nameFr": "Poignard de Statikk",
     "cost": 3000,
     "from": [
       "3144",
@@ -796,6 +898,7 @@
   },
   "3089": {
     "name": "Rabadon's Deathcap",
+    "nameFr": "Coiffe de Rabadon",
     "cost": 3500,
     "from": [
       "1058",
@@ -805,6 +908,7 @@
   },
   "3091": {
     "name": "Wit's End",
+    "nameFr": "Au bout du rouleau",
     "cost": 2800,
     "from": [
       "1043",
@@ -815,6 +919,7 @@
   },
   "3094": {
     "name": "Rapid Firecannon",
+    "nameFr": "Canon ultrarapide",
     "cost": 2650,
     "from": [
       "3086",
@@ -823,6 +928,7 @@
   },
   "3095": {
     "name": "Stormrazor",
+    "nameFr": "Lame tempête",
     "cost": 3200,
     "from": [
       "1038",
@@ -833,6 +939,7 @@
   },
   "3100": {
     "name": "Lich Bane",
+    "nameFr": "Fléau de liche",
     "cost": 2900,
     "from": [
       "3057",
@@ -843,6 +950,7 @@
   },
   "3102": {
     "name": "Banshee's Veil",
+    "nameFr": "Voile de la banshee",
     "cost": 3000,
     "from": [
       "1058",
@@ -853,6 +961,7 @@
   },
   "3107": {
     "name": "Redemption",
+    "nameFr": "Rédemption",
     "cost": 2300,
     "from": [
       "3108",
@@ -862,6 +971,7 @@
   },
   "3108": {
     "name": "Fiendish Codex",
+    "nameFr": "Codex méphitique",
     "cost": 850,
     "from": [
       "1052",
@@ -871,6 +981,7 @@
   },
   "3109": {
     "name": "Knight's Vow",
+    "nameFr": "Vœu du chevalier",
     "cost": 2300,
     "from": [
       "3067",
@@ -882,6 +993,7 @@
   },
   "3110": {
     "name": "Frozen Heart",
+    "nameFr": "Cœur gelé",
     "cost": 2500,
     "from": [
       "3082",
@@ -891,6 +1003,7 @@
   },
   "3111": {
     "name": "Mercury's Treads",
+    "nameFr": "Sandales de Mercure",
     "cost": 1250,
     "from": [
       "1001",
@@ -901,12 +1014,14 @@
   },
   "3112": {
     "name": "Guardian's Orb",
+    "nameFr": "Orbe du gardien",
     "cost": 950,
     "ap": 50,
     "hp": 150
   },
   "3113": {
     "name": "Aether Wisp",
+    "nameFr": "Feu follet éthéré",
     "cost": 900,
     "from": [
       "1052"
@@ -915,6 +1030,7 @@
   },
   "3114": {
     "name": "Forbidden Idol",
+    "nameFr": "Idole interdite",
     "cost": 600,
     "from": [
       "1004"
@@ -922,6 +1038,7 @@
   },
   "3115": {
     "name": "Nashor's Tooth",
+    "nameFr": "Dent de Nashor",
     "cost": 2900,
     "from": [
       "1043",
@@ -932,6 +1049,7 @@
   },
   "3116": {
     "name": "Rylai's Crystal Scepter",
+    "nameFr": "Sceptre de Rylai",
     "cost": 2600,
     "from": [
       "1026",
@@ -943,6 +1061,7 @@
   },
   "3118": {
     "name": "Malignance",
+    "nameFr": "Malfaisance",
     "cost": 2700,
     "from": [
       "3802",
@@ -952,6 +1071,7 @@
   },
   "3119": {
     "name": "Winter's Approach",
+    "nameFr": "Approche de l'hiver",
     "cost": 2400,
     "from": [
       "3070",
@@ -962,6 +1082,7 @@
   },
   "3123": {
     "name": "Executioner's Calling",
+    "nameFr": "Marque du bourreau",
     "cost": 800,
     "from": [
       "1036"
@@ -970,6 +1091,7 @@
   },
   "3124": {
     "name": "Guinsoo's Rageblade",
+    "nameFr": "Lame enragée de Guinsoo",
     "cost": 3000,
     "from": [
       "1052",
@@ -981,6 +1103,7 @@
   },
   "3133": {
     "name": "Caulfield's Warhammer",
+    "nameFr": "Marteau de Caulfield",
     "cost": 1050,
     "from": [
       "1036",
@@ -991,6 +1114,7 @@
   },
   "3134": {
     "name": "Serrated Dirk",
+    "nameFr": "Dague dentelée",
     "cost": 1000,
     "from": [
       "1036",
@@ -1000,6 +1124,7 @@
   },
   "3135": {
     "name": "Void Staff",
+    "nameFr": "Bâton du vide",
     "cost": 3000,
     "from": [
       "4630",
@@ -1009,6 +1134,7 @@
   },
   "3137": {
     "name": "Cryptbloom",
+    "nameFr": "Fleur de crypte",
     "cost": 3000,
     "from": [
       "4630",
@@ -1019,6 +1145,7 @@
   },
   "3139": {
     "name": "Mercurial Scimitar",
+    "nameFr": "Cimeterre mercuriel",
     "cost": 3200,
     "from": [
       "3140",
@@ -1031,6 +1158,7 @@
   },
   "3140": {
     "name": "Quicksilver Sash",
+    "nameFr": "Ceinture de mercure",
     "cost": 1300,
     "from": [
       "1033"
@@ -1039,6 +1167,7 @@
   },
   "3142": {
     "name": "Youmuu's Ghostblade",
+    "nameFr": "Lame spectre de Youmuu",
     "cost": 2800,
     "from": [
       "3134",
@@ -1049,6 +1178,7 @@
   },
   "3143": {
     "name": "Randuin's Omen",
+    "nameFr": "Présage de Randuin",
     "cost": 2700,
     "from": [
       "3082",
@@ -1059,6 +1189,7 @@
   },
   "3144": {
     "name": "Scout's Slingshot",
+    "nameFr": "Fronde de l'éclaireur",
     "cost": 600,
     "from": [
       "1042",
@@ -1067,6 +1198,7 @@
   },
   "3145": {
     "name": "Hextech Alternator",
+    "nameFr": "Alternateur Hextech",
     "cost": 1100,
     "from": [
       "1052",
@@ -1076,6 +1208,7 @@
   },
   "3146": {
     "name": "Hextech Gunblade",
+    "nameFr": "Pistolame Hextech",
     "cost": 3000,
     "from": [
       "1053",
@@ -1088,6 +1221,7 @@
   },
   "3147": {
     "name": "Haunting Guise",
+    "nameFr": "Déguisement hanté",
     "cost": 1300,
     "from": [
       "1052",
@@ -1098,6 +1232,7 @@
   },
   "3152": {
     "name": "Hextech Rocketbelt",
+    "nameFr": "Ceinture-roquette Hextech",
     "cost": 2650,
     "from": [
       "3145",
@@ -1109,6 +1244,7 @@
   },
   "3153": {
     "name": "Blade of The Ruined King",
+    "nameFr": "Lame du roi déchu",
     "cost": 3200,
     "from": [
       "1053",
@@ -1120,6 +1256,7 @@
   },
   "3155": {
     "name": "Hexdrinker",
+    "nameFr": "Hexterminateur",
     "cost": 1300,
     "from": [
       "1036",
@@ -1131,6 +1268,7 @@
   },
   "3156": {
     "name": "Maw of Malmortius",
+    "nameFr": "Gueule de Malmortius",
     "cost": 3100,
     "from": [
       "3155",
@@ -1142,6 +1280,7 @@
   },
   "3157": {
     "name": "Zhonya's Hourglass",
+    "nameFr": "Sablier de Zhonya",
     "cost": 3250,
     "from": [
       "1058",
@@ -1152,6 +1291,7 @@
   },
   "3158": {
     "name": "Ionian Boots of Lucidity",
+    "nameFr": "Bottes de lucidité",
     "cost": 900,
     "from": [
       "1001",
@@ -1161,6 +1301,7 @@
   },
   "3161": {
     "name": "Spear of Shojin",
+    "nameFr": "Lance de Shojin",
     "cost": 3100,
     "from": [
       "1037",
@@ -1172,6 +1313,7 @@
   },
   "3165": {
     "name": "Morellonomicon",
+    "nameFr": "Morellonomicon",
     "cost": 2850,
     "from": [
       "3916",
@@ -1183,6 +1325,7 @@
   },
   "3168": {
     "name": "Immortal Path",
+    "nameFr": "Voie immortelle",
     "cost": 1100,
     "from": [
       "3008"
@@ -1192,6 +1335,7 @@
   },
   "3170": {
     "name": "Swiftmarch",
+    "nameFr": "Célérité martiale",
     "cost": 1000,
     "from": [
       "3009"
@@ -1200,6 +1344,7 @@
   },
   "3171": {
     "name": "Crimson Lucidity",
+    "nameFr": "Lucidité pourpre",
     "cost": 900,
     "from": [
       "3158"
@@ -1208,6 +1353,7 @@
   },
   "3172": {
     "name": "Gunmetal Greaves",
+    "nameFr": "Jambières de métal",
     "cost": 1100,
     "from": [
       "3006"
@@ -1216,6 +1362,7 @@
   },
   "3173": {
     "name": "Chainlaced Crushers",
+    "nameFr": "Broyeuses à chaînes",
     "cost": 1250,
     "from": [
       "3111"
@@ -1225,6 +1372,7 @@
   },
   "3174": {
     "name": "Armored Advance",
+    "nameFr": "Avancée blindée",
     "cost": 1200,
     "from": [
       "3047"
@@ -1234,6 +1382,7 @@
   },
   "3175": {
     "name": "Spellslinger's Shoes",
+    "nameFr": "Chaussures de lanceur de sorts",
     "cost": 1100,
     "from": [
       "3020"
@@ -1242,12 +1391,14 @@
   },
   "3177": {
     "name": "Guardian's Blade",
+    "nameFr": "Lame du gardien",
     "cost": 950,
     "ad": 30,
     "hp": 150
   },
   "3179": {
     "name": "Umbral Glaive",
+    "nameFr": "Glaive d'ombre",
     "cost": 2800,
     "from": [
       "3134",
@@ -1257,6 +1408,7 @@
   },
   "3181": {
     "name": "Hullbreaker",
+    "nameFr": "Brise-coques",
     "cost": 3000,
     "from": [
       "2021",
@@ -1268,6 +1420,7 @@
   },
   "3184": {
     "name": "Guardian's Hammer",
+    "nameFr": "Marteau du gardien",
     "cost": 950,
     "ad": 25,
     "hp": 150,
@@ -1275,6 +1428,7 @@
   },
   "3190": {
     "name": "Locket of the Iron Solari",
+    "nameFr": "Médaillon de l'Iron Solari",
     "cost": 2200,
     "from": [
       "3067",
@@ -1287,6 +1441,7 @@
   },
   "3211": {
     "name": "Spectre's Cowl",
+    "nameFr": "Manteau de spectre",
     "cost": 1250,
     "from": [
       "1028",
@@ -1298,6 +1453,7 @@
   },
   "3222": {
     "name": "Mikael's Blessing",
+    "nameFr": "Bénédiction de Mikael",
     "cost": 2300,
     "from": [
       "3067",
@@ -1307,6 +1463,7 @@
   },
   "3302": {
     "name": "Terminus",
+    "nameFr": "Terminus",
     "cost": 3000,
     "from": [
       "3051",
@@ -1316,22 +1473,27 @@
   },
   "3330": {
     "name": "Scarecrow Effigy",
+    "nameFr": "Effigie d'épouvantail",
     "cost": 0
   },
   "3340": {
     "name": "Stealth Ward",
+    "nameFr": "Balise camouflée",
     "cost": 0
   },
   "3363": {
     "name": "Farsight Alteration",
+    "nameFr": "Altération divinatoire",
     "cost": 0
   },
   "3364": {
     "name": "Oracle Lens",
+    "nameFr": "Brouilleur oraculaire",
     "cost": 0
   },
   "3504": {
     "name": "Ardent Censer",
+    "nameFr": "Encensoir ardent",
     "cost": 2200,
     "from": [
       "3113",
@@ -1341,6 +1503,7 @@
   },
   "3508": {
     "name": "Essence Reaver",
+    "nameFr": "Faux spectrale",
     "cost": 3050,
     "from": [
       "3057",
@@ -1351,14 +1514,17 @@
   },
   "3599": {
     "name": "Kalista's Black Spear",
+    "nameFr": "Lance noire de Kalista",
     "cost": 0
   },
   "3600": {
     "name": "Kalista's Black Spear",
+    "nameFr": "Lance noire de Kalista",
     "cost": 0
   },
   "3742": {
     "name": "Dead Man's Plate",
+    "nameFr": "Plaque du mort",
     "cost": 2900,
     "from": [
       "3066",
@@ -1370,6 +1536,7 @@
   },
   "3748": {
     "name": "Titanic Hydra",
+    "nameFr": "Hydre titanesque",
     "cost": 3300,
     "from": [
       "3077",
@@ -1381,6 +1548,7 @@
   },
   "3801": {
     "name": "Crystalline Bracer",
+    "nameFr": "Bracelet cristallin",
     "cost": 800,
     "from": [
       "1028",
@@ -1390,6 +1558,7 @@
   },
   "3802": {
     "name": "Lost Chapter",
+    "nameFr": "Chapitre perdu",
     "cost": 1200,
     "from": [
       "1052",
@@ -1400,6 +1569,7 @@
   },
   "3803": {
     "name": "Catalyst of Aeons",
+    "nameFr": "Catalyseur de l'éternité",
     "cost": 1300,
     "from": [
       "1028",
@@ -1410,6 +1580,7 @@
   },
   "3814": {
     "name": "Edge of Night",
+    "nameFr": "Manteau de la nuit",
     "cost": 3000,
     "from": [
       "3134",
@@ -1420,10 +1591,12 @@
   },
   "3865": {
     "name": "World Atlas",
+    "nameFr": "Atlas",
     "cost": 400
   },
   "3869": {
     "name": "Celestial Opposition",
+    "nameFr": "Opposition céleste",
     "cost": 400,
     "from": [
       "3867"
@@ -1432,6 +1605,7 @@
   },
   "3870": {
     "name": "Dream Maker",
+    "nameFr": "Rêve éveillé",
     "cost": 400,
     "from": [
       "3867"
@@ -1440,6 +1614,7 @@
   },
   "3871": {
     "name": "Zaz'Zak's Realmspike",
+    "nameFr": "Pique dimensionnelle de Zaz'Zak",
     "cost": 400,
     "from": [
       "3867"
@@ -1448,6 +1623,7 @@
   },
   "3876": {
     "name": "Solstice Sleigh",
+    "nameFr": "Traîneau du solstice",
     "cost": 400,
     "from": [
       "3867"
@@ -1456,6 +1632,7 @@
   },
   "3877": {
     "name": "Bloodsong",
+    "nameFr": "Mélodie du sang",
     "cost": 400,
     "from": [
       "3867"
@@ -1464,6 +1641,7 @@
   },
   "3916": {
     "name": "Oblivion Orb",
+    "nameFr": "Orbe de l'oubli",
     "cost": 800,
     "from": [
       "1052"
@@ -1472,6 +1650,7 @@
   },
   "4005": {
     "name": "Imperial Mandate",
+    "nameFr": "Mandat impérial",
     "cost": 2400,
     "from": [
       "1052",
@@ -1482,6 +1661,7 @@
   },
   "4401": {
     "name": "Force of Nature",
+    "nameFr": "Force de la nature",
     "cost": 2800,
     "from": [
       "1057",
@@ -1493,6 +1673,7 @@
   },
   "4628": {
     "name": "Horizon Focus",
+    "nameFr": "Concentration lointaine",
     "cost": 2700,
     "from": [
       "3108",
@@ -1503,6 +1684,7 @@
   },
   "4629": {
     "name": "Cosmic Drive",
+    "nameFr": "Volonté cosmique",
     "cost": 3000,
     "from": [
       "3067",
@@ -1514,6 +1696,7 @@
   },
   "4630": {
     "name": "Blighting Jewel",
+    "nameFr": "Joyau putréfiant",
     "cost": 1100,
     "from": [
       "1052"
@@ -1522,6 +1705,7 @@
   },
   "4632": {
     "name": "Verdant Barrier",
+    "nameFr": "Barrière verdoyante",
     "cost": 1600,
     "from": [
       "1052",
@@ -1533,6 +1717,7 @@
   },
   "4633": {
     "name": "Riftmaker",
+    "nameFr": "Créateur de failles",
     "cost": 3100,
     "from": [
       "3147",
@@ -1544,6 +1729,7 @@
   },
   "4642": {
     "name": "Bandleglass Mirror",
+    "nameFr": "Miroir en verre de Bandle",
     "cost": 900,
     "from": [
       "1004",
@@ -1554,6 +1740,7 @@
   },
   "4645": {
     "name": "Shadowflame",
+    "nameFr": "Flamme-ombre",
     "cost": 3200,
     "from": [
       "3145",
@@ -1563,6 +1750,7 @@
   },
   "4646": {
     "name": "Stormsurge",
+    "nameFr": "Onde orageuse",
     "cost": 2800,
     "from": [
       "3145",
@@ -1572,6 +1760,7 @@
   },
   "6333": {
     "name": "Death's Dance",
+    "nameFr": "Danse de la mort",
     "cost": 3300,
     "from": [
       "2019",
@@ -1583,6 +1772,7 @@
   },
   "6609": {
     "name": "Chempunk Chainsword",
+    "nameFr": "Épée dentelée chimico-punk",
     "cost": 3000,
     "from": [
       "3123",
@@ -1594,6 +1784,7 @@
   },
   "6610": {
     "name": "Sundered Sky",
+    "nameFr": "Ciel éventré",
     "cost": 3100,
     "from": [
       "2021",
@@ -1604,6 +1795,7 @@
   },
   "6616": {
     "name": "Staff of Flowing Water",
+    "nameFr": "Bâton des flots",
     "cost": 2250,
     "from": [
       "3108",
@@ -1613,6 +1805,7 @@
   },
   "6617": {
     "name": "Moonstone Renewer",
+    "nameFr": "Régénérateur de pierre de lune",
     "cost": 2200,
     "from": [
       "3067",
@@ -1623,6 +1816,7 @@
   },
   "6620": {
     "name": "Echoes of Helia",
+    "nameFr": "Échos d'Helia",
     "cost": 2200,
     "from": [
       "3067",
@@ -1633,6 +1827,7 @@
   },
   "6621": {
     "name": "Dawncore",
+    "nameFr": "Cœur de l'aube",
     "cost": 2500,
     "from": [
       "1026",
@@ -1643,6 +1838,7 @@
   },
   "6631": {
     "name": "Stridebreaker",
+    "nameFr": "Estropieur",
     "cost": 3300,
     "from": [
       "3077",
@@ -1654,6 +1850,7 @@
   },
   "6653": {
     "name": "Liandry's Torment",
+    "nameFr": "Tourment de Liandry",
     "cost": 3000,
     "from": [
       "3147",
@@ -1664,6 +1861,7 @@
   },
   "6655": {
     "name": "Luden's Echo",
+    "nameFr": "Écho de Luden",
     "cost": 2750,
     "from": [
       "3802",
@@ -1673,6 +1871,7 @@
   },
   "6657": {
     "name": "Rod of Ages",
+    "nameFr": "Bâton séculaire",
     "cost": 2600,
     "from": [
       "1026",
@@ -1683,6 +1882,7 @@
   },
   "6660": {
     "name": "Bami's Cinder",
+    "nameFr": "Cendres de Bami",
     "cost": 900,
     "from": [
       "1028",
@@ -1692,6 +1892,7 @@
   },
   "6662": {
     "name": "Iceborn Gauntlet",
+    "nameFr": "Gantelet givrant",
     "cost": 2900,
     "from": [
       "3057",
@@ -1703,6 +1904,7 @@
   },
   "6664": {
     "name": "Hollow Radiance",
+    "nameFr": "Rayonnement du vide",
     "cost": 2800,
     "from": [
       "6660",
@@ -1713,6 +1915,7 @@
   },
   "6665": {
     "name": "Jak'Sho, The Protean",
+    "nameFr": "Jak'Sho, le Protéiforme",
     "cost": 3200,
     "from": [
       "1011",
@@ -1725,6 +1928,7 @@
   },
   "6670": {
     "name": "Noonquiver",
+    "nameFr": "Carquois zénithien",
     "cost": 1300,
     "from": [
       "1036",
@@ -1734,6 +1938,7 @@
   },
   "6672": {
     "name": "Kraken Slayer",
+    "nameFr": "Tueur de krakens",
     "cost": 3000,
     "from": [
       "6690",
@@ -1744,6 +1949,7 @@
   },
   "6673": {
     "name": "Immortal Shieldbow",
+    "nameFr": "Arc-bouclier immortel",
     "cost": 3000,
     "from": [
       "1037",
@@ -1753,6 +1959,7 @@
   },
   "6675": {
     "name": "Navori Flickerblade",
+    "nameFr": "Tremblelame navori",
     "cost": 2650,
     "from": [
       "1042",
@@ -1762,6 +1969,7 @@
   },
   "6676": {
     "name": "The Collector",
+    "nameFr": "Percepteur",
     "cost": 3000,
     "from": [
       "1037",
@@ -1772,6 +1980,7 @@
   },
   "6690": {
     "name": "Rectrix",
+    "nameFr": "Rectrix",
     "cost": 775,
     "from": [
       "1036"
@@ -1780,6 +1989,7 @@
   },
   "6692": {
     "name": "Eclipse",
+    "nameFr": "Éclipse",
     "cost": 2900,
     "from": [
       "3133",
@@ -1790,6 +2000,7 @@
   },
   "6694": {
     "name": "Serylda's Grudge",
+    "nameFr": "Rancune de Serylda",
     "cost": 3000,
     "from": [
       "3133",
@@ -1799,6 +2010,7 @@
   },
   "6695": {
     "name": "Serpent's Fang",
+    "nameFr": "Crochet de serpent",
     "cost": 2500,
     "from": [
       "3134",
@@ -1808,6 +2020,7 @@
   },
   "6696": {
     "name": "Axiom Arc",
+    "nameFr": "Arc axiomatique",
     "cost": 2750,
     "from": [
       "2020",
@@ -1817,6 +2030,7 @@
   },
   "6697": {
     "name": "Hubris",
+    "nameFr": "Orgueil",
     "cost": 2800,
     "from": [
       "3134",
@@ -1826,6 +2040,7 @@
   },
   "6698": {
     "name": "Profane Hydra",
+    "nameFr": "Hydre profane",
     "cost": 2850,
     "from": [
       "3077",
@@ -1835,6 +2050,7 @@
   },
   "6699": {
     "name": "Voltaic Cyclosword",
+    "nameFr": "Cyclosabre voltaïque",
     "cost": 3000,
     "from": [
       "2020",
@@ -1845,6 +2061,7 @@
   },
   "8010": {
     "name": "Bloodletter's Curse",
+    "nameFr": "Malédiction du sanguinaire",
     "cost": 2900,
     "from": [
       "3147",
@@ -1855,6 +2072,7 @@
   },
   "8020": {
     "name": "Abyssal Mask",
+    "nameFr": "Masque abyssal",
     "cost": 2650,
     "from": [
       "3067",

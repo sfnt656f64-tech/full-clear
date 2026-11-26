@@ -24,5 +24,13 @@ export const SHARDS: Record<number, string> = {
 /** Icône d'une rune ou d'un arbre (CDN Data Dragon, sans numéro de version). */
 export const runeIconUrl = (icon: string): string => `https://ddragon.leagueoflegends.com/cdn/img/${icon}`;
 
+/** Fragments de stats : noms du client français. */
+export const SHARDS_FR: Record<number, string> = {
+  5008: "Force adaptative", 5005: "Vitesse d'attaque", 5007: "Accélération de compétence", 5010: "Vitesse de déplacement",
+  5001: "PV croissants", 5011: "PV", 5013: "Ténacité et résistance aux ralentissements",
+};
+/** Nom affiché dans l'appli de bureau : celui du client (français). */
+export const runeNameFr = (id: number): string => RUNES_BY_ID[id]?.name ?? RUNE_TREES[id]?.name ?? SHARDS_FR[id] ?? `#${id}`;
+
 /** Nom anglais (comme les noms d'items et le guide de runes). */
 export const runeName = (id: number): string => RUNES_BY_ID[id]?.nameEn ?? RUNE_TREES[id]?.nameEn ?? SHARDS[id] ?? `#${id}`;

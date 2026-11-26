@@ -25,8 +25,14 @@ export interface StatBuild {
   /** Ajustements à la composition, en clair. */
   reasons: string[];
   /** Règles écrites avant la partie (« si… alors… ») : c'est toi qui les appliques, l'appli ne lit rien en jeu. */
-  ifThen: string[];
+  rules: BuildRule[];
 }
+
+/**
+ * Règle « si… alors… » de build : une condition que tu vois toi-même en jeu, et l'item à prendre (à la place d'un
+ * autre, éventuellement). Le texte est composé à l'affichage, avec les noms dans la langue du client.
+ */
+export interface BuildRule { cond: string; id: string; instead?: string }
 
 /** Items terminés pris en compte (au moins cette part des parties). */
 export const MIN_SHARE = 0.05;
@@ -107,8 +113,8 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
 
   // Bottes : les plus jouées, ou des bottes défensives si les joueurs les prennent sur ce champion.
   let boots = bootsRank[0]?.id ?? null;
-  if (adShare >= 0.7 && usedBoots.has(BOOTS_ARMOR) && boots !== BOOTS_ARMOR) { boots = BOOTS_ARMOR; reasons.push("Plated Steelcaps contre les dégâts physiques"); }
-  else if (adShare <= 0.3 && usedBoots.has(BOOTS_MR) && boots !== BOOTS_MR) { boots = BOOTS_MR; reasons.push("Mercury's Treads contre les dégâts magiques"); }
+  if (adShare >= 0.7 && usedBoots.has(BOOTS_ARMOR) && boots !== BOOTS_ARMOR) { boots = BOOTS_ARMOR; reasons.push(`${input.shop[BOOTS_ARMOR]?.nameFr ?? "Coques en acier"} contre les dégâts physiques`); }
+  else if (adShare <= 0.3 && usedBoots.has(BOOTS_MR) && boots !== BOOTS_MR) { boots = BOOTS_MR; reasons.push(`${input.shop[BOOTS_MR]?.nameFr ?? "Sandales de Mercure"} contre les dégâts magiques`); }
 
   // Bottes après le premier item (le plus courant pour un jungler ou un mid).
   const ids = boots ? [legend[0], boots, ...legend.slice(1)].filter(Boolean) : legend;
@@ -116,15 +122,14 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
     ? ranked(input.parts.flatMap((p) => p.items.map(String).filter((i) => STARTER_MAIN.has(i)).slice(0, 1).map((i) => STARTER_MAIN.get(i)!)))[0]?.id ?? null
     : null;
   // Si… alors… : alternatives jouées sur ce champion, à appliquer toi-même selon ce que tu vois en partie.
-  const name = (id: string) => input.shop[id]?.name ?? id;
-  const ifThen: string[] = [];
+  const rules: BuildRule[] = [];
   const gw = items.find((x) => ANTI_HEAL.has(x.id));
-  if (gw && !ids.includes(gw.id)) ifThen.push(`Si leurs soins pèsent plus que prévu (vol de vie, soigneurs) : ${name(gw.id)} plus tôt.`);
   const arm = items.find((x) => (input.shop[x.id]?.armor ?? 0) >= 30 && !ids.includes(x.id));
   const mr = items.find((x) => (input.shop[x.id]?.mr ?? 0) >= 30 && !ids.includes(x.id));
-  if (arm) ifThen.push(`Si leur menace principale fait des dégâts physiques (elle a pris de l'avance) : ${name(arm.id)}.`);
-  if (mr) ifThen.push(`Si leur menace principale fait des dégâts magiques : ${name(mr.id)}.`);
-  if (boots !== BOOTS_ARMOR && usedBoots.has(BOOTS_ARMOR)) ifThen.push(`Si leurs auto-attaqueurs prennent l'avance : ${name(BOOTS_ARMOR)} à la place de tes bottes.`);
-  if (boots !== BOOTS_MR && usedBoots.has(BOOTS_MR)) ifThen.push(`Si leur contrôle ou leurs mages te gênent : ${name(BOOTS_MR)} à la place de tes bottes.`);
-  return { ids, starter, games: n, reasons, ifThen: ifThen.slice(0, 3) };
+  if (arm) rules.push({ cond: "Leur carry AD est fed", id: arm.id });
+  if (mr) rules.push({ cond: "Leur carry AP est fed", id: mr.id });
+  if (gw && !ids.includes(gw.id)) rules.push({ cond: "Leurs soins font la différence", id: gw.id });
+  if (boots && boots !== BOOTS_ARMOR && usedBoots.has(BOOTS_ARMOR)) rules.push({ cond: "Beaucoup d'auto-attaques en face", id: BOOTS_ARMOR, instead: boots });
+  if (boots && boots !== BOOTS_MR && usedBoots.has(BOOTS_MR)) rules.push({ cond: "Leurs contrôles te gênent", id: BOOTS_MR, instead: boots });
+  return { ids, starter, games: n, reasons, rules: rules.slice(0, 3) };
 }

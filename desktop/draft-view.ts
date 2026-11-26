@@ -65,6 +65,8 @@ export interface DraftView {
   plan?: GamePlan | null;
   /** Plan de partie (tous rôles) : dès que ton champion est choisi, provisoire tant que la draft n'est pas complète ; ajouté par le processus principal. */
   strategy?: Strategy | null;
+  /** Vue simple du plan (à retenir, build, si… alors…, rappels, détails) ; ajoutée par le processus principal. */
+  plain?: import("./coach/plain.ts").PlainPlan | null;
   /** Page de runes recommandée pour le champion survolé ou verrouillé (importable) ; ajoutée par le processus principal. */
   runePage?: (RecommendedPage & { championName: string }) | null;
 }
@@ -72,7 +74,7 @@ export interface DraftView {
 const lite = (c: Champion): ChampLite => ({ id: c.id ?? c.name, name: c.name, icon: `${DDRAGON_IMG}/champion/${c.image ?? `${c.id}.png`}` });
 const itemLite = (k: ItemKey): ItemLite => {
   const it = ITEMS[k];
-  return { key: k, name: it.n, icon: it.image ? `${DDRAGON_IMG}/item/${it.image}` : "", cost: it.cost };
+  return { key: k, name: it.nFr ?? it.n, icon: it.image ? `${DDRAGON_IMG}/item/${it.image}` : "", cost: it.cost };
 };
 
 export function buildDraftView(s: DraftSnapshot): DraftView {
@@ -114,9 +116,9 @@ export function buildDraftView(s: DraftSnapshot): DraftView {
     build: rep && {
       starter: rep.starter.map(([k, why]) => {
         const s = STARTERS[k];
-        return { key: k, name: s.name, nameFr: s.nameFr, icon: `${DDRAGON_IMG}/item/${s.image}`, cost: s.cost, why, effect: s.effectFr };
+        return { key: k, name: s.nameFr, nameFr: s.nameFr, icon: `${DDRAGON_IMG}/item/${s.image}`, cost: s.cost, why, effect: s.effectFr };
       }),
-      boots: rep.boots.map(([k, why]) => ({ name: ITEMS[k].n, t3: BOOTS_T3[k], why })),
+      boots: rep.boots.map(([k, why]) => ({ name: ITEMS[k].nFr ?? ITEMS[k].n, t3: BOOTS_T3[k], why })),
       items: rep.build.map(itemLite),
       notes: rep.notes,
     },

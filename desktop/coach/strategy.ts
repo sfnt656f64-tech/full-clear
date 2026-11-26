@@ -144,7 +144,11 @@ export interface TeamProfile {
   marked: { name: string; lane: Lane; early: boolean; timing: Timing }[];
 }
 
-export interface Reminder { key: string; text: string }
+/**
+ * Rappel personnel (objectif de la semaine) : texte détaillé, consigne courte, et valeur → cible (« 57 % → cible 35 % »,
+ * null si pas encore mesuré).
+ */
+export interface Reminder { key: string; text: string; short: string; value: string | null }
 
 export interface StrategyInput {
   me: { championId: number; lane: Lane };
@@ -175,7 +179,17 @@ export interface Strategy {
   /** Objectifs à prioriser. */
   objectives: string[];
   reminders: Reminder[];
+  /**
+   * Vue simple : consignes d'action courtes, sans chiffre technique (règle : 12 mots au plus, rien de plus que les
+   * détails). « À retenir » : départ et premier gank, objectif prioritaire, piège à éviter. « Si… alors… » : une
+   * condition visible en jeu, puis l'action.
+   */
+  plain: { retain: string[]; ifThen: string[] };
 }
+
+/** « en haut » / « en bas » (côté de la carte), « top » / « mid » / « bot » (lane). */
+const SIDE_FR = { top: "en haut", bot: "en bas" } as const;
+const LANE_SHORT: Record<Lane, string> = { TOP: "top", JUNGLE: "jungle", MIDDLE: "mid", BOTTOM: "bot", UTILITY: "support" };
 
 /** « le top », « l'ADC »… (article compris). */
 const THE: Record<Lane, string> = { TOP: "le top", JUNGLE: "le jungler", MIDDLE: "le mid", BOTTOM: "l'ADC", UTILITY: "le support" };
@@ -254,8 +268,8 @@ export function strategy(inp: StrategyInput): Strategy {
   }
   if (ours.engagers.length > theirs.engagers.length) ifThen.push(`Si un combat groupé se prépare autour d'un objectif : ton équipe a plus d'engage (${ours.engagers.join(", ")}) ; c'est à elle de lancer.`);
   else if (theirs.engagers.length > ours.engagers.length) ifThen.push(`Si leur équipe se regroupe : elle a plus d'engage (${theirs.engagers.join(", ")}) ; évite de te placer devant sans vision.`);
-  if (ours.splitters.length) ifThen.push(`Si la partie est bloquée en milieu de partie : ${ours.splitters.join(", ")} peut faire pression seul en side lane.`);
-  if (theirs.splitters.length) ifThen.push(`Si ${theirs.splitters.join(", ")} part seul en side lane : ne le laisse pas prendre des tours gratuitement, mais n'y va pas seul.`);
+  if (ours.splitters.length) ifThen.push(`Si la partie est bloquée en milieu de partie : ${ours.splitters.join(", ")} peut faire pression seul sur une lane, seul.`);
+  if (theirs.splitters.length) ifThen.push(`Si ${theirs.splitters.join(", ")} part seul sur une lane : ne le laisse pas prendre des tours gratuitement, mais n'y va pas seul.`);
 
   // ----- Moments de force -----
   const power: string[] = [];
@@ -308,7 +322,7 @@ export function strategy(inp: StrategyInput): Strategy {
     } else {
       // Aucun facteur favorable : pas de lane à viser d'avance, départ comme la majorité.
       const side = majority ?? p.start.side;
-      const buff = inp.side == null ? "" : ` (${(inp.side === "blue") === (side === "top") ? "Blue Buff" : "Red Buff"})`;
+      const buff = inp.side == null ? "" : ` (${(inp.side === "blue") === (side === "top") ? "buff bleu" : "buff rouge"})`;
       path.push(`Départ côté ${side}${buff}${share != null ? `, comme la majorité (${share} % des joueurs Émeraude+ de ton champion)` : ""}.`);
       path.push(`Aucune lane nettement plus gankable d'après la draft${con.length ? ` (contre ${laneName} : ${con.join(", ")})` : ""} : choisis ton premier gank à la fin de ton tour, selon la position des vagues.`);
     }
@@ -330,7 +344,55 @@ export function strategy(inp: StrategyInput): Strategy {
     objectives.push(side ? `Aucun duel de lane net en méta (top et bot) : vise d'abord ${side}, du côté de ton premier gank, où tu seras déjà.` : "Aucun duel de lane net en méta : priorise l'objectif du côté où tes laners ont la priorité à ce moment-là.");
   }
 
-  return { provisional: !inp.complete, ours, theirs, winCondition: { summary, ifThen: ifThen.slice(0, 5) }, power, enemyJungler, path, objectives: objectives.slice(0, 4), reminders: inp.reminders };
+  // ----- Vue simple (n'affirme rien de plus que les détails ci-dessus) -----
+  const retain: string[] = [];
+  const plainIf: string[] = [];
+  const isJg = inp.me.lane === "JUNGLE";
+  // 1. Départ et premier gank.
+  if (isJg && inp.plan) {
+    const p = inp.plan, lane = p.firstGank;
+    const majority = p.start.topShare != null ? (p.start.topShare >= 50 ? "top" : "bot") : null;
+    if (gankFactors.pro.length) retain.push(`Commence ${SIDE_FR[p.start.side]}, gank ${LANE_SHORT[lane]} après ton premier tour de camps.`);
+    else retain.push(`Commence ${SIDE_FR[majority ?? p.start.side]} : aucune lane plus gankable d'avance.`);
+  }
+  // 2. Objectif prioritaire (duel de lane net, sinon le côté du premier gank s'il est visé).
+  if (bot && bot.wr > bot.base) retain.push("Joue les dragons : ta bot lane gagne son duel.");
+  else if (top && top.wr > top.base) retain.push("Joue les larves : ton top gagne son duel.");
+  else if (bot && bot.wr < bot.base) retain.push("Dragon difficile : s'ils le prennent, prends l'autre côté.");
+  else if (top && top.wr < top.base) retain.push("Ne conteste pas les larves sans ton top.");
+  else if (gankFactors.pro.length && inp.plan?.firstGank === "BOTTOM") retain.push("Premier dragon en priorité : tu seras déjà côté bot.");
+  else if (gankFactors.pro.length && inp.plan?.firstGank === "TOP") retain.push("Larves en priorité : tu seras déjà côté top.");
+  // 3. Piège à éviter.
+  const ejName = ej ? name(ej) : null;
+  if (isJg && ejName) {
+    const d = earlyDuel(inp.metaParts, inp.me.championId, ej!, "JUNGLE");
+    retain.push(!d ? `Pas d'invade : duel inconnu contre ${ejName}, joue tes camps.`
+      : !d.net ? `Pas d'invade : duel incertain contre ${ejName}, joue tes camps.`
+      : d.gold > 0 ? `Envahis ${ejName} tôt : tu gagnes ce duel en début de partie.`
+      : `Pas d'invade : ${ejName} gagne ce duel, joue tes camps.`);
+  } else if (theirs.engagers.length > ours.engagers.length) retain.push("Ne te place pas devant sans vision : ils engagent mieux.");
+
+  // Si… alors… : condition visible en jeu → action.
+  const ejT = ej ? timing(inp.metaParts, ej, "JUNGLE", "JUNGLE") : null;
+  if (isJg && ejName && ejT?.verdict === "early") plainIf.push(`${ejName} disparaît avant 6 min → surveille tes camps et tes lanes.`);
+  for (const x of theirs.marked) {
+    if (x.lane === "JUNGLE" || x.lane === inp.me.lane) continue;
+    if (x.early) plainIf.push(`Ton ${LANE_SHORT[x.lane]} perd ses échanges contre ${x.name} → couvre-le d'abord.`);
+    else plainIf.push(`${x.name} s'avance avant 10 min → gank sa lane en priorité.`);
+  }
+  for (const x of ours.marked) {
+    if (x.lane === inp.me.lane) plainIf.push(x.early ? "Tu prends l'avance → enchaîne avant leurs premiers objets." : "Tes premiers objets pas finis → évite les combats.");
+    else if (x.early) plainIf.push(`${x.name} gagne sa lane → joue les objectifs avec lui.`);
+    else plainIf.push(`${x.name} se fait plonger → aide-le, il porte la fin.`);
+  }
+  if (ours.engagers.length > theirs.engagers.length) plainIf.push("Combat autour d'un objectif → c'est à ton équipe d'engager.");
+  else if (theirs.engagers.length > ours.engagers.length && !retain.some((r) => r.includes("engagent"))) plainIf.push("Ils se regroupent → reste derrière, avec de la vision.");
+  for (const s of theirs.splitters) plainIf.push(`${s} part seul sur une lane → ne le suis pas seul.`);
+
+  return {
+    provisional: !inp.complete, ours, theirs, winCondition: { summary, ifThen: ifThen.slice(0, 5) }, power, enemyJungler, path, objectives: objectives.slice(0, 4), reminders: inp.reminders,
+    plain: { retain: retain.slice(0, 3), ifThen: plainIf },
+  };
 }
 
 /** Tes rappels personnels, tirés de tes objectifs de la semaine (valeur récente et cible). */
@@ -341,22 +403,15 @@ export function remindersFrom(goals: { key: string; label: string; unit: string;
     deathsBeforeObj: "Ne meurs pas dans la minute avant un objectif adverse : place-toi avec vision, ou recule.",
     cs10: "CS à 10 min : finis tes camps entre deux actions plutôt que d'attendre.",
   };
+  const SHORT: Record<string, string> = {
+    uncompensatedEarly: "Ne laisse pas d'objectif gratuit avant 15 min.",
+    deathsBeforeObj: "Ne meurs pas juste avant un objectif adverse.",
+    cs10: "Finis tes camps entre deux actions.",
+  };
   return goals.filter((g) => TEXT[g.key]).map((g) => ({
     key: g.key,
     text: `${TEXT[g.key]} (${g.label} : ${g.value != null ? `${fmt(g.value, g.unit)} sur tes ${g.n} dernières parties` : "pas encore de mesure"}, cible ${g.better === "-" ? "≤" : "≥"} ${fmt(g.target, g.unit)}.)`,
+    short: SHORT[g.key],
+    value: `${g.key === "cs10" ? "CS à 10 min : " : ""}${g.value != null ? fmt(g.value, g.unit) : "pas encore mesuré"} → cible ${fmt(g.target, g.unit)}`,
   }));
-}
-
-/**
- * Lignes courtes pour l'overlay au début de la partie : le plan écrit en draft (départ, « si… alors… », objectif,
- * rappels). Rien n'y dépend de ce qui se passe en jeu.
- */
-export function strategyTips(s: Strategy): string[] {
-  const cut = (t: string) => t.replace(/\s*\((?:comme|contrairement|écart|par champion)[^)]*\)\.?$/, ".").replace(/, pour finir[^.(]*/, "");
-  return [
-    ...(s.path[0] ? [cut(s.path[0])] : []),
-    ...s.winCondition.ifThen.slice(0, 2),
-    ...s.objectives.slice(0, 1),
-    ...s.reminders.map((r) => r.text.replace(/\s*\([^()]*\)\.?$/, "").replace(/\s*\(.*\.\)$/, "")),
-  ];
 }
