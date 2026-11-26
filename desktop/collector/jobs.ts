@@ -137,11 +137,10 @@ function refreshIds(ctx: JobContext, puuid: string, riotId: string, force = fals
   const st = ctx.store.jobStatus(key);
   if (!st) ctx.store.enqueue("myMatchIds", key, PRIORITY.mine, { puuid, riotId, start: 0 });
   else if (st.status !== "pending" && st.status !== "running" && (force || ctx.now() - st.updatedAt >= REFRESH_MS)) ctx.store.requeue(key);
-  // Tous les modes (expérience sur un champion, normales en draft) : même rythme, priorité basse.
-  const all = allIdsKey(puuid, 0);
-  const sa = ctx.store.jobStatus(all);
-  if (!sa) ctx.store.enqueue("myAllIds", all, PRIORITY.mineOld, { puuid, riotId, start: 0 }, ALL_MODES_RANK);
-  else if (sa.status !== "pending" && sa.status !== "running" && (force || ctx.now() - sa.updatedAt >= REFRESH_MS)) ctx.store.requeue(all);
+  // Tous les modes (expérience sur un champion, normales en draft) : lancé une première fois à la fin de l'historique
+  // classé (listPage), puis rafraîchi au même rythme que la saison.
+  const sa = ctx.store.jobStatus(allIdsKey(puuid, 0));
+  if (sa && sa.status !== "pending" && sa.status !== "running" && (force || ctx.now() - sa.updatedAt >= REFRESH_MS)) ctx.store.requeue(allIdsKey(puuid, 0));
 }
 
 const account: Handler = async (ctx, p: { riotId: string }) => {
@@ -178,6 +177,10 @@ async function listPage(ctx: JobContext, p: IdsPayload, scope: "season" | "histo
       } else {
         ctx.store.enqueue("myHistoryIds", historyKey(p.puuid, nextP.start), prio, nextP);
       }
+    } else if (!season) {
+      // Fin de l'historique classé : toutes tes parties classées sont en file. La liste « tous modes » peut commencer
+      // sans relire de partie classée.
+      ctx.store.enqueue("myAllIds", allIdsKey(p.puuid, 0), PRIORITY.mineOld, { puuid: p.puuid, riotId: p.riotId, start: 0 }, ALL_MODES_RANK);
     }
   });
 }
@@ -192,7 +195,8 @@ const myAllIds: Handler = async (ctx, p: IdsPayload) => {
   let fresh = 0;
   ctx.store.tx(() => {
     for (const matchId of ids) {
-      if (ctx.store.knownGame(matchId, p.riotId)) continue;
+      // Déjà connue, ou déjà en file comme partie classée (même pas encore lue) : rien à relire.
+      if (ctx.store.knownGame(matchId, p.riotId) || ctx.store.jobStatus(matchKey(matchId, p.puuid))) continue;
       if (ctx.store.enqueue("myOther", `myOther:${matchId}:${p.puuid}`, PRIORITY.mineOld, { matchId, puuid: p.puuid, riotId: p.riotId }, ALL_MODES_RANK)) fresh++;
     }
     if (ids.length === PAGE && fresh > 0) {

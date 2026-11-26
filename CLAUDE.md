@@ -42,4 +42,7 @@ une décision qui lui revient.
 - À chaque nouvel installateur, augmenter le numéro de version (`package.json`, ex. 0.2.0 → 0.3.0) : un installateur
   n'en écrase jamais un précédent, et on sait quelle version tourne.
 - Commiter chaque étape validée, pousser la branche, et donner le lien pour ouvrir la PR.
+- Après chaque push, attendre le résultat des vérifications GitHub (Tests, et Déploiement sur main) ; en cas d'échec,
+  lire les journaux, corriger et repousser. Ne jamais proposer de merger une PR dont les vérifications ne sont pas
+  au vert. Lancer aussi les tests sous la version de Node de la CI (Node 22 : `npx -y node@22 node_modules/vitest/vitest.mjs run`).
 - Ne jamais commiter de données personnelles (Riot ID, clé API, `.env`, base `riot.db`) : le dépôt est public.
