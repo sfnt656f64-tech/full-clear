@@ -324,6 +324,7 @@ export class CollectorStore {
         where timeline_v6 = 0 and remake = 0 order by start_ms desc`),
       putMastery: this.db.prepare("insert or replace into meta_mastery (match_id, champion_id, role, win, points) values (?, ?, ?, ?, ?)"),
       putOtherGame: this.db.prepare("insert or replace into my_other_games (match_id, account, start_ms, queue, champion_id, role, win, remake) values (?, ?, ?, ?, ?, ?, ?, ?)"),
+      standardWithoutDetail: this.db.prepare("select o.match_id from my_other_games o where o.account = ? and o.queue in (400, 440) and o.remake = 0 and not exists (select 1 from my_detail d where d.match_id = o.match_id and d.account = o.account)"),
       knownGame: this.db.prepare("select 1 from my_games where match_id = ? and account = ? union all select 1 from my_other_games where match_id = ? and account = ? limit 1"),
       putJungleMastery: this.db.prepare("insert or replace into meta_jungle_mastery (match_id, participant_id, champion_id, win, points, read_after_ms) values (?, ?, ?, ?, ?, ?)"),
       hasJungleMastery: this.db.prepare("select 1 from meta_jungle_mastery where match_id = ?"),
@@ -436,6 +437,8 @@ export class CollectorStore {
   putOtherGame(g: { matchId: string; account: string; startMs: number; queue: number; championId: number; role: string; win: boolean; remake: boolean }): void {
     this.st.putOtherGame.run(g.matchId, g.account, g.startMs, g.queue, g.championId, g.role, g.win ? 1 : 0, g.remake ? 1 : 0);
   }
+  /** Normales en draft et flexibles déjà listées mais sans détail (lues avant que leur détail soit gardé). */
+  standardWithoutDetail(account: string): string[] { return (this.st.standardWithoutDetail.all(account) as { match_id: string }[]).map((r) => r.match_id); }
   /** Partie déjà connue (Solo/Duo ou autre mode) pour ce compte. */
   knownGame(matchId: string, account: string): boolean { return !!this.st.knownGame.get(matchId, account, matchId, account); }
 

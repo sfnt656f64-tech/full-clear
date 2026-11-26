@@ -80,10 +80,11 @@ export function trades(events: Ev[], team: number, teamOf: Map<number, number>, 
 type Num = Record<string, unknown>;
 const n = (v: unknown) => (typeof v === "number" ? v : 0);
 
-export function gameMetrics(d: Detail): GameMetrics | null {
+/** `queues` : files prises en compte (Solo/Duo pour le suivi des objectifs ; normale en draft aussi pour l'analyse d'une partie). */
+export function gameMetrics(d: Detail, queues: ReadonlySet<number> = new Set([420])): GameMetrics | null {
   const me = d.match.parts.find((p) => p.me);
   // Sans chronologie (rare, parties anciennes) : mesures inconnues, la partie n'est pas suivie.
-  if (!me || me.teamPosition !== "JUNGLE" || me.gameEndedInEarlySurrender || d.match.queue !== 420 || !d.timeline) return null;
+  if (!me || me.teamPosition !== "JUNGLE" || me.gameEndedInEarlySurrender || !queues.has(d.match.queue) || !d.timeline) return null;
   const pid = n(me.participantId), team = n(me.teamId);
   const ej = d.match.parts.find((p) => n(p.teamId) !== team && p.teamPosition === "JUNGLE");
   const events = d.timeline.frames.flatMap((f) => f.e);

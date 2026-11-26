@@ -22,6 +22,8 @@ import { META_LABELS, metaJungleMastery, metaLeague, metaMatch, metaPlayer, meta
 export const QUEUE_SOLO_DUO = 420;
 /** Normale en draft : seule file hors classée aux règles standard de la Faille gardée pour les stats. */
 export const QUEUE_DRAFT_NORMAL = 400;
+/** Classée flexible : règles standard aussi (stats et analyse), lue comme les autres modes. */
+export const QUEUE_FLEX = 440;
 const PAGE = 100;
 /** Délai minimal entre deux vérifications de nouvelles parties sur un compte. */
 export const REFRESH_MS = 20 * 60_000;
@@ -139,6 +141,8 @@ function refreshIds(ctx: JobContext, puuid: string, riotId: string, force = fals
   else if (st.status !== "pending" && st.status !== "running" && (force || ctx.now() - st.updatedAt >= REFRESH_MS)) ctx.store.requeue(key);
   // Tous les modes (expérience sur un champion, normales en draft) : lancé une première fois à la fin de l'historique
   // classé (listPage), puis rafraîchi au même rythme que la saison.
+  // Normales en draft et flexibles sans détail : relues une fois (même travail, clé à part).
+  for (const matchId of ctx.store.standardWithoutDetail(riotId)) ctx.store.enqueue("myOther", `myOtherDetail:${matchId}:${puuid}`, PRIORITY.mineOld, { matchId, puuid, riotId }, ALL_MODES_RANK);
   const sa = ctx.store.jobStatus(allIdsKey(puuid, 0));
   if (sa && sa.status !== "pending" && sa.status !== "running" && (force || ctx.now() - sa.updatedAt >= REFRESH_MS)) ctx.store.requeue(allIdsKey(puuid, 0));
 }
@@ -206,7 +210,7 @@ const myAllIds: Handler = async (ctx, p: IdsPayload) => {
   });
 };
 
-/** Partie hors Solo/Duo : champion, mode, victoire ; normale en draft : aussi son détail anonyme (stats). */
+/** Partie hors Solo/Duo : champion, mode, victoire ; normale en draft et flexible : aussi leur détail anonyme (stats). */
 const myOther: Handler = async (ctx, p: { matchId: string; puuid: string; riotId: string }) => {
   const m = await ctx.api.get<MatchV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}`, PRIORITY.mineOld, { allow404: true });
   if (!m || m.info.queueId === QUEUE_SOLO_DUO) return; // Solo/Duo : déjà lue par la collecte de tes parties
@@ -214,7 +218,7 @@ const myOther: Handler = async (ctx, p: { matchId: string; puuid: string; riotId
   if (!me) return;
   const start = (m.info as { gameStartTimestamp?: number }).gameStartTimestamp ?? m.info.gameCreation;
   ctx.store.putOtherGame({ matchId: p.matchId, account: p.riotId, startMs: start, queue: m.info.queueId, championId: me.championId, role: me.teamPosition ?? "", win: me.win, remake: !!me.gameEndedInEarlySurrender });
-  if (m.info.queueId === QUEUE_DRAFT_NORMAL && !me.gameEndedInEarlySurrender) {
+  if ((m.info.queueId === QUEUE_DRAFT_NORMAL || m.info.queueId === QUEUE_FLEX) && !me.gameEndedInEarlySurrender) {
     const t = await ctx.api.get<TimelineV5>("europe", `/lol/match/v5/matches/${encodeURIComponent(p.matchId)}/timeline`, PRIORITY.mineOld, { allow404: true });
     ctx.store.putDetail(p.matchId, p.riotId, packDetail(cleanDetail(p.riotId, m as never, t as never, p.puuid)));
   }

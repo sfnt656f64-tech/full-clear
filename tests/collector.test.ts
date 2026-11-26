@@ -402,3 +402,16 @@ describe("anciennes saisons", () => {
     store.close();
   });
 });
+
+describe("parties standard hors Solo/Duo sans détail", () => {
+  it("une flexible déjà listée sans détail est relue une fois, avec sa chronologie", async () => {
+    const store = new CollectorStore(tmpDb());
+    store.set(accountKey("Moi#EUW"), ME);
+    store.putOtherGame({ matchId: "EUW1_7", account: "Moi#EUW", startMs: 1, queue: 440, championId: 141, role: "JUNGLE", win: true, remake: false });
+    store.putOtherGame({ matchId: "EUW1_8", account: "Moi#EUW", startMs: 1, queue: 450, championId: 141, role: "", win: true, remake: false });
+    scheduleAccounts({ store, api: new RiotScheduler({ apiKey: "k", windows: FAST }), now: () => 0, pool: () => new Set<number>() }, ["Moi#EUW"]);
+    const keys = (store.db.prepare("select key from jobs where kind = 'myOther'").all() as { key: string }[]).map((j) => j.key);
+    expect(keys).toEqual([`myOtherDetail:EUW1_7:${ME}`]); // pas l'ARAM
+    store.close();
+  });
+});

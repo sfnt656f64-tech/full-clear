@@ -40,6 +40,7 @@ import ddChamps from "../../src/data/generated/champions.json";
 import { METRICS as ALL_METRICS } from "../analysis/analysis.ts";
 import { AXES } from "../analysis/radar.ts";
 import { myGameFromDetail } from "../analysis/opponent.ts";
+import { postGame, type PostGame } from "../analysis/postgame.ts";
 import { DEFAULT_TAU, firstGamesEffect, statsSpread, WEIGHTS, type AxisGame } from "../reco/progress.ts";
 import { readJungleMastery, readJungleMeta, readOtherGames } from "../reco/progress-read.ts";
 import { progressAdvice, progression, readiness, RIFT_QUEUES, STANDARD_QUEUES, type ChampionFlag } from "../reco/progression.ts";
@@ -348,10 +349,10 @@ export class Engine {
     });
   }
 
-  /** Tes normales en draft (règles standard de la Faille), reconstruites depuis leur détail. */
+  /** Tes normales en draft et classées flexibles (règles standard de la Faille), reconstruites depuis leur détail. */
   private draftNormals(): AnalysisGame[] {
     return this.memo("draftNormals", () => {
-      const keys = new Set(readOtherGames(this.dbFile).filter((g) => g.queue === 400 && !g.remake).map((g) => `${g.matchId}|${g.account}`));
+      const keys = new Set(readOtherGames(this.dbFile).filter((g) => (g.queue === 400 || g.queue === 440) && !g.remake).map((g) => `${g.matchId}|${g.account}`));
       if (!keys.size) return [];
       const out: AnalysisGame[] = [];
       let db: DatabaseSync | null = null;
@@ -460,6 +461,42 @@ export class Engine {
         comfort: core.comfort, notForMe: core.notForMe, learningSpeed: firstGamesEffect(groups), tau: core.tau, calibration, tracking,
         myAxes: radarOf(all.filter((g) => g.role === "JUNGLE" && g.season === core.season), ref)?.values ?? [],
       };
+    });
+  }
+
+/**
+   * Analyses d'après-partie de tes dernières parties (classées et normales en draft), les plus récentes d'abord.
+   * Pour chaque partie, les points à travailler et ta moyenne ne viennent que des parties d'avant.
+   */
+  postGames(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, targets: { uncompensatedEarly: number; deathsBeforeObj: number; cs10: number }, limit = 10, flags: Record<string, ChampionFlag> = {}): PostGame[] {
+    return this.memo(`postGames:${excluded.join(",")}:${tier}:${JSON.stringify(targets)}:${limit}:${JSON.stringify(flags)}`, () => {
+      const ranked = this.analysisGames(excluded);
+      const normals = this.draftNormals().filter((g) => !excluded.includes(g.championId));
+      const rankedKeys = new Set(ranked.map((g) => `${g.matchId}|${g.account}`));
+      const all = [...ranked, ...normals].sort((a, b) => b.startMs - a.startMs);
+      const tracking = new Map(this.progression(excluded, tier, "progress", flags).tracking.map((t) => [t.championId, t]));
+      let db: DatabaseSync | null = null;
+      const out: PostGame[] = [];
+      try {
+        db = new DatabaseSync(this.dbFile, { readOnly: true });
+        const get = db.prepare("select data from my_detail where match_id = ? and account = ?");
+        for (const g of all) {
+          if (out.length >= limit) break;
+          const row = get.get(g.matchId, g.account) as { data: Uint8Array } | undefined;
+          if (!row) continue;
+          const d = unpackDetail(row.data);
+          const before = all.filter((h) => h.startMs < g.startMs);
+          const ref = this.metaRef([g.role], tier);
+          const t = tracking.get(g.championId);
+          out.push(postGame({
+            game: g, detail: d, queue: rankedKeys.has(`${g.matchId}|${g.account}`) ? "ranked" : d.match.queue === 440 ? "flex" : "draftNormal",
+            metrics: gameMetrics(d, new Set([420, 440, 400])), targets,
+            sameChampion: before.filter((h) => h.championId === g.championId && h.role === g.role && h.season === g.season),
+            recent: before.filter((h) => h.role === g.role), ref, refName: REF_TIERS[tier].short, progression: t ? `${t.text}` : null,
+          }));
+        }
+      } finally { db?.close(); }
+      return out;
     });
   }
 
