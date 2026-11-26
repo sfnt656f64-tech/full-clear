@@ -25,6 +25,7 @@ describe("analyse d'après-partie", () => {
     const m = keyMoments(detail());
     expect(m.map((x) => `${x.time} ${x.kind}`)).toEqual(["4:00 death", "4:30 objective-theirs", "6:00 kill", "7:00 objective-ours"]);
     expect(m[0].text).toMatch(/Lee Sin en 1 contre 1 — ils prennent dragon à 4:30/);
+    expect(m[1].text).toBe("Ils prennent : dragon infernal.");
     expect(m[3].text).toMatch(/par toi/);
   });
 

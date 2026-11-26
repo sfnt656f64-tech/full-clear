@@ -43,7 +43,7 @@ import { myGameFromDetail } from "../analysis/opponent.ts";
 import { postGame, type PostGame } from "../analysis/postgame.ts";
 import { DEFAULT_TAU, firstGamesEffect, statsSpread, WEIGHTS, type AxisGame } from "../reco/progress.ts";
 import { readJungleMastery, readJungleMeta, readOtherGames } from "../reco/progress-read.ts";
-import { progressAdvice, progression, readiness, RIFT_QUEUES, STANDARD_QUEUES, type ChampionFlag } from "../reco/progression.ts";
+import { progressAdvice, progression, readiness, RIFT_QUEUES, STAGE_LABEL, STANDARD_QUEUES, type ChampionFlag } from "../reco/progression.ts";
 
 const DIFFICULTY = new Map((Object.values(ddChamps) as { key: string | number; info: { difficulty: number } }[]).map((x) => [Number(x.key), x.info.difficulty]));
 import type { MyGameRow } from "../stats/my-stats.ts";
@@ -442,7 +442,7 @@ export class Engine {
       const tracked = new Map<number, TrackEntry["source"]>();
       for (const e of core.candidates.slice(0, 2)) tracked.set(e.championId, "advice");
       for (const [c, f] of fm) if (f === "progress") tracked.set(c, "flag");
-      const tracking: TrackEntry[] = [...tracked].map(([c, source]) => {
+      const track = ([c, source]: [number, TrackEntry["source"]]): TrackEntry => {
         const ranked = all.filter((g) => g.championId === c);
         const rift = others.filter((g) => g.championId === c && RIFT_QUEUES.has(g.queue));
         const draft = normals.filter((g) => g.championId === c && g.role === "JUNGLE");
@@ -451,7 +451,10 @@ export class Engine {
         const rankedRadar = radarOf(rankedJ, ref);
         const r = readiness({ experience: ranked.length + rift.length, standard, ranked: rankedRadar, rankedGames: rankedJ.length });
         return { championId: c, source, experience: ranked.length + rift.length, draftNormal: draft.length, rankedGames: rankedJ.length, standard, ranked: rankedRadar, ...r };
-      });
+      };
+      const tracking = [...tracked].map(track);
+      // Repère de chaque champion de progression (tous, hors confort) : pour l'analyse d'après-partie.
+      const readinessAll = core.candidates.map((e) => track([e.championId, tracked.get(e.championId) ?? "advice"]));
       void STANDARD_QUEUES;
 
       return {
@@ -460,6 +463,7 @@ export class Engine {
         candidates: core.candidates.slice(0, 15).map((e) => ({ ...e, myGames: core.mine.get(e.championId)?.games ?? 0, myWins: core.mine.get(e.championId)?.wins ?? 0 })),
         comfort: core.comfort, notForMe: core.notForMe, learningSpeed: firstGamesEffect(groups), tau: core.tau, calibration, tracking,
         myAxes: radarOf(all.filter((g) => g.role === "JUNGLE" && g.season === core.season), ref)?.values ?? [],
+        readinessAll,
       };
     });
   }
@@ -474,7 +478,7 @@ export class Engine {
       const normals = this.draftNormals().filter((g) => !excluded.includes(g.championId));
       const rankedKeys = new Set(ranked.map((g) => `${g.matchId}|${g.account}`));
       const all = [...ranked, ...normals].sort((a, b) => b.startMs - a.startMs);
-      const tracking = new Map(this.progression(excluded, tier, "progress", flags).tracking.map((t) => [t.championId, t]));
+      const tracking = new Map(this.progression(excluded, tier, "progress", flags).readinessAll.map((t) => [t.championId, t]));
       let db: DatabaseSync | null = null;
       const out: PostGame[] = [];
       try {
@@ -492,7 +496,7 @@ export class Engine {
             game: g, detail: d, queue: rankedKeys.has(`${g.matchId}|${g.account}`) ? "ranked" : d.match.queue === 440 ? "flex" : "draftNormal",
             metrics: gameMetrics(d, new Set([420, 440, 400])), targets,
             sameChampion: before.filter((h) => h.championId === g.championId && h.role === g.role && h.season === g.season),
-            recent: before.filter((h) => h.role === g.role), ref, refName: REF_TIERS[tier].short, progression: t ? `${t.text}` : null,
+            recent: before.filter((h) => h.role === g.role), ref, refName: REF_TIERS[tier].short, progression: t ? `${STAGE_LABEL[t.stage]} : ${t.text}` : null,
           }));
         }
       } finally { db?.close(); }

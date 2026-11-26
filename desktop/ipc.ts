@@ -267,4 +267,6 @@ export interface ProgressionView {
   tracking: TrackEntry[];
   /** Ton radar en jungle (saison en cours) : tes axes forts. */
   myAxes: (number | null)[];
+  /** Repère de chaque champion de progression (hors confort), pour l'analyse d'après-partie. */
+  readinessAll: TrackEntry[];
 }

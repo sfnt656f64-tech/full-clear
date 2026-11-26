@@ -44,6 +44,7 @@ export interface PostGame {
   work: string[];
 }
 
+const DRAGON_FR: Record<string, string> = { FIRE: "infernal", WATER: "océanique", AIR: "des nuages", EARTH: "des montagnes", CHEMTECH: "chemtech", HEXTECH: "hextech", ELDER: "ancestral" };
 const OBJ_LABEL: Record<string, string> = { DRAGON: "dragon", HORDE: "larve du Néant", RIFTHERALD: "Héraut", BARON_NASHOR: "Nashor", ATAKHAN: "Atakhan" };
 
 /** Moments clés de la chronologie : tes morts (et qui), tes kills, les objectifs pris et perdus. */
@@ -62,14 +63,15 @@ export function keyMoments(d: Detail): Moment[] {
     if (e.type === "CHAMPION_KILL" && n(e.victimId) === pid) {
       const helpers = ((e.assistingParticipantIds as number[] | undefined) ?? []).length;
       const enemyObj = objs.find((o) => n(o.killerTeamId) !== team && n(o.timestamp) > t && n(o.timestamp) - t <= MIN);
-      out.push({ t, time: mmss(t), kind: "death", text: `Mort, tué par ${name(champOf.get(n(e.killerId)) ?? 0)}${helpers ? ` (+${helpers})` : " en 1 contre 1"}${enemyObj ? ` — ils prennent ${OBJ_LABEL[String(enemyObj.monsterType)] ?? "un objectif"} à ${mmss(n(enemyObj.timestamp))}` : ""}.` });
+      out.push({ t, time: mmss(t), kind: "death", text: `Mort, tué par ${name(champOf.get(n(e.killerId)) ?? 0)}${helpers ? ` avec ${helpers} autre${helpers > 1 ? "s" : ""}` : " en 1 contre 1"}${enemyObj ? ` — ils prennent ${OBJ_LABEL[String(enemyObj.monsterType)] ?? "un objectif"} à ${mmss(n(enemyObj.timestamp))}` : ""}.` });
     } else if (e.type === "CHAMPION_KILL" && n(e.killerId) === pid) {
       out.push({ t, time: mmss(t), kind: "kill", text: `Kill sur ${name(champOf.get(n(e.victimId)) ?? 0)}.` });
     } else if (e.type === "ELITE_MONSTER_KILL" && n(e.killerTeamId) > 0) {
       const type = String(e.monsterType);
       if (type === "HORDE") { if (t - lastGrub < 90_000) continue; lastGrub = t; }
       const ours = n(e.killerTeamId) === team;
-      const label = type === "DRAGON" && e.monsterSubType ? `${OBJ_LABEL.DRAGON} (${String(e.monsterSubType).replace(/_DRAGON$/, "").toLowerCase()})` : OBJ_LABEL[type] ?? type.toLowerCase();
+      const sub = String(e.monsterSubType ?? "").replace(/_DRAGON$/, "");
+      const label = type === "DRAGON" ? `dragon${DRAGON_FR[sub] ? ` ${DRAGON_FR[sub]}` : ""}` : OBJ_LABEL[type] ?? type.toLowerCase();
       out.push({ t, time: mmss(t), kind: ours ? "objective-ours" : "objective-theirs", text: `${ours ? "Ton équipe prend" : "Ils prennent"} : ${label}${n(e.killerId) === pid ? " (par toi)" : ""}.` });
     }
   }
