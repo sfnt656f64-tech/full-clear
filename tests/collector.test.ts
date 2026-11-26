@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Collector, type CollectorStatus } from "../desktop/collector/collector";
-import { accountKey, HANDLERS, historyKey, allIdsKey, idsKey, masteryKey, scheduleAccounts } from "../desktop/collector/jobs";
+import { accountKey, HANDLERS, historyKey, idsKey, masteryKey, matchKey, scheduleAccounts } from "../desktop/collector/jobs";
 import { readMyMastery } from "../desktop/stats/read";
 import { at15, patchOf, summarizeMyGame, type MatchV5, type TimelineV5 } from "../desktop/collector/my-games";
 import { KeyRefusedError, PRIORITY, RiotScheduler } from "../desktop/collector/scheduler";
@@ -199,9 +199,11 @@ function fakeRiot(onMatch: (n: number) => void = () => {}) {
     if (u.pathname.startsWith("/riot/account/v1/accounts/by-riot-id/Moi/EUW")) return json({ puuid: ME });
     if (u.pathname.endsWith("/ids")) {
       const start = Number(u.searchParams.get("start"));
-      // Solo/Duo (queue=420), ou tous les modes (sans filtre) : la même liste, ARAM comprise.
-      expect([null, "420"]).toContain(u.searchParams.get("queue"));
-      return json(ids.slice(start, start + Number(u.searchParams.get("count"))));
+      // Solo/Duo (queue=420) : sans l'ARAM, comme l'API ; tous les modes (sans filtre) : avec.
+      const q = u.searchParams.get("queue");
+      expect([null, "420"]).toContain(q);
+      const list = q === "420" ? ids.filter((id) => id !== "EUW1_999") : ids;
+      return json(list.slice(start, start + Number(u.searchParams.get("count"))));
     }
     const m = u.pathname.match(/matches\/([^/]+)(\/timeline)?$/);
     if (m) {
@@ -244,7 +246,7 @@ describe("collecte de mes parties", () => {
     expect(store.db.prepare("select match_id, queue from my_other_games").all()).toEqual([{ match_id: "EUW1_999", queue: 450 }]);
     expect(calls.filter((c) => c.endsWith("/timeline"))).toHaveLength(149); // pas de chronologie pour l'ARAM
     expect(last!.myGames).toEqual({ "Moi#EUW": 149 });
-    expect(last!.jobs.find((j) => j.kind === "myMatch")).toMatchObject({ done: 150, failed: 0 });
+    expect(last!.jobs.find((j) => j.kind === "myMatch")).toMatchObject({ done: 149, failed: 0 });
     store.close();
   });
 
@@ -263,7 +265,9 @@ describe("collecte de mes parties", () => {
     await new Promise((ok) => setTimeout(ok, 30));
     store.close();
     const before = calls.filter((c) => /matches\/EUW1_\d+$/.test(c)).length;
-    expect(before).toBe(40);
+    // Interrompue à la 40ᵉ lecture ; jusqu'à 2 lectures déjà parties (3 travaux en parallèle) se terminent quand même.
+    expect(before).toBeGreaterThanOrEqual(40);
+    expect(before).toBeLessThanOrEqual(42);
 
     store = new CollectorStore(file);
     api = new RiotScheduler({ apiKey: "k", windows: FAST, fetch: f });
@@ -299,10 +303,7 @@ describe("collecte de mes parties", () => {
     const h = store.claimNext()!;
     expect(h.key).toBe(historyKey(ME, 0));
     store.done(h.id);
-    // Tous les modes : après l'historique classé.
-    const a = store.claimNext()!;
-    expect(a.key).toBe(allIdsKey(ME, 0));
-    store.done(a.id);
+    // Tous les modes : seulement à la fin de l'historique classé (lancé par la dernière page de l'historique).
     now += 60_000;
     scheduleAccounts(ctx, ["Moi#EUW"]);
     expect(store.claimNext()).toBeNull();
@@ -312,6 +313,18 @@ describe("collecte de mes parties", () => {
     now += 86_400_000;
     scheduleAccounts(ctx, ["Moi#EUW"]);
     expect(store.claimNext()?.key).toBe(masteryKey("Moi#EUW", now));
+    store.close();
+  });
+
+  it("liste « tous modes » : ne relit jamais une partie classée, même encore en file (quel que soit l'ordre)", async () => {
+    const store = new CollectorStore(tmpDb());
+    // EUW1_2 : partie classée en file, pas encore lue ; EUW1_1 : déjà enregistrée comme autre mode.
+    store.enqueue("myOldMatch", matchKey("EUW1_2", ME), 1, {});
+    store.putOtherGame({ matchId: "EUW1_1", account: "Moi#EUW", startMs: 1, queue: 450, championId: 141, role: "", win: true, remake: false });
+    const api = { get: async () => ["EUW1_1", "EUW1_2", "EUW1_3"] };
+    await HANDLERS.myAllIds({ store, api, now: () => 0, pool: () => new Set<number>() } as never, { puuid: ME, riotId: "Moi#EUW", start: 0 } as never);
+    const queued = (store.db.prepare("select key from jobs where kind = 'myOther'").all() as { key: string }[]).map((j) => j.key);
+    expect(queued).toEqual([`myOther:EUW1_3:${ME}`]);
     store.close();
   });
 
