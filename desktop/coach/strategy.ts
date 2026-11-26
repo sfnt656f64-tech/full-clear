@@ -257,13 +257,18 @@ export function strategy(inp: StrategyInput): Strategy {
 
   // ----- Premier chemin et côté (jungle) -----
   const path: string[] = [];
+  // Facteurs du premier gank ; un « duel » n'est cité que s'il est net (au-delà de la marge, 20 parties), comme partout
+  // ailleurs. Sans facteur favorable, aucune lane n'est visée d'avance (ni son objectif).
+  const gankFactors = (() => {
+    if (inp.me.lane !== "JUNGLE" || !inp.plan) return { pro: [] as string[], con: [] as string[] };
+    const lane = inp.plan.firstGank;
+    const netDuel = duel(inp.index, inp.allies[lane], inp.enemies[lane], lane);
+    const factors = (inp.plan.lanes.find((l) => l.lane === lane)?.factors ?? []).filter((r) => !/ce duel/.test(r.text) || netDuel);
+    return { pro: factors.filter((r) => r.sign > 0).map((r) => r.text), con: factors.filter((r) => r.sign < 0).map((r) => r.text) };
+  })();
   if (inp.me.lane === "JUNGLE" && inp.plan) {
     const p = inp.plan, lane = p.firstGank;
-    const g = p.lanes.find((l) => l.lane === lane);
-    // Facteurs du plan ; un « duel » n'est cité que s'il est net (au-delà de la marge, 20 parties), comme partout ailleurs.
-    const netDuel = duel(inp.index, inp.allies[lane], inp.enemies[lane], lane);
-    const factors = (g?.factors ?? []).filter((r) => !/ce duel/.test(r.text) || netDuel);
-    const pro = factors.filter((r) => r.sign > 0).map((r) => r.text), con = factors.filter((r) => r.sign < 0).map((r) => r.text);
+    const { pro, con } = gankFactors;
     const majority = p.start.topShare != null ? (p.start.topShare >= 50 ? "top" : "bot") : null;
     const share = p.start.topShare != null ? Math.round(majority === "top" ? p.start.topShare : 100 - p.start.topShare) : null;
     const laneName = lane === "BOTTOM" ? "la bot lane" : LANE_LABELS[lane];
@@ -294,8 +299,7 @@ export function strategy(inp: StrategyInput): Strategy {
   if (top && top.wr < top.base) objectives.push(`Larves : ${fmtDuel(top, "TOP")} ; ne les conteste pas sans ton top.`);
   if (!objectives.length) {
     // Pas de duel net : l'objectif du côté de ton premier gank (tu y seras déjà), sinon celui de ta lane forte en début de partie.
-    const hasPro = !!inp.plan?.lanes.find((l) => l.lane === inp.plan!.firstGank)?.factors.some((f) => f.sign > 0);
-    const side = !hasPro ? null : inp.plan?.firstGank === "TOP" ? "les larves (côté top)" : inp.plan?.firstGank === "BOTTOM" ? "le premier dragon (côté bot)" : null;
+    const side = !gankFactors.pro.length ? null : inp.plan?.firstGank === "TOP" ? "les larves (côté top)" : inp.plan?.firstGank === "BOTTOM" ? "le premier dragon (côté bot)" : null;
     objectives.push(side ? `Aucun duel de lane net en méta (top et bot) : vise d'abord ${side}, du côté de ton premier gank, où tu seras déjà.` : "Aucun duel de lane net en méta : priorise l'objectif du côté où tes laners ont la priorité à ce moment-là.");
   }
 
@@ -314,4 +318,18 @@ export function remindersFrom(goals: { key: string; label: string; unit: string;
     key: g.key,
     text: `${TEXT[g.key]} (${g.label} : ${g.value != null ? `${fmt(g.value, g.unit)} sur tes ${g.n} dernières parties` : "pas encore de mesure"}, cible ${g.better === "-" ? "≤" : "≥"} ${fmt(g.target, g.unit)}.)`,
   }));
+}
+
+/**
+ * Lignes courtes pour l'overlay au début de la partie : le plan écrit en draft (départ, « si… alors… », objectif,
+ * rappels). Rien n'y dépend de ce qui se passe en jeu.
+ */
+export function strategyTips(s: Strategy): string[] {
+  const cut = (t: string) => t.replace(/\s*\((?:comme|contrairement|écart|par champion)[^)]*\)\.?$/, ".").replace(/, pour finir[^.(]*/, "");
+  return [
+    ...(s.path[0] ? [cut(s.path[0])] : []),
+    ...s.winCondition.ifThen.slice(0, 2),
+    ...s.objectives.slice(0, 1),
+    ...s.reminders.map((r) => r.text.replace(/\s*\([^()]*\)\.?$/, "").replace(/\s*\(.*\.\)$/, "")),
+  ];
 }

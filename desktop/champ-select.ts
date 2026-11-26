@@ -27,6 +27,15 @@ export interface DraftSnapshot {
   side: "blue" | "red" | null;
   /** Champions bannis ou déjà pris (des deux côtés) : impossibles à choisir. */
   unavailable: number[];
+  /** File de la partie (420 Solo/Duo, 440 flexible, 400 normale en draft…), lue dans le client ; 0 si inconnue. */
+  queueId: number;
+}
+
+/** File lue dans la session de jeu du client (/lol-gameflow/v1/session), 0 si absente. */
+export function queueOf(session: unknown): number {
+  const g = session && typeof session === "object" ? (session as Record<string, unknown>).gameData : null;
+  const q = g && typeof g === "object" ? (g as Record<string, unknown>).queue : null;
+  return q && typeof q === "object" ? num((q as Record<string, unknown>).id) : 0;
 }
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.trunc(v) : 0);
@@ -66,7 +75,7 @@ function unavailableIds(actions: unknown, bans: unknown): number[] {
   return [...out].sort((x, y) => x - y);
 }
 
-export function toDraftSnapshot(raw: unknown): DraftSnapshot | null {
+export function toDraftSnapshot(raw: unknown, queueId = 0): DraftSnapshot | null {
   if (!raw || typeof raw !== "object") return null;
   const s = raw as Record<string, unknown>;
   const myTeam = arr(s.myTeam);
@@ -94,5 +103,6 @@ export function toDraftSnapshot(raw: unknown): DraftSnapshot | null {
     myTurn: isMyTurn(s.actions, myCell),
     side: meRaw?.team === 1 ? "blue" : meRaw?.team === 2 ? "red" : null,
     unavailable: unavailableIds(s.actions, s.bans),
+    queueId,
   };
 }

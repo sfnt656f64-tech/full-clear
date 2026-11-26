@@ -61,6 +61,6 @@ describe("plan d'avant-partie", () => {
     const p = gamePlan({ meChampion: KAYN, side: null, lanes: LANES, kills: [], parts: [], index: pairIndex([]) })!;
     expect(p.provisional).toBe(true);
     expect(p.start.buff).toBeNull();
-    expect(planTips(p)[0]).toMatch(/^Ganks estimés : Top \d+ % · Mid \d+ % · Bot \d+ %\.$/);
+    expect(planTips(p).join(" ")).not.toMatch(/%/); // aucun pourcentage estimé
   });
 });

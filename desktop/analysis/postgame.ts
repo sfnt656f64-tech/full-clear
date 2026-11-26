@@ -32,6 +32,8 @@ export interface AverageLine { key: string; label: string; unit: string; game: n
 
 export interface PostGame {
   matchId: string; account: string; startMs: number; championId: number; win: boolean; durationS: number;
+  /** Rôle joué (TOP, JUNGLE…) : tes objectifs de la semaine ne portent que sur la jungle. */
+  role: string;
   queue: "ranked" | "flex" | "draftNormal"; kda: string;
   opponent: number | null;
   vs: VsLine[];
@@ -133,9 +135,9 @@ export function postGame(x: PostGameInput): PostGame {
   }
   const { work, strength } = workPoints(x.recent, x.ref, x.refName, g);
   return {
-    matchId: g.matchId, account: g.account, startMs: g.startMs, championId: g.championId, win: g.win, durationS: g.durationS,
+    matchId: g.matchId, account: g.account, startMs: g.startMs, championId: g.championId, win: g.win, durationS: g.durationS, role: g.role,
     queue: x.queue, kda: `${g.kills}/${g.deaths}/${g.assists}`, opponent: opp ? n(opp.championId) : null,
-    vs, goals: goalLines(x.metrics, x.targets), moments: keyMoments(x.detail), average, progression: x.progression,
+    vs, goals: g.role === "JUNGLE" ? goalLines(x.metrics, x.targets) : [], moments: keyMoments(x.detail), average, progression: x.progression,
     work, strength,
   };
 }

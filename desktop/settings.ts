@@ -31,11 +31,13 @@ export interface Settings {
   poolGoal: "win" | "progress";
   /** Choix par champion (identifiant Data Dragon), prioritaires sur le seuil « déjà beaucoup joué ». */
   championFlags: Record<string, "notForMe" | "progress">;
+  /** Dernière partie dont l'analyse d'après-partie a été signalée (identifiant de partie Riot). */
+  lastPostGame: string | null;
 }
 
 export const DEFAULT_EXCLUDED = ["Jax", "Fiora", "Camille"];
 
-export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED], goals: { startMs: null, targets: {} }, refTier: DEFAULT_REF_TIER, poolGoal: "progress", championFlags: {} };
+export const DEFAULT_SETTINGS: Settings = { overlay: { enabled: true, tips: true }, formChoice: "auto", shortcuts: { ...DEFAULT_SHORTCUTS }, collectorPaused: false, excludedChampions: [...DEFAULT_EXCLUDED], goals: { startMs: null, targets: {} }, refTier: DEFAULT_REF_TIER, poolGoal: "progress", championFlags: {}, lastPostGame: null };
 
 export function parseSettings(text: string | null): Settings {
   try {
@@ -61,6 +63,7 @@ export function parseSettings(text: string | null): Settings {
       refTier: isRefTier(raw.refTier) ? raw.refTier : DEFAULT_REF_TIER,
       poolGoal: raw.poolGoal === "win" ? "win" : "progress",
       championFlags: Object.fromEntries(Object.entries(raw.championFlags ?? {}).filter(([k, v]) => /^[A-Za-z]{1,30}$/.test(k) && (v === "notForMe" || v === "progress"))),
+      lastPostGame: typeof raw.lastPostGame === "string" && /^[A-Z0-9]{2,6}_d{1,15}$/.test(raw.lastPostGame) ? raw.lastPostGame : null,
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

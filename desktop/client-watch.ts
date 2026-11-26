@@ -2,7 +2,7 @@
 // Client fermé : lockfile relu toutes les 3 s, processus inspecté toutes les 12 s au plus.
 // Client ouvert : phase relue toutes les 2 s.
 import { DEFAULT_INSTALL_DIRS, discover, lcuGet, phaseLabel, sameRiotId, toLocalAccount, type LcuCredentials, type LocalAccount } from "./lcu.ts";
-import { toDraftSnapshot, type DraftSnapshot } from "./champ-select.ts";
+import { queueOf, toDraftSnapshot, type DraftSnapshot } from "./champ-select.ts";
 import type { ClientStatus } from "./ipc.ts";
 
 const CLOSED_INTERVAL = 3000;
@@ -25,6 +25,7 @@ export class ClientWatcher {
   private readonly onChange: (s: ClientStatus, creds: LcuCredentials | null) => void;
   private readonly onDraft: (d: DraftSnapshot) => void;
   private lastDraft = "";
+  private queueId = 0;
 
   constructor(
     expected: () => { gameName: string; tagLine: string }[],
@@ -92,12 +93,15 @@ export class ClientWatcher {
         });
         if (phase === "ChampSelect") {
           delay = CHAMP_SELECT_INTERVAL;
-          const snap = toDraftSnapshot(await lcuGet(this.creds, "/lol-champ-select/v1/session"));
+          // File de la partie : lue une fois par draft.
+          if (!this.queueId) this.queueId = queueOf(await lcuGet(this.creds, "/lol-gameflow/v1/session"));
+          const snap = toDraftSnapshot(await lcuGet(this.creds, "/lol-champ-select/v1/session"), this.queueId);
           // Le chrono change à chaque lecture : on ne compare que la composition pour éviter de tout recalculer.
           const key = snap && JSON.stringify({ ...snap, timeLeftMs: 0 });
           if (snap && key !== this.lastDraft) { this.lastDraft = key!; this.onDraft(snap); }
         } else {
           this.lastDraft = "";
+          this.queueId = 0;
         }
       }
     } catch {

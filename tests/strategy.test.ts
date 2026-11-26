@@ -85,3 +85,30 @@ describe("plan de partie (draft)", () => {
     expect(r[0].text).toMatch(/68,6 sur tes 20 dernières parties, cible ≥ 72/);
   });
 });
+
+describe("plan de partie : premier gank et objectif cohérents", () => {
+  it("sans facteur favorable au premier gank, aucun objectif « du côté de ton premier gank »", () => {
+    const plan = {
+      lanes: [{ lane: "TOP", chance: 60, reasons: [], factors: [{ text: "Illaoi gagne souvent ce duel", sign: 1 }] }, { lane: "MIDDLE", chance: 40, reasons: [], factors: [] }, { lane: "BOTTOM", chance: 40, reasons: [], factors: [] }],
+      firstGank: "TOP", start: { side: "bot", buff: "Blue Buff", topShare: 39 }, objectives: [], games: 100, provisional: false,
+    } as never;
+    const s = strategy({ me: { championId: K("Shyvana"), lane: "JUNGLE" }, allies: { JUNGLE: K("Shyvana"), TOP: K("Illaoi") }, enemies: { TOP: K("Darius") }, side: "blue", metaParts: [], index: pairIndex([]), plan, reminders: [], complete: false });
+    // Le duel n'est pas net (aucune partie) : pas de facteur favorable, donc ni lane visée ni objectif de ce côté.
+    expect(s.path.join(" ")).toMatch(/Aucune lane nettement plus gankable/);
+    expect(s.objectives.join(" ")).not.toMatch(/premier gank/);
+  });
+});
+
+describe("overlay : plan de partie écrit en draft", () => {
+  it("lignes courtes : départ, « si… alors… », objectif, rappels sans chiffres", async () => {
+    const { strategyTips } = await import("../desktop/coach/strategy");
+    const tips = strategyTips({
+      provisional: false, ours: {} as never, theirs: {} as never, power: [], enemyJungler: null,
+      winCondition: { summary: "", ifThen: ["Si A : B.", "Si C : D.", "Si E : F."] },
+      path: ["Départ côté top (Red Buff), pour finir ton premier tour de camps côté bot, près de ton premier gank (contrairement à la majorité : 61 % des joueurs Émeraude+ de ton champion commencent côté bot)."],
+      objectives: ["Dragon d'abord."],
+      reminders: [{ key: "cs10", text: "CS à 10 min : finis tes camps entre deux actions plutôt que d'attendre. (CS à 10 min : 68,6 sur tes 20 dernières parties, cible ≥ 72.)" }],
+    });
+    expect(tips).toEqual(["Départ côté top (Red Buff).", "Si A : B.", "Si C : D.", "Dragon d'abord.", "CS à 10 min : finis tes camps entre deux actions plutôt que d'attendre."]);
+  });
+});

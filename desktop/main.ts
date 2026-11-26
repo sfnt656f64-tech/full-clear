@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { DATA_DIR, LEGACY_DIR, legacyChangedSince, migrateUserData, type MigrationResult } from "./migrate.ts";
 import { DEFAULT_REF_TIER, isRefTier } from "./analysis/ref-tier.ts";
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Notification, shell, Tray } from "electron";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { ClientWatcher } from "./client-watch.ts";
@@ -17,12 +17,13 @@ import type { OverviewFilter } from "./analysis/overview.ts";
 import { DEFAULT_GOALS, type GoalsView } from "./analysis/goals.ts";
 import type { StatBuild } from "./coach/stat-build.ts";
 import { EngineClient } from "./data/engine-client.ts";
-import { findChamp } from "../src/data/champions";
+import type { DraftContext } from "./data/engine.ts";
+import { champByKey, findChamp } from "../src/data/champions";
 import { IPC, type AppState, type Navigation } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildPlanView, type OverlayView , type MatchChampions } from "./next-item.ts";
 import { pregameTips, tipsAt } from "./coach/pregame.ts";
-import { planTips } from "./coach/game-plan.ts";
+import { strategyTips } from "./coach/strategy.ts";
 import { SHOP } from "./next-item.ts";
 import { OverlayWindow } from "./overlay-window.ts";
 import { DEFAULT_SHORTCUTS, displayAccelerator, isValidAccelerator, type ShortcutName } from "./shortcuts.ts";
@@ -134,8 +135,8 @@ function startCoach(): void {
   coach = null;
   if (!settings.overlay.tips || !draft?.lanes || Date.now() - draftAt > DRAFT_MAX_AGE) return;
   const form = draft.isKayn ? (settings.formChoice !== "auto" ? settings.formChoice : draft.form?.value ?? null) : null;
-  // Plan d'avant-partie d'abord (jungle), puis les autres conseils : 6 au plus, deux à la fois.
-  const tips = [...(draft.plan ? planTips(draft.plan) : []), ...pregameTips({ lanes: draft.lanes, form })].slice(0, 6);
+  // Plan de partie écrit en draft d'abord, puis les autres conseils : 8 au plus, deux à la fois.
+  const tips = [...(draft.strategy ? strategyTips(draft.strategy) : []), ...pregameTips({ lanes: draft.lanes, form })].slice(0, 8);
   if (!tips.length) return;
   coach = { tips, start: Date.now() };
   // Défilement : on ne renvoie la vue que quand la paire affichée change.
@@ -208,21 +209,76 @@ const watcher = new ClientWatcher(
     pushState();
     if (tray) tray.setToolTip(s.kind === "connected" ? `Full Clear · ${s.phaseLabel}` : "Full Clear · client LoL fermé");
   },
-  (snap) => {
+  (snap) => onDraft(snap),
+);
+
+/** Nouvelle lecture de la draft : vue immédiate, puis compléments du moteur (rôles, choix, plan de partie, runes). */
+function onDraft(snap: DraftSnapshot): void {
     const view = buildDraftView(snap);
     // En attendant le moteur : les compléments précédents de cette draft (pas de clignotement).
-    if (draft) Object.assign(view, { lanes: draft.lanes, picks: draft.picks, plan: draft.plan, runePage: draft.runePage });
+    if (draft) Object.assign(view, { lanes: draft.lanes, picks: draft.picks, plan: draft.plan, strategy: draft.strategy, runePage: draft.runePage });
     draft = view;
     draftAt = Date.now();
     pushState();
     const seq = ++draftSeq;
-    engine.call("draftExtras", snap as DraftSnapshot, view, excludedKeys()).then((x) => {
+    engine.call("draftExtras", snap as DraftSnapshot, view, excludedKeys(), draftContext()).then((x) => {
       if (seq !== draftSeq || draft !== view) return;
       Object.assign(view, x);
       pushState();
     }).catch((e) => console.error("Draft :", e));
-  },
-);
+}
+
+// FULL_CLEAR_FAKE_DRAFT=<fichier JSON> (avec un dossier de données de test seulement) : draft simulée, relue quand le
+// fichier change, pour vérifier l'onglet Draft sans client LoL.
+if (testData && process.env.FULL_CLEAR_FAKE_DRAFT) {
+  const file = process.env.FULL_CLEAR_FAKE_DRAFT;
+  let last = "";
+  setInterval(() => {
+    try {
+      const text = readFileSync(file, "utf8");
+      if (text !== last) { last = text; onDraft(JSON.parse(text) as DraftSnapshot); }
+    } catch { /* fichier absent ou en cours d'écriture */ }
+  }, 1000).unref?.();
+}
+
+/** Analyses d'après-partie des dernières parties (classées, flexibles et normales en draft). */
+const postGames = (limit: number) => engine.call("postGames", excludedKeys(), settings.refTier, settings.goals.targets, limit, settings.championFlags);
+
+/**
+ * Analyse automatique : dès qu'une nouvelle partie apparaît dans la base (collecte), une notification Windows la
+ * signale ; un clic ouvre son analyse dans Progresser. Au premier lancement, la dernière partie est seulement notée.
+ * Vérifié au plus toutes les 30 s, quand la collecte avance.
+ */
+let postGameTimer: NodeJS.Timeout | null = null;
+function checkPostGame(): void {
+  if (postGameTimer) return;
+  postGameTimer = setTimeout(() => {
+    postGameTimer = null;
+    void postGames(1).then(([p]) => {
+      if (!p || p.matchId === settings.lastPostGame) return;
+      const first = settings.lastPostGame == null;
+      settings.lastPostGame = p.matchId;
+      saveSettings(settingsFile, settings);
+      win?.webContents.send(IPC.postGameReady);
+      if (first || !Notification.isSupported()) return;
+      const name = champByKey(p.championId)?.name ?? "ta partie";
+      const n = new Notification({
+        title: "Analyse d'après-partie prête",
+        body: `${name} · ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min · ${p.kda}. Clique pour l'ouvrir dans Progresser.`,
+        silent: true,
+      });
+      n.on("click", () => navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }));
+      n.show();
+      if (PROFILE) console.log(`[après-partie] notification : ${p.matchId}`);
+    }).catch((e) => console.error("Analyse d'après-partie :", e));
+  }, 30_000);
+  postGameTimer.unref?.();
+}
+
+/** Réglages utiles à la draft : mode du pool, drapeaux, référence, objectifs. */
+function draftContext(): DraftContext {
+  return { goal: settings.poolGoal, flags: settings.championFlags, tier: settings.refTier, goalsStartMs: settings.goals.startMs, targets: settings.goals.targets };
+}
 
 function readConfig(): DesktopConfig {
   const userData = app.getPath("userData");
@@ -497,6 +553,7 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
   ipcMain.handle(IPC.getProgression, () => engine.call("progression", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
+  ipcMain.handle(IPC.getPostGames, () => postGames(10));
   ipcMain.handle(IPC.setPoolGoal, (_e, goal: unknown) => {
     if (goal === "win" || goal === "progress") { settings.poolGoal = goal; saveSettings(settingsFile, settings); }
     pushState();
@@ -551,7 +608,7 @@ if (!app.requestSingleInstanceLock()) {
       onChange: () => { pushState(); refreshTrayMenu(); },
     });
     overlay.enabled = settings.overlay.enabled;
-    collector = new CollectorHost(here, dbFile(), pushState);
+    collector = new CollectorHost(here, dbFile(), () => { pushState(); checkPostGame(); });
     configureCollector();
     registerIpc();
     createTray();

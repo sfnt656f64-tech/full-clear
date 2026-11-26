@@ -56,6 +56,7 @@ describe("session de draft (LCU)", () => {
       myTurn: true,
       side: null,
       unavailable: [key("Zed"), key("Ahri"), key("Jinx"), key("Lulu"), key("Ornn"), key("Syndra")].sort((a, b) => a - b),
+      queueId: 0,
     });
   });
 
@@ -118,5 +119,14 @@ describe("recommandation de draft", () => {
     expect(v.notKayn).toBe(true);
     expect(v.isKayn).toBe(false);
     expect(v.unknown).toBe(1);
+  });
+});
+
+describe("file de la partie (lue dans le client)", () => {
+  it("lit gameData.queue.id de la session de jeu, 0 sinon", async () => {
+    const { queueOf } = await import("../desktop/champ-select");
+    expect(queueOf({ gameData: { queue: { id: 420, description: "x" } }, playerChampionSelections: [{ summonerInternalName: "Pseudo" }] })).toBe(420);
+    expect(queueOf({})).toBe(0);
+    expect(queueOf(null)).toBe(0);
   });
 });

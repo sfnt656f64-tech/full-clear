@@ -70,6 +70,8 @@ export interface DraftPick {
   poolRank: number | null;
   reasons: string[];
   provisional: boolean;
+  /** Mode « Progresser » : étiquette (champion de progression, confort). */
+  tag?: string;
 }
 
 export interface DraftPicks {
@@ -78,6 +80,8 @@ export interface DraftPicks {
   list: DraftPick[];
   /** Champion hors pool nettement meilleur pour cette draft, sinon null. */
   offPool: DraftPick | null;
+  /** Mode « Progresser » : règle appliquée selon la file (affichée au-dessus des choix). */
+  rule?: string;
 }
 
 export interface DraftPickInput {
@@ -96,6 +100,11 @@ export interface DraftPickInput {
   index: PairIndex;
   /** Méta trop maigre : tout est provisoire. */
   provisional?: boolean;
+  /** Mode « Progresser » : champions mis en tête (par groupe), avec leur étiquette et leur raison. */
+  priority?: { championId: number; group: number; tag: string; why: string }[];
+  /** Champions jamais proposés (« Pas pour moi », pas prêts pour la classée). */
+  blocked?: number[];
+  rule?: string;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -191,23 +200,40 @@ function evaluate(input: DraftPickInput, championId: number, base: number, poolR
 }
 
 export function draftPicks(input: DraftPickInput): DraftPicks {
-  const unavailable = new Set([...input.unavailable, ...(input.excluded ?? [])]);
+  const blocked = new Set(input.blocked ?? []);
+  const unavailable = new Set([...input.unavailable, ...(input.excluded ?? []), ...blocked]);
   const allyChamps = input.allies.map((id) => champByKey(id)).filter((c): c is Champion => !!c);
   const need = missingDamage(allyChamps);
   const metaBy = new Map(input.meta.filter((m) => m.role === input.role).map((m) => [m.championId, m]));
 
-  const list = input.pool
+  // Mode « Progresser » : les champions prioritaires d'abord (par groupe, puis selon la draft), chacun avec sa raison.
+  const poolRank = new Map(input.pool.map((p, i) => [p.championId, { p, rank: i + 1 }]));
+  const prio = (input.priority ?? []).filter((x) => !unavailable.has(x.championId)).flatMap((x) => {
+    const inPool = poolRank.get(x.championId);
+    const m = metaBy.get(x.championId);
+    const base = inPool ? inPool.p.score : m ? ((m.wins + 50) / (m.games + 100)) * 100 : 50;
+    const d = evaluate(input, x.championId, base, inPool?.rank ?? null, need, inPool ? inPool.p.provisional : !m || m.games < 200);
+    if (!d) return [];
+    d.tag = x.tag;
+    d.reasons = [x.why, ...d.reasons.filter((r) => !/^Ton meilleur champion|^N° d+ de ton pool/.test(r)).slice(0, 2)];
+    return [{ d, group: x.group }];
+  // Entre champions prioritaires : d'abord le groupe, puis l'effet de cette draft (contres, synergies, dégâts) ; 3 au plus.
+  }).sort((a, b) => a.group - b.group || (b.d.score - b.d.base) - (a.d.score - a.d.base)).map((x) => x.d).slice(0, DRAFT_COUNT);
+  const prioIds = new Set(prio.map((d) => d.championId));
+
+  const regular = input.pool
     .map((p, i) => ({ p, rank: i + 1 }))
-    .filter(({ p }) => !unavailable.has(p.championId))
+    .filter(({ p }) => !unavailable.has(p.championId) && !prioIds.has(p.championId))
     .flatMap(({ p, rank }) => {
       const d = evaluate(input, p.championId, p.score, rank, need, p.provisional);
       return d ? [d] : [];
     })
-    .sort((a, b) => b.score - a.score || (a.poolRank ?? 99) - (b.poolRank ?? 99))
-    .slice(0, DRAFT_COUNT);
+    .sort((a, b) => b.score - a.score || (a.poolRank ?? 99) - (b.poolRank ?? 99));
+  // Les prioritaires, puis ton pool (au moins un choix habituel reste visible).
+  const list = [...prio, ...regular].slice(0, Math.max(DRAFT_COUNT, prio.length + 1));
 
   // Hors pool : seulement s'il est nettement meilleur que ton meilleur choix.
-  const inPool = new Set(input.pool.map((p) => p.championId));
+  const inPool = new Set([...input.pool.map((p) => p.championId), ...prioIds]);
   let offPool: DraftPick | null = null;
   for (const m of metaBy.values()) {
     if (m.games < OFF_POOL_MIN_GAMES || inPool.has(m.championId) || unavailable.has(m.championId)) continue;
@@ -222,5 +248,5 @@ export function draftPicks(input: DraftPickInput): DraftPicks {
       : "Aucun champion de ton pool disponible dans ce rôle : meilleur choix de la méta pour cette draft."];
   } else offPool = null;
 
-  return { role: input.role, myTurn: input.myTurn, list, offPool };
+  return { role: input.role, myTurn: input.myTurn, list, offPool, ...(input.rule ? { rule: input.rule } : {}) };
 }
