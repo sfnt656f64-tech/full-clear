@@ -3,7 +3,7 @@
 // Fonctions pures.
 import { champByKey } from "../../src/data/champions";
 import type { Detail } from "../collector/detail.ts";
-import { METRICS, type AnalysisGame } from "./analysis.ts";
+import { METRICS, type AnalysisGame, type Metric } from "./analysis.ts";
 import { gameRank, type MetaRef } from "./overview.ts";
 import type { GameMetrics } from "./goals.ts";
 
@@ -40,8 +40,10 @@ export interface PostGame {
   average: { games: number; lines: AverageLine[] } | null;
   /** Champion de progression : son repère (texte), sinon null. */
   progression: string | null;
-  /** Points à travailler : tirés de tes dernières parties (pas de cette seule partie), avec cette partie en exemple. */
+  /** Points à travailler : tirés de tes dernières parties (pas de cette seule partie), avec leur évolution. */
   work: string[];
+  /** Ton point fort net sur les mêmes parties (ou pourquoi il n'y en a pas). */
+  strength: string;
 }
 
 const DRAGON_FR: Record<string, string> = { FIRE: "infernal", WATER: "océanique", AIR: "des nuages", EARTH: "des montagnes", CHEMTECH: "chemtech", HEXTECH: "hextech", ELDER: "ancestral" };
@@ -129,37 +131,75 @@ export function postGame(x: PostGameInput): PostGame {
     });
     average = { games: x.sameChampion.length, lines };
   }
-  const work = workPoints(x.recent, x.ref, x.refName, g);
+  const { work, strength } = workPoints(x.recent, x.ref, x.refName, g);
   return {
     matchId: g.matchId, account: g.account, startMs: g.startMs, championId: g.championId, win: g.win, durationS: g.durationS,
     queue: x.queue, kda: `${g.kills}/${g.deaths}/${g.assists}`, opponent: opp ? n(opp.championId) : null,
     vs, goals: goalLines(x.metrics, x.targets), moments: keyMoments(x.detail), average, progression: x.progression,
-    work,
+    work, strength,
   };
 }
 
 /** Parties récentes pour les points à travailler : pas de conclusion en dessous. */
 export const WORK_GAMES = 20;
 
+const meanMargin = (xs: number[]) => {
+  const mean = xs.reduce((s, v) => s + v, 0) / xs.length;
+  const sd = xs.length > 1 ? Math.sqrt(xs.reduce((s, v) => s + (v - mean) ** 2, 0) / (xs.length - 1)) : 0;
+  return { mean, margin: (1.96 * sd) / Math.sqrt(xs.length) };
+};
+
+/** Parties minimales dans chaque moitié pour comparer les 10 dernières aux 10 précédentes. */
+const HALF_MIN = 5;
+
 /**
- * Points à travailler : sur tes 20 dernières parties (avant celle-ci), les mesures nettement sous la référence (ta
- * position moyenne + sa marge < 50), les plus faibles d'abord (3 au plus). Cette partie n'est qu'un exemple : aucune
+ * Évolution d'une mesure : moyenne sur tes 10 dernières parties contre les 10 précédentes, chacune avec sa marge ;
+ * « progrès » ou « recul » seulement si l'écart dépasse la marge combinée.
+ */
+export function evolution(m: Metric, games: AnalysisGame[]): string {
+  const vals = (gs: AnalysisGame[]) => gs.map((h) => m.value(h)).filter((v): v is number => v != null);
+  const a = vals(games.slice(0, 10)), b = vals(games.slice(10, 20));
+  if (a.length < HALF_MIN || b.length < HALF_MIN) return "Évolution : pas assez de valeurs pour comparer tes 10 dernières parties aux 10 précédentes.";
+  const ra = meanMargin(a), rb = meanMargin(b);
+  const gap = ra.mean - rb.mean, mg = Math.hypot(ra.margin, rb.margin);
+  const better = m.better === "+" ? gap > 0 : gap < 0;
+  const verdict = Math.abs(gap) <= mg ? "pas d'écart net (marge comprise)" : better ? "progrès net" : "recul net";
+  return `Évolution : ${fmt(ra.mean, m.unit)} ± ${fmt(ra.margin, m.unit)} sur tes 10 dernières parties${a.length < 10 ? ` (${a.length} mesurées)` : ""}, contre ${fmt(rb.mean, m.unit)} ± ${fmt(rb.margin, m.unit)} sur les 10 précédentes${b.length < 10 ? ` (${b.length} mesurées)` : ""} : ${verdict}.`;
+}
+
+/**
+ * Points à travailler et point fort : sur tes 20 dernières parties (avant celle-ci), les mesures nettement sous la
+ * référence (ta position moyenne + sa marge < 50), les plus faibles d'abord (3 au plus), chacune avec son évolution ;
+ * et la mesure nettement au-dessus (position − marge > 50) la plus haute. Cette partie n'est qu'un exemple : aucune
  * conclusion n'en est tirée.
  */
-export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string, game: AnalysisGame): string[] {
+export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string, game: AnalysisGame): { work: string[]; strength: string } {
   const games = recent.slice(0, WORK_GAMES);
-  if (games.length < WORK_GAMES) return [`Moins de ${WORK_GAMES} parties avant celle-ci dans ce rôle (${games.length}) : pas encore de point à travailler.`];
-  const pts = METRICS.filter((m) => WORK_KEYS.has(m.key)).flatMap((m) => {
+  if (games.length < WORK_GAMES) {
+    return { work: [`Moins de ${WORK_GAMES} parties avant celle-ci dans ce rôle (${games.length}) : pas encore de point à travailler.`], strength: `Moins de ${WORK_GAMES} parties : pas encore de point fort.` };
+  }
+  const scored = METRICS.filter((m) => WORK_KEYS.has(m.key)).flatMap((m) => {
     const ranks = games.map((h) => gameRank(m, h, ref, null).rank).filter((r): r is number => r != null);
     const vals = games.map((h) => m.value(h)).filter((v): v is number => v != null);
     if (ranks.length < WORK_GAMES * 0.8 || !vals.length) return [];
-    const mean = ranks.reduce((s, r) => s + r, 0) / ranks.length;
-    const sd = Math.sqrt(ranks.reduce((s, r) => s + (r - mean) ** 2, 0) / (ranks.length - 1));
-    const margin = (1.96 * sd) / Math.sqrt(ranks.length);
-    if (mean + margin >= 50) return [];
-    const v = m.value(game);
+    const r = meanMargin(ranks);
     const avg = vals.reduce((s, y) => s + y, 0) / vals.length;
-    return [{ rank: mean, text: `${m.label} : ${fmt(avg, m.unit)} en moyenne sur tes ${ranks.length} dernières parties, mieux que ${Math.round(mean)} % ± ${Math.round(margin)} des joueurs ${refName} (nettement sous la médiane).${v != null ? ` Cette partie : ${fmt(v, m.unit)}.` : ""}` }];
-  }).sort((a, b) => a.rank - b.rank);
-  return pts.length ? pts.slice(0, 3).map((p) => p.text) : [`Aucune mesure nettement sous la médiane ${refName} sur tes ${WORK_GAMES} dernières parties (marge comprise).`];
+    const over = ranks.length < games.length ? `${ranks.length} de tes ${games.length} dernières parties` : `tes ${games.length} dernières parties`;
+    return [{ m, rank: r.mean, margin: r.margin, avg, over }];
+  });
+  const line = (p: (typeof scored)[number], tail: string) => {
+    const v = p.m.value(game);
+    return `${p.m.label} : ${fmt(p.avg, p.m.unit)} en moyenne sur ${p.over}, mieux que ${Math.round(p.rank)} % ± ${Math.round(p.margin)} des joueurs ${refName} (${tail}).${v != null ? ` Cette partie : ${fmt(v, p.m.unit)}.` : ""} ${evolution(p.m, games)}`;
+  };
+  const weak = scored.filter((p) => p.rank + p.margin < 50).sort((a, b) => a.rank - b.rank);
+  const strong = scored.filter((p) => p.rank - p.margin > 50).sort((a, b) => b.rank - a.rank);
+  return {
+    work: weak.length ? weak.slice(0, 3).map((p) => line(p, "nettement sous la médiane")) : [`Aucune mesure nettement sous la médiane ${refName} sur tes ${WORK_GAMES} dernières parties (marge comprise).`],
+    strength: strong.length ? line(strong[0], "nettement au-dessus de la médiane")
+      : (() => {
+        // Pas de point fort net : ta meilleure mesure, dite comme telle (au-dessus de la médiane mais dans la marge).
+        const best = scored.filter((p) => p.rank > 50).sort((a, b) => b.rank - a.rank)[0];
+        return `Aucune mesure nettement au-dessus de la médiane ${refName} sur tes ${WORK_GAMES} dernières parties (marge comprise).${best ? ` La plus proche, pas encore nette : ${line(best, "au-dessus de la médiane, mais dans la marge")}` : ""}`;
+      })(),
+  };
 }

@@ -30,6 +30,8 @@ export interface LaneGank {
   chance: number;
   /** 1 à 2 raisons en clair. */
   reasons: string[];
+  /** Facteurs en clair, avec leur sens : pour (+1) ou contre (−1) ce gank. Sans pourcentage. */
+  factors: { text: string; sign: 1 | -1 }[];
 }
 
 export interface GamePlan {
@@ -107,9 +109,12 @@ export function gamePlan(input: GamePlanInput): GamePlan | null {
     const base = (a.ok + 1) / (a.ok + a.ko + 2);
     const champRate = (m.ok + K_CHAMP * base) / (m.ok + m.ko + K_CHAMP);
     let x = logit(clamp(champRate, 0.05, 0.95));
-    const reasons: { w: number; text: string }[] = [];
-    if (m.ok + m.ko >= 10 && Math.abs(champRate - base) >= 0.04) {
-      reasons.push({ w: Math.abs(champRate - base) * 10, text: `ton champion réussit ${nf(champRate * 100)} % de ses ganks ici (moyenne ${nf(base * 100)} %)` });
+    const reasons: { w: number; text: string; sign: 1 | -1 }[] = [];
+    // Réussite mesurée de ton champion sur cette lane : citée seulement avec 20 ganks et un écart au-delà de la marge.
+    const mn = m.ok + m.ko;
+    if (mn >= 20) {
+      const raw = m.ok / mn, mg = 1.96 * Math.sqrt((raw * (1 - raw)) / mn);
+      if (Math.abs(raw - base) > mg) reasons.push({ w: Math.abs(raw - base) * 10, sign: raw > base ? 1 : -1, text: `avant 10 min sur cette lane, quand un kill implique ton champion en jungle, il est pour son équipe ${nf(raw * 100)} % ± ${nf(mg * 100)} du temps (${mn} cas Émeraude+, ${nf(base * 100)} % pour l'ensemble des junglers)` });
     }
 
     const roles = LANE_ROLES[lane];
@@ -119,7 +124,7 @@ export function gamePlan(input: GamePlanInput): GamePlan | null {
     const cc = allies.reduce((s, c) => s + c.cc, 0);
     x += 0.18 * (cc - 1.5);
     const ccAlly = allies.filter((c) => c.cc >= 2).sort((p, q) => q.cc - p.cc)[0];
-    if (ccAlly) reasons.push({ w: ccAlly.cc, text: `${ccAlly.name} a beaucoup de contrôle` });
+    if (ccAlly) reasons.push({ w: ccAlly.cc, sign: 1, text: `${ccAlly.name} a beaucoup de contrôle` });
 
     // Laner(s) adverse(s) : vulnérabilité aux ganks et mobilité.
     const enemies = rows.flatMap((r, i) => (champ(r?.enemy?.id) ? [{ c: champ(r!.enemy!.id)!, role: roles[i] }] : []));
@@ -128,12 +133,12 @@ export function gamePlan(input: GamePlanInput): GamePlan | null {
       if (v.base > 0) {
         const ratio = v.rate / v.base;
         x += 0.5 * Math.log(clamp(ratio, 0.5, 2));
-        if (v.games >= 15 && ratio >= 1.25) reasons.push({ w: ratio * 2, text: `${e.c.name} meurt souvent sur gank` });
-        if (v.games >= 15 && ratio <= 0.75) reasons.push({ w: (1 / ratio) * 2, text: `${e.c.name} meurt rarement sur gank` });
+        if (v.games >= 15 && ratio >= 1.25) reasons.push({ w: ratio * 2, sign: 1, text: `${e.c.name} meurt souvent sur gank` });
+        if (v.games >= 15 && ratio <= 0.75) reasons.push({ w: (1 / ratio) * 2, sign: -1, text: `${e.c.name} meurt rarement sur gank` });
       }
       const mob = mobility(e.c.id);
       x -= 0.15 * (mob - 2);
-      if (mob === 3) reasons.push({ w: 1.5, text: `${e.c.name} est très mobile` });
+      if (mob === 3) reasons.push({ w: 1.5, sign: -1, text: `${e.c.name} est très mobile (s'échappe facilement)` });
     }
 
     // Duel de la lane : ton allié contre son vis-à-vis (méta).
@@ -141,9 +146,10 @@ export function gamePlan(input: GamePlanInput): GamePlan | null {
     x += duel / 12;
     if (Math.abs(duel) >= 1.5 && rows[0]?.ally) {
       const a = champ(rows[0].ally.id)!;
-      reasons.push({ w: Math.abs(duel), text: duel > 0 ? `${a.name} gagne souvent ce duel` : `${a.name} perd souvent ce duel` });
+      reasons.push({ w: Math.abs(duel), sign: duel > 0 ? 1 : -1, text: duel > 0 ? `${a.name} gagne souvent ce duel` : `${a.name} perd souvent ce duel` });
     }
-    return { lane, chance: clamp(sigmoid(x) * 100, 10, 90), reasons: reasons.sort((p, q) => q.w - p.w).slice(0, 2).map((r) => r.text) };
+    const top = reasons.sort((p, q) => q.w - p.w);
+    return { lane, chance: clamp(sigmoid(x) * 100, 10, 90), reasons: top.slice(0, 2).map((r) => r.text), factors: top.map((r) => ({ text: r.text, sign: r.sign })) };
   });
 
   const first = [...lanes].sort((a, b) => b.chance - a.chance)[0].lane;
@@ -191,9 +197,7 @@ export const laneLabel = (l: GankLane): string => (l === "BOTTOM" ? "Bot" : LANE
 
 /** Lignes courtes pour l'overlay (début de partie). */
 export function planTips(p: GamePlan): string[] {
-  const lanes = p.lanes.map((l) => `${laneLabel(l.lane)} ${nf(l.chance)} %`).join(" · ");
   return [
-    `Ganks estimés : ${lanes}.`,
     `1er gank suggéré : ${laneLabel(p.firstGank)} · départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}.`,
     ...p.objectives.slice(0, 1),
   ];

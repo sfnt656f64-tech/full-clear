@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { goalLines, keyMoments, WORK_GAMES, workPoints } from "../desktop/analysis/postgame";
+import { evolution, goalLines, keyMoments, WORK_GAMES, workPoints } from "../desktop/analysis/postgame";
 import { MetaRef } from "../desktop/analysis/overview";
 import type { Detail } from "../desktop/collector/detail";
 import type { AnalysisGame } from "../desktop/analysis/analysis";
@@ -37,6 +37,21 @@ describe("analyse d'après-partie", () => {
 
   it("points à travailler : rien sous 20 parties", () => {
     const few = Array.from({ length: WORK_GAMES - 1 }, () => ({}) as AnalysisGame);
-    expect(workPoints(few, new MetaRef(new Map()), "Émeraude", {} as AnalysisGame)[0]).toMatch(/Moins de 20 parties/);
+    const r = workPoints(few, new MetaRef(new Map()), "Émeraude", {} as AnalysisGame);
+    expect(r.work[0]).toMatch(/Moins de 20 parties/);
+    expect(r.strength).toMatch(/pas encore de point fort/);
+  });
+});
+
+describe("évolution d'une mesure (10 dernières contre 10 précédentes)", () => {
+  const m = { key: "cs10", label: "CS à 10 min", unit: "", better: "+", value: (g: AnalysisGame) => (g as unknown as { v: number }).v } as never;
+  const games = (recent: number[], older: number[]) => [...recent, ...older].map((v) => ({ v }) as unknown as AnalysisGame);
+  it("progrès net seulement au-delà de la marge combinée", () => {
+    expect(evolution(m, games([80, 82, 78, 81, 79, 80, 82, 78, 81, 79], [60, 62, 58, 61, 59, 60, 62, 58, 61, 59]))).toMatch(/: progrès net\.$/);
+    expect(evolution(m, games([60, 62, 58, 61, 59, 60, 62, 58, 61, 59], [80, 82, 78, 81, 79, 80, 82, 78, 81, 79]))).toMatch(/: recul net\.$/);
+    expect(evolution(m, games([60, 90, 50, 70, 80, 60, 90, 50, 70, 80], [65, 85, 55, 75, 70, 65, 85, 55, 75, 70]))).toMatch(/pas d'écart net/);
+  });
+  it("pas de comparaison sous 5 valeurs par moitié", () => {
+    expect(evolution(m, games([80, 80, 80], [60, 60, 60]))).toMatch(/pas assez de valeurs/);
   });
 });

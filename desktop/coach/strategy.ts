@@ -23,28 +23,98 @@ const wilson = (w: number, n: number) => {
   return ((z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d) * 100;
 };
 
-export interface Timing { champion: number; lane: Lane; games: number; diff: number; margin: number }
+const fpo = (n: number) => `${n >= 0 ? "+" : "−"}${Math.round(Math.abs(n)).toLocaleString("fr-FR")} po`;
+const meanMargin = (xs: number[]) => {
+  const m = xs.reduce((s, v) => s + v, 0) / xs.length;
+  const sd = Math.sqrt(xs.reduce((s, v) => s + (v - m) ** 2, 0) / Math.max(1, xs.length - 1));
+  return { mean: m, margin: (1.96 * sd) / Math.sqrt(xs.length), n: xs.length };
+};
 
-/** Écart de win rate parties courtes − longues d'un champion dans son rôle (méta), avec sa marge. */
+/**
+ * Écarts d'or à 15 min contre le vis-à-vis du même rôle (même partie, équipe adverse), par champion et rôle, et par
+ * duel (champion contre champion). Calculé une fois par jeu de parties.
+ */
+const goldCache = new WeakMap<MetaPartRow[], { byChamp: Map<string, number[]>; byDuel: Map<string, number[]> }>();
+function goldDiffs(parts: MetaPartRow[]) {
+  let c = goldCache.get(parts);
+  if (c) return c;
+  const slots = new Map<string, MetaPartRow[]>();
+  for (const p of parts) {
+    if (p.gold15 == null) continue;
+    const k = `${p.matchId}|${p.role}`;
+    (slots.get(k) ?? slots.set(k, []).get(k)!).push(p);
+  }
+  const byChamp = new Map<string, number[]>(), byDuel = new Map<string, number[]>();
+  const add = (m: Map<string, number[]>, k: string, v: number) => (m.get(k) ?? m.set(k, []).get(k)!).push(v);
+  for (const v of slots.values()) {
+    if (v.length !== 2 || v[0].team === v[1].team) continue;
+    for (const [a, b] of [[v[0], v[1]], [v[1], v[0]]]) {
+      add(byChamp, `${a.championId}|${a.role}`, a.gold15! - b.gold15!);
+      add(byDuel, `${a.championId}|${b.championId}|${a.role}`, a.gold15! - b.gold15!);
+    }
+  }
+  c = { byChamp, byDuel };
+  goldCache.set(parts, c);
+  return c;
+}
+
+/**
+ * Début de partie d'un champion dans son rôle (méta), par deux mesures indépendantes :
+ * - l'écart d'or à 15 min contre son vis-à-vis (avance prise en début de partie) ;
+ * - le win rate des parties courtes (< 25 min) moins celui des parties longues (≥ 32 min).
+ * Le win rate seul est confondu avec l'issue (un champion qui perd vite quand il prend du retard « gagne » les parties
+ * longues) : un champion n'est classé « début » ou « fin de partie » que si les DEUX mesures sont nettes (au-delà de
+ * leur marge) et vont dans le même sens. Sinon : pas de classement. Deux garde-fous de cohérence :
+ * - support : pas de classement (son or à 15 min dépend de l'item de support, pas de sa force) ;
+ * - un champion connu pour son début de partie agressif (fiche du champion) n'est jamais classé « fin de partie ».
+ */
+export interface Timing {
+  champion: number; lane: Lane;
+  gold: number; goldMargin: number; goldGames: number;
+  wr: number; wrMargin: number; wrGames: number;
+  verdict: "early" | "late" | null;
+}
+
 export function timing(parts: MetaPartRow[], championId: number, role: string, lane: Lane): Timing | null {
   const rows = parts.filter((p) => p.championId === championId && p.role === role && (p.durationS ?? 0) > 0);
   const short = rows.filter((r) => r.durationS! < SHORT_S), long = rows.filter((r) => r.durationS! >= LONG_S);
-  if (short.length < DUEL_MIN || long.length < DUEL_MIN) return null;
+  const golds = goldDiffs(parts).byChamp.get(`${championId}|${role}`) ?? [];
+  if (short.length < DUEL_MIN || long.length < DUEL_MIN || golds.length < DUEL_MIN) return null;
   const sw = short.filter((r) => r.win).length, lw = long.filter((r) => r.win).length;
-  return { champion: championId, lane, games: rows.length, diff: (sw / short.length - lw / long.length) * 100, margin: Math.hypot(wilson(sw, short.length), wilson(lw, long.length)) };
+  const wr = (sw / short.length - lw / long.length) * 100, wrMargin = Math.hypot(wilson(sw, short.length), wilson(lw, long.length));
+  const g = meanMargin(golds);
+  const goldSign = Math.abs(g.mean) > g.margin ? Math.sign(g.mean) : 0, wrSign = Math.abs(wr) > wrMargin ? Math.sign(wr) : 0;
+  return {
+    champion: championId, lane, gold: g.mean, goldMargin: g.margin, goldGames: g.n, wr, wrMargin, wrGames: short.length + long.length,
+    verdict: role === "UTILITY" ? null : goldSign !== 0 && goldSign === wrSign ? (goldSign > 0 ? "early" : champByKey(championId)?.early ? null : "late") : null,
+  };
+}
+
+/** Les deux mesures en clair. */
+export const timingText = (t: Timing) => `écart d'or à 15 min contre son vis-à-vis ${fpo(t.gold)} ± ${Math.round(t.goldMargin)} (${t.goldGames} parties), win rate parties courtes − longues ${sgn(t.wr)} ± ${f1(t.wrMargin)} pts`;
+
+/**
+ * Duel en début de partie entre deux champions du même rôle (méta) : écart d'or à 15 min du premier contre le second,
+ * avec sa marge. Seulement à partir de 20 parties ; net si l'écart dépasse la marge.
+ */
+export function earlyDuel(parts: MetaPartRow[], a: number, b: number, role: string): { gold: number; margin: number; n: number; net: boolean } | null {
+  const xs = goldDiffs(parts).byDuel.get(`${a}|${b}|${role}`) ?? [];
+  if (xs.length < DUEL_MIN) return null;
+  const g = meanMargin(xs);
+  return { gold: g.mean, margin: g.margin, n: g.n, net: Math.abs(g.mean) > g.margin };
 }
 
 export interface TeamProfile {
-  /** Écart moyen parties courtes − longues (points), sa marge, et les champions mesurés. */
-  early: number | null; earlyMargin: number; measured: number;
+  /** Moyennes par champion mesuré : écart d'or à 15 min (po) et win rate courtes − longues (pts), avec leurs marges. */
+  gold: number | null; goldMargin: number; early: number | null; earlyMargin: number; measured: number;
   /** Contrôle de foule cumulé (0–3 par champion) et champions capables d'engager (contrôle ≥ 2, mêlée). */
   cc: number; engagers: string[];
   /** Champions de split-push possibles (combattants mobiles en top). */
   splitters: string[];
   /** Champions les plus marqués « early » ou « fin de partie » (écart net, hors marge). */
   earlyChamps: string[]; lateChamps: string[];
-  /** Les mêmes, avec leur rôle et leur écart (pour des « si… alors… » concrets). */
-  marked: { name: string; lane: Lane; diff: number; margin: number }[];
+  /** Les mêmes, avec leur rôle et leur sens (pour des « si… alors… » concrets). */
+  marked: { name: string; lane: Lane; early: boolean; timing: Timing }[];
 }
 
 export interface Reminder { key: string; text: string }
@@ -90,16 +160,18 @@ function team(parts: MetaPartRow[], byLane: Partial<Record<Lane, number>>): Team
   const entries = (Object.entries(byLane) as [Lane, number][]).filter(([, id]) => id);
   const t = entries.map(([lane, id]) => timing(parts, id, ROLE[lane], lane)).filter((x): x is Timing => !!x);
   const champs = entries.map(([lane, id]) => ({ lane, id, c: champByKey(id) })).filter((x): x is { lane: Lane; id: number; c: Champion } => !!x.c);
+  const avg = (f: (x: Timing) => number) => (t.length ? t.reduce((s, x) => s + f(x), 0) / t.length : null);
+  const avgMargin = (f: (x: Timing) => number) => (t.length ? Math.sqrt(t.reduce((s, x) => s + f(x) ** 2, 0)) / t.length : 0);
   return {
-    early: t.length ? t.reduce((s, x) => s + x.diff, 0) / t.length : null,
-    earlyMargin: t.length ? Math.sqrt(t.reduce((s, x) => s + x.margin ** 2, 0)) / t.length : 0,
+    gold: avg((x) => x.gold), goldMargin: avgMargin((x) => x.goldMargin),
+    early: avg((x) => x.wr), earlyMargin: avgMargin((x) => x.wrMargin),
     measured: t.length,
     cc: champs.reduce((s, x) => s + x.c.cc, 0),
     engagers: champs.filter((x) => x.c.cc >= 2 && x.c.range === "melee").map((x) => x.c.name),
     splitters: champs.filter((x) => x.lane === "TOP" && x.c.profile === "fighter" && mobility(x.c.id) >= 2).map((x) => x.c.name),
-    earlyChamps: t.filter((x) => x.diff - x.margin > 0).map((x) => name(x.champion)),
-    lateChamps: t.filter((x) => x.diff + x.margin < 0).map((x) => name(x.champion)),
-    marked: t.filter((x) => Math.abs(x.diff) > x.margin).map((x) => ({ name: name(x.champion), lane: x.lane, diff: x.diff, margin: x.margin })),
+    earlyChamps: t.filter((x) => x.verdict === "early").map((x) => name(x.champion)),
+    lateChamps: t.filter((x) => x.verdict === "late").map((x) => name(x.champion)),
+    marked: t.filter((x) => x.verdict).map((x) => ({ name: name(x.champion), lane: x.lane, early: x.verdict === "early", timing: x })),
   };
 }
 
@@ -117,29 +189,37 @@ export function strategy(inp: StrategyInput): Strategy {
   const ifThen: string[] = [];
   // ----- Condition de victoire (sans trou : début de partie, fin de partie, ou pas d'écart net) -----
   let summary: string;
-  if (ours.early != null && theirs.early != null) {
+  if (ours.early != null && theirs.early != null && ours.gold != null && theirs.gold != null) {
     const gap = ours.early - theirs.early, m = Math.hypot(ours.earlyMargin, theirs.earlyMargin);
-    if (gap > m) {
-      summary = `Ton équipe est plus forte en début de partie (écart parties courtes − longues ${sgn(ours.early)} contre ${sgn(theirs.early)} pts, marge ± ${f1(m)}) : gagne avant 25 min.`;
+    const gGap = ours.gold - theirs.gold, gm = Math.hypot(ours.goldMargin, theirs.goldMargin);
+    const both = Math.abs(gap) > m && Math.abs(gGap) > gm && Math.sign(gap) === Math.sign(gGap) ? Math.sign(gap) : 0;
+    const measures = `par champion : or à 15 min ${fpo(ours.gold)} contre ${fpo(theirs.gold)} (marge ± ${Math.round(gm)}), win rate courtes − longues ${sgn(ours.early)} contre ${sgn(theirs.early)} pts (marge ± ${f1(m)})`;
+    if (both > 0) {
+      summary = `Ton équipe est plus forte en début de partie (${measures}) : gagne avant 25 min.`;
       ifThen.push("Si ton équipe prend l'avance avant 15 min : enchaîne les objectifs (dragon, larves, héraut) pendant qu'elle est forte.");
       ifThen.push("Si la partie traîne au-delà de 30 min sans avance : évite les combats à 5 contre 5 ouverts, cherche les picks.");
-    } else if (gap < -m) {
-      summary = `Leur équipe est plus forte en début de partie (${sgn(theirs.early)} contre ${sgn(ours.early)} pts, marge ± ${f1(m)}) : ton équipe gagne en fin de partie, sans se faire distancer avant.`;
+    } else if (both < 0) {
+      summary = `Leur équipe est plus forte en début de partie (${measures}) : ton équipe gagne en fin de partie, sans se faire distancer avant.`;
       ifThen.push("Si ils prennent un objectif avant 15 min : prends une contrepartie (autre objectif, tour) plutôt qu'un combat perdu d'avance.");
       ifThen.push("Si tu arrives à 25 min sans grand retard : c'est ton équipe qui a l'avantage, joue les combats groupés.");
     } else {
       // Pas d'écart net entre les équipes : les champions nettement marqués donnent le plan.
       const keys = [...ours.marked.map((x) => ({ ...x, mine: true })), ...theirs.marked.map((x) => ({ ...x, mine: false }))];
-      summary = `Pas d'écart net entre les deux équipes sur le début ou la fin de partie (${sgn(ours.early)} contre ${sgn(theirs.early)} pts, marge ± ${f1(m)})`
-        + (keys.length ? ` : la partie se joue sur ${keys.map((x) => `${x.name} (${x.mine ? "chez toi" : "en face"}, pic ${x.diff > 0 ? "en début" : "en fin"} de partie)`).join(", ")}.` : " ni de champion nettement marqué : la partie se jouera sur l'exécution.");
+      summary = `Pas d'écart net entre les deux équipes sur le début ou la fin de partie (${measures} ; il faut les deux mesures nettes et dans le même sens)`
+        + (keys.length ? ` : la partie se joue sur ${keys.map((x) => `${x.name} (${x.mine ? "chez toi" : "en face"}, pic ${x.early ? "en début" : "en fin"} de partie)`).join(", ")}.` : " ni de champion nettement marqué : la partie se jouera sur l'exécution.");
     }
     // Champions nettement marqués : quoi faire, écrit à l'avance.
+    // Invade : jamais sans duel de début de partie mesuré et favorable.
+    const myDuel = inp.me.lane === "JUNGLE" && inp.enemies.JUNGLE ? earlyDuel(inp.metaParts, inp.me.championId, inp.enemies.JUNGLE, "JUNGLE") : null;
+    const lateJungler = () => myDuel?.net && myDuel.gold > 0
+      ? `prends-lui des camps tôt, du côté où tes laners ont la priorité (ton duel en début de partie contre lui : ${fpo(myDuel.gold)} ± ${Math.round(myDuel.margin)} à 15 min sur ${myDuel.n} parties)`
+      : `fais pression sur les premiers objectifs avec tes laners ; pas d'invade : ${myDuel?.net ? `ton duel en début de partie contre lui est défavorable (${fpo(myDuel.gold)} ± ${Math.round(myDuel.margin)} à 15 min sur ${myDuel.n} parties)` : myDuel ? "ton duel en début de partie contre lui n'est pas net en méta" : "ton duel en début de partie contre lui n'est pas mesurable (moins de 20 parties)"}`;
     for (const x of theirs.marked) {
-      if (x.diff > 0) ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, en face) a son pic en début de partie : ${x.lane === inp.me.lane ? "pas de combat à niveau égal avant tes premiers items" : x.lane === "JUNGLE" ? "évite de le croiser seul avant 10 min" : `si ${YOUR[x.lane]} perd ses premiers échanges, couvre-le plutôt que de ganker ailleurs`}.`);
-      else ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, en face) monte en puissance en fin de partie : ${x.lane === "JUNGLE" ? "prends-lui des camps tôt, du côté où tes laners ont la priorité" : `c'est la lane à faire tomber tôt : si ${THE[x.lane]} est gankable avant 10 min, priorise-la`}.`);
+      if (x.early) ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, en face) a son pic en début de partie : ${x.lane === inp.me.lane ? "pas de combat à niveau égal avant tes premiers items" : x.lane === "JUNGLE" ? "évite de le croiser seul avant 10 min" : `si ${YOUR[x.lane]} perd ses premiers échanges, couvre-le plutôt que de ganker ailleurs`}.`);
+      else ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, en face) monte en puissance en fin de partie : ${x.lane === "JUNGLE" ? lateJungler() : `c'est la lane à faire tomber tôt : si ${THE[x.lane]} est gankable avant 10 min, priorise-la`}.`);
     }
     for (const x of ours.marked) {
-      if (x.diff > 0) ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, chez toi) a son pic en début de partie : ${x.lane === inp.me.lane ? "joue agressif avant tes 2 premiers items" : `si ${YOUR[x.lane]} prend l'avance, joue autour de lui pour les premiers objectifs`}.`);
+      if (x.early) ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, chez toi) a son pic en début de partie : ${x.lane === inp.me.lane ? "joue agressif avant tes 2 premiers items" : `si ${YOUR[x.lane]} prend l'avance, joue autour de lui pour les premiers objectifs`}.`);
       else ifThen.push(`${x.name} (${LANE_LABELS[x.lane]}, chez toi) monte en puissance en fin de partie : ${x.lane === inp.me.lane ? "farme et évite les combats risqués avant tes items" : "protège-le en début de partie, c'est lui qui portera la fin"}.`);
     }
   } else {
@@ -166,27 +246,40 @@ export function strategy(inp: StrategyInput): Strategy {
   const ej = inp.enemies.JUNGLE;
   if (ej) {
     const t = timing(inp.metaParts, ej, "JUNGLE", "JUNGLE");
-    const d = inp.me.lane === "JUNGLE" ? duel(inp.index, inp.me.championId, ej, "JUNGLE") : null;
-    const strong = t ? (t.diff - t.margin > 0 ? "fort en début de partie" : t.diff + t.margin < 0 ? "plutôt fort en fin de partie" : "sans pic net en début de partie") : "pas assez de parties de méta pour le dire";
-    enemyJungler = `${name(ej)} : ${strong}${t ? ` (${sgn(t.diff)} ± ${f1(t.margin)} pts parties courtes − longues)` : ""}.`
-      + (d ? ` Ton duel contre lui : ${f1(d.wr)} % ± ${f1(d.margin)} sur ${d.n} parties en Émeraude+ (contre ${f1(d.base)} % d'habitude) : ${d.wr > d.base ? "tu peux accepter le combat à niveau égal" : "évite le combat à niveau égal"}.` : inp.me.lane === "JUNGLE" ? " Ton duel contre lui : pas d'écart net en méta." : "")
-      + (t && t.diff - t.margin > 0 ? " Si tu le perds de vue avant 6 min : surveille les lanes de ton côté et ton jungle." : "");
+    const d = inp.me.lane === "JUNGLE" ? earlyDuel(inp.metaParts, inp.me.championId, ej, "JUNGLE") : null;
+    const strong = !t ? "pas assez de parties de méta pour le dire" : t.verdict === "early" ? "fort en début de partie" : t.verdict === "late" ? "plutôt fort en fin de partie" : "pas de classement net début ou fin de partie";
+    enemyJungler = `${name(ej)} : ${strong}${t ? ` (${timingText(t)})` : ""}.`
+      + (inp.me.lane !== "JUNGLE" ? "" : d?.net
+        ? ` Ton duel en début de partie contre lui : ${fpo(d.gold)} ± ${Math.round(d.margin)} à 15 min sur ${d.n} parties Émeraude+ : ${d.gold > 0 ? "tu peux accepter le combat à niveau égal" : "évite le combat à niveau égal et ne l'envahis pas"}.`
+        : ` Ton duel en début de partie contre lui : ${d ? `pas net en méta (${fpo(d.gold)} ± ${Math.round(d.margin)} sur ${d.n} parties)` : "pas mesurable (moins de 20 parties)"} : pas d'invade, joue tes camps et tes lanes.`)
+      + (t?.verdict === "early" ? " Si tu le perds de vue avant 6 min : surveille les lanes de ton côté et ton jungle." : "");
   }
 
   // ----- Premier chemin et côté (jungle) -----
   const path: string[] = [];
   if (inp.me.lane === "JUNGLE" && inp.plan) {
     const p = inp.plan, lane = p.firstGank;
-    const sideOfLane = lane === "TOP" ? "top" : lane === "BOTTOM" ? "bot" : null;
     const g = p.lanes.find((l) => l.lane === lane);
-    const majority = p.start.topShare != null ? (p.start.topShare >= 50 ? "top" : "bot") : null;
-    const why = sideOfLane && sideOfLane !== p.start.side ? `pour finir ton premier tour de camps côté ${sideOfLane}, près de ton premier gank` : "";
-    path.push(`Départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}${why ? `, ${why}` : ""}`
-      + (p.start.topShare != null ? ` (${majority === p.start.side ? "comme" : "contrairement à"} la majorité : ${Math.round(majority === "top" ? p.start.topShare : 100 - p.start.topShare)} % des joueurs Émeraude+ de ton champion commencent côté ${majority}).` : "."));
-    // Raisons du plan ; un « duel » n'est cité que s'il est net (au-delà de la marge, 20 parties), comme partout ailleurs.
+    // Facteurs du plan ; un « duel » n'est cité que s'il est net (au-delà de la marge, 20 parties), comme partout ailleurs.
     const netDuel = duel(inp.index, inp.allies[lane], inp.enemies[lane], lane);
-    const reasons = (g?.reasons ?? []).filter((r) => !/ce duel/.test(r) || netDuel);
-    path.push(`Premier gank visé : ${LANE_LABELS[lane]} (chance estimée ${Math.round(g?.chance ?? 0)} %${reasons.length ? ` : ${reasons.join(", ")}` : ""}), à la fin de ton premier tour de camps.`);
+    const factors = (g?.factors ?? []).filter((r) => !/ce duel/.test(r.text) || netDuel);
+    const pro = factors.filter((r) => r.sign > 0).map((r) => r.text), con = factors.filter((r) => r.sign < 0).map((r) => r.text);
+    const majority = p.start.topShare != null ? (p.start.topShare >= 50 ? "top" : "bot") : null;
+    const share = p.start.topShare != null ? Math.round(majority === "top" ? p.start.topShare : 100 - p.start.topShare) : null;
+    const laneName = lane === "BOTTOM" ? "la bot lane" : LANE_LABELS[lane];
+    if (pro.length) {
+      const sideOfLane = lane === "TOP" ? "top" : lane === "BOTTOM" ? "bot" : null;
+      const why = sideOfLane && sideOfLane !== p.start.side ? `pour finir ton premier tour de camps côté ${sideOfLane}, près de ton premier gank` : "";
+      path.push(`Départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}${why ? `, ${why}` : ""}`
+        + (share != null ? ` (${majority === p.start.side ? "comme" : "contrairement à"} la majorité : ${share} % des joueurs Émeraude+ de ton champion commencent côté ${majority}).` : "."));
+      path.push(`Premier gank visé : ${laneName}, à la fin de ton premier tour de camps. Pour : ${pro.join(", ")}${con.length ? `. Contre : ${con.join(", ")}` : ""}. Lane choisie en pesant ces facteurs (pas un taux de réussite mesuré).`);
+    } else {
+      // Aucun facteur favorable : pas de lane à viser d'avance, départ comme la majorité.
+      const side = majority ?? p.start.side;
+      const buff = inp.side == null ? "" : ` (${(inp.side === "blue") === (side === "top") ? "Blue Buff" : "Red Buff"})`;
+      path.push(`Départ côté ${side}${buff}${share != null ? `, comme la majorité (${share} % des joueurs Émeraude+ de ton champion)` : ""}.`);
+      path.push(`Aucune lane nettement plus gankable d'après la draft${con.length ? ` (contre ${laneName} : ${con.join(", ")})` : ""} : choisis ton premier gank à la fin de ton tour, selon la position des vagues.`);
+    }
     path.push("Si la lane n'est pas gankable à ce moment-là (vague poussée vers leur tour, adversaire en pleine vie avec Flash) : ne force pas, prends tes camps ou va de l'autre côté.");
   }
 
@@ -201,7 +294,8 @@ export function strategy(inp: StrategyInput): Strategy {
   if (top && top.wr < top.base) objectives.push(`Larves : ${fmtDuel(top, "TOP")} ; ne les conteste pas sans ton top.`);
   if (!objectives.length) {
     // Pas de duel net : l'objectif du côté de ton premier gank (tu y seras déjà), sinon celui de ta lane forte en début de partie.
-    const side = inp.plan?.firstGank === "TOP" ? "les larves (côté top)" : inp.plan?.firstGank === "BOTTOM" ? "le premier dragon (côté bot)" : null;
+    const hasPro = !!inp.plan?.lanes.find((l) => l.lane === inp.plan!.firstGank)?.factors.some((f) => f.sign > 0);
+    const side = !hasPro ? null : inp.plan?.firstGank === "TOP" ? "les larves (côté top)" : inp.plan?.firstGank === "BOTTOM" ? "le premier dragon (côté bot)" : null;
     objectives.push(side ? `Aucun duel de lane net en méta (top et bot) : vise d'abord ${side}, du côté de ton premier gank, où tu seras déjà.` : "Aucun duel de lane net en méta : priorise l'objectif du côté où tes laners ont la priorité à ce moment-là.");
   }
 
