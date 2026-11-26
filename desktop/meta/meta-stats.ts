@@ -7,6 +7,8 @@ export interface MetaPartRow {
   /** Pour le style de jeu (« À essayer ») : équipe, KDA, durée ; début de partie si la chronologie a été lue. */
   team?: number; kills?: number; deaths?: number; assists?: number; durationS?: number;
   kills15?: number | null; assists15?: number | null; teamKills15?: number | null; gold15?: number | null;
+  /** Dégâts infligés aux champions (toute la partie). */
+  damage?: number | null;
 }
 export interface MetaBuildRow { championId: number; role: string; win: boolean; items: number[] }
 export interface MetaMasteryRow { championId: number; role: string; win: boolean; points: number }

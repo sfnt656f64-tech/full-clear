@@ -46,6 +46,45 @@ export interface PostGame {
   work: string[];
   /** Ton point fort net sur les mêmes parties (ou pourquoi il n'y en a pas). */
   strength: string;
+  /** Courbe de chaque point à travailler (même ordre que work), null si pas assez de parties. */
+  curves: (WorkCurve | null)[];
+}
+
+/** Moyenne glissante sur 10 parties, sur tes 30 dernières parties dans ce rôle, avec ta cible. */
+export interface WorkCurve {
+  key: string; label: string; unit: string; better: "+" | "-";
+  /** Du plus ancien au plus récent : moyenne des 10 parties qui finissent à ce point (null : moins de 5 valeurs). */
+  points: (number | null)[];
+  games: number;
+  /** Ta cible (objectif de la semaine) ou, à défaut, la médiane de la référence. */
+  target: number | null; targetLabel: string;
+  /** Les 10 dernières parties face à la cible, avec la marge ; sans conclusion si l'écart n'est pas net. */
+  vsTarget: string;
+}
+
+/** Parties de la courbe et taille de la fenêtre glissante. */
+export const CURVE_GAMES = 30, CURVE_WINDOW = 10;
+/** Mesures dont la cible vient de tes objectifs de la semaine. */
+const GOAL_TARGET: Record<string, keyof PostGameInput["targets"]> = { cs10: "cs10", unc15: "uncompensatedEarly" };
+
+export function workCurve(m: Metric, recent: AnalysisGame[], target: number | null, targetLabel: string): WorkCurve | null {
+  const games = recent.slice(0, CURVE_GAMES).reverse();
+  if (games.length < CURVE_WINDOW * 2) return null;
+  const vals = games.map((h) => m.value(h));
+  const points: (number | null)[] = [];
+  for (let i = CURVE_WINDOW; i <= vals.length; i++) {
+    const w = vals.slice(i - CURVE_WINDOW, i).filter((v): v is number => v != null);
+    points.push(w.length >= HALF_MIN ? w.reduce((s, v) => s + v, 0) / w.length : null);
+  }
+  const last = vals.slice(-CURVE_WINDOW).filter((v): v is number => v != null);
+  let vsTarget = "Pas assez de valeurs sur tes 10 dernières parties pour les comparer à la cible.";
+  if (target != null && last.length >= HALF_MIN) {
+    const r = meanMargin(last);
+    const gap = r.mean - target;
+    const good = m.better === "+" ? gap > 0 : gap < 0;
+    vsTarget = `10 dernières parties : ${fmt(r.mean, m.unit)} ± ${fmt(r.margin, m.unit)}, ${targetLabel} ${fmt(target, m.unit)} : ${Math.abs(gap) <= r.margin ? "pas d'écart net avec la cible (marge comprise), pas de conclusion" : good ? "nettement mieux que la cible" : "nettement en deçà de la cible"}.`;
+  }
+  return { key: m.key, label: m.label, unit: m.unit, better: m.better, points, games: games.length, target, targetLabel, vsTarget };
 }
 
 const DRAGON_FR: Record<string, string> = { FIRE: "infernal", WATER: "océanique", AIR: "des nuages", EARTH: "des montagnes", CHEMTECH: "chemtech", HEXTECH: "hextech", ELDER: "ancestral" };
@@ -133,12 +172,12 @@ export function postGame(x: PostGameInput): PostGame {
     });
     average = { games: x.sameChampion.length, lines };
   }
-  const { work, strength } = workPoints(x.recent, x.ref, x.refName, g);
+  const { work, strength, curves } = workPoints(x.recent, x.ref, x.refName, g, x.targets);
   return {
     matchId: g.matchId, account: g.account, startMs: g.startMs, championId: g.championId, win: g.win, durationS: g.durationS, role: g.role,
     queue: x.queue, kda: `${g.kills}/${g.deaths}/${g.assists}`, opponent: opp ? n(opp.championId) : null,
     vs, goals: g.role === "JUNGLE" ? goalLines(x.metrics, x.targets) : [], moments: keyMoments(x.detail), average, progression: x.progression,
-    work, strength,
+    work, strength, curves,
   };
 }
 
@@ -175,11 +214,17 @@ export function evolution(m: Metric, games: AnalysisGame[]): string {
  * et la mesure nettement au-dessus (position − marge > 50) la plus haute. Cette partie n'est qu'un exemple : aucune
  * conclusion n'en est tirée.
  */
-export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string, game: AnalysisGame): { work: string[]; strength: string } {
+export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string, game: AnalysisGame, targets?: PostGameInput["targets"]): { work: string[]; strength: string; curves: (WorkCurve | null)[] } {
   const games = recent.slice(0, WORK_GAMES);
   if (games.length < WORK_GAMES) {
-    return { work: [`Moins de ${WORK_GAMES} parties avant celle-ci dans ce rôle (${games.length}) : pas encore de point à travailler.`], strength: `Moins de ${WORK_GAMES} parties : pas encore de point fort.` };
+    return { work: [`Moins de ${WORK_GAMES} parties avant celle-ci dans ce rôle (${games.length}) : pas encore de point à travailler.`], strength: `Moins de ${WORK_GAMES} parties : pas encore de point fort.`, curves: [null] };
   }
+  const curve = (m: Metric) => {
+    const goal = GOAL_TARGET[m.key];
+    if (goal && targets) return workCurve(m, recent, targets[goal], "ta cible");
+    const sorted = ref.sorted(m, game.role, null);
+    return workCurve(m, recent, sorted.length ? sorted[Math.floor(sorted.length / 2)] : null, `médiane ${refName}`);
+  };
   const scored = METRICS.filter((m) => WORK_KEYS.has(m.key)).flatMap((m) => {
     const ranks = games.map((h) => gameRank(m, h, ref, null).rank).filter((r): r is number => r != null);
     const vals = games.map((h) => m.value(h)).filter((v): v is number => v != null);
@@ -196,6 +241,7 @@ export function workPoints(recent: AnalysisGame[], ref: MetaRef, refName: string
   const weak = scored.filter((p) => p.rank + p.margin < 50).sort((a, b) => a.rank - b.rank);
   const strong = scored.filter((p) => p.rank - p.margin > 50).sort((a, b) => b.rank - a.rank);
   return {
+    curves: weak.length ? weak.slice(0, 3).map((p) => curve(p.m)) : [null],
     work: weak.length ? weak.slice(0, 3).map((p) => line(p, "nettement sous la médiane")) : [`Aucune mesure nettement sous la médiane ${refName} sur tes ${WORK_GAMES} dernières parties (marge comprise).`],
     strength: strong.length ? line(strong[0], "nettement au-dessus de la médiane")
       : (() => {

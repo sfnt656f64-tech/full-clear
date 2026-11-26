@@ -3,6 +3,7 @@ import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
 import type { PostGame } from "../analysis/postgame.ts";
 import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
+import { sparkline as targetCurve } from "../ui/sparkline.ts";
 import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
@@ -93,7 +94,7 @@ function renderStrategy(st: NonNullable<DraftView["strategy"]>): HTMLElement {
     ...list("Premier chemin :", st.path),
     ...list("Objectifs :", st.objectives),
     ...list("Tes rappels :", st.reminders.map((r) => r.text)),
-    h("p", { class: "small muted" }, "Début ou fin de partie : un champion n'est classé que si son écart d'or à 15 min contre son vis-à-vis et son win rate parties courtes − longues (Émeraude+) sont nets et vont dans le même sens. Duels cités à partir de 20 parties, hors marge. Écrit une fois en draft : rien ne s'adapte pendant la partie."));
+    h("p", { class: "small muted" }, "Début ou fin de partie : un champion n'est classé que si trois mesures (Émeraude+) sont nettes et vont dans le même sens : son écart d'or à 15 min contre son vis-à-vis, son win rate parties courtes − longues, et la progression de ses dégâts face à son vis-à-vis entre parties courtes et longues. Duels cités à partir de 20 parties, hors marge. Écrit une fois en draft : rien ne s'adapte pendant la partie."));
 }
 
 /** Page de runes recommandée, avec le bouton d'import dans le client. */
@@ -663,7 +664,13 @@ function renderPostGame(p: PostGame, open: boolean): HTMLElement {
       p.average ? h("ul", { class: "why small" }, ...p.average.lines.map((l) => h("li", {}, mark(l.better), `${l.label} : ${num(l.game, l.unit)} contre ${num(l.average, l.unit)} en moyenne`)))
         : h("p", { class: "small muted" }, "Moins de 5 autres parties sur ce champion cette saison : pas de comparaison.")),
     p.progression ? sec("Repère de progression", h("p", { class: "small" }, p.progression)) : null,
-    sec("À travailler (d'après tes 20 parties précédentes)", h("ul", { class: "why small" }, ...p.work.map((w) => h("li", {}, w)))),
+    sec("À travailler (d'après tes 20 parties précédentes)", h("ul", { class: "why small" }, ...p.work.map((w, i) => {
+      const c = p.curves?.[i];
+      return h("li", {}, w, c ? h("div", { class: "spark-box" },
+        h("span", { class: "small muted" }, `${c.label} : moyenne glissante sur 10 parties, tes ${c.games} dernières parties (de la plus ancienne à la plus récente).`),
+        targetCurve({ points: c.points, target: c.target, targetLabel: c.targetLabel, fmt: (v) => num(v, c.unit) }),
+        h("span", { class: "small" }, c.vsTarget)) : null);
+    }))),
     sec("Point fort", h("p", { class: "small" }, p.strength)));
   if (open) d.setAttribute("open", "");
   return d;

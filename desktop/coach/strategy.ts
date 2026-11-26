@@ -34,37 +34,50 @@ const meanMargin = (xs: number[]) => {
  * Écarts d'or à 15 min contre le vis-à-vis du même rôle (même partie, équipe adverse), par champion et rôle, et par
  * duel (champion contre champion). Calculé une fois par jeu de parties.
  */
-const goldCache = new WeakMap<MetaPartRow[], { byChamp: Map<string, number[]>; byDuel: Map<string, number[]> }>();
+const goldCache = new WeakMap<MetaPartRow[], { byChamp: Map<string, number[]>; byDuel: Map<string, number[]>; dmgShort: Map<string, number[]>; dmgLong: Map<string, number[]> }>();
 function goldDiffs(parts: MetaPartRow[]) {
   let c = goldCache.get(parts);
   if (c) return c;
   const slots = new Map<string, MetaPartRow[]>();
   for (const p of parts) {
-    if (p.gold15 == null) continue;
+    if (p.gold15 == null && !p.damage) continue;
     const k = `${p.matchId}|${p.role}`;
     (slots.get(k) ?? slots.set(k, []).get(k)!).push(p);
   }
   const byChamp = new Map<string, number[]>(), byDuel = new Map<string, number[]>();
+  const dmgShort = new Map<string, number[]>(), dmgLong = new Map<string, number[]>();
   const add = (m: Map<string, number[]>, k: string, v: number) => (m.get(k) ?? m.set(k, []).get(k)!).push(v);
   for (const v of slots.values()) {
     if (v.length !== 2 || v[0].team === v[1].team) continue;
     for (const [a, b] of [[v[0], v[1]], [v[1], v[0]]]) {
-      add(byChamp, `${a.championId}|${a.role}`, a.gold15! - b.gold15!);
-      add(byDuel, `${a.championId}|${b.championId}|${a.role}`, a.gold15! - b.gold15!);
+      const k = `${a.championId}|${a.role}`;
+      if (a.gold15 != null && b.gold15 != null) {
+        add(byChamp, k, a.gold15 - b.gold15);
+        add(byDuel, `${a.championId}|${b.championId}|${a.role}`, a.gold15 - b.gold15);
+      }
+      // Dégâts face au vis-à-vis (log du rapport), en parties courtes et longues.
+      const d = a.durationS ?? 0;
+      if (a.damage && b.damage && d > 0 && (d < SHORT_S || d >= LONG_S)) add(d < SHORT_S ? dmgShort : dmgLong, k, Math.log(a.damage / b.damage));
     }
   }
-  c = { byChamp, byDuel };
+  c = { byChamp, byDuel, dmgShort, dmgLong };
   goldCache.set(parts, c);
   return c;
 }
 
 /**
- * Début de partie d'un champion dans son rôle (méta), par deux mesures indépendantes :
+ * Début de partie d'un champion dans son rôle (méta), par trois mesures :
  * - l'écart d'or à 15 min contre son vis-à-vis (avance prise en début de partie) ;
- * - le win rate des parties courtes (< 25 min) moins celui des parties longues (≥ 32 min).
+ * - le win rate des parties courtes (< 25 min) moins celui des parties longues (≥ 32 min) ;
+ * - la progression de ses dégâts face à son vis-à-vis : rapport de dégâts aux champions dans les parties longues
+ *   comparé aux parties courtes (un champion de fin de partie pèse de plus en plus dans les combats). C'est une mesure
+ *   de combat, pas d'issue, mais elle n'en est pas totalement indépendante (l'équipe qui gagne combat davantage).
+ *   Écartée : la dépendance à l'avance (win rate devant − derrière à 15 min), nette pour 13 champions sur 221, ce que
+ *   le hasard seul donne, donc pas informative.
  * Le win rate seul est confondu avec l'issue (un champion qui perd vite quand il prend du retard « gagne » les parties
- * longues) : un champion n'est classé « début » ou « fin de partie » que si les DEUX mesures sont nettes (au-delà de
- * leur marge) et vont dans le même sens. Sinon : pas de classement. Deux garde-fous de cohérence :
+ * longues) : un champion n'est classé « début » ou « fin de partie » que si les TROIS mesures sont nettes (au-delà de
+ * leur marge) et vont dans le même sens. Sur environ 270 champions testés, une ou deux fausses alertes restent
+ * possibles avec deux mesures ; la troisième les écarte. Sinon : pas de classement. Deux garde-fous de cohérence :
  * - support : pas de classement (son or à 15 min dépend de l'item de support, pas de sa force) ;
  * - un champion connu pour son début de partie agressif (fiche du champion) n'est jamais classé « fin de partie ».
  */
@@ -72,6 +85,8 @@ export interface Timing {
   champion: number; lane: Lane;
   gold: number; goldMargin: number; goldGames: number;
   wr: number; wrMargin: number; wrGames: number;
+  /** Progression des dégâts face au vis-à-vis, parties longues contre courtes (%), et sa marge ; null sous 20 parties de chaque. */
+  dmg: number | null; dmgMargin: number;
   verdict: "early" | "late" | null;
 }
 
@@ -84,14 +99,26 @@ export function timing(parts: MetaPartRow[], championId: number, role: string, l
   const wr = (sw / short.length - lw / long.length) * 100, wrMargin = Math.hypot(wilson(sw, short.length), wilson(lw, long.length));
   const g = meanMargin(golds);
   const goldSign = Math.abs(g.mean) > g.margin ? Math.sign(g.mean) : 0, wrSign = Math.abs(wr) > wrMargin ? Math.sign(wr) : 0;
+  const { dmgShort, dmgLong } = goldDiffs(parts);
+  const ds = dmgShort.get(`${championId}|${role}`) ?? [], dl = dmgLong.get(`${championId}|${role}`) ?? [];
+  let dmg: number | null = null, dmgMargin = 0, dmgSign = 0;
+  if (ds.length >= DUEL_MIN && dl.length >= DUEL_MIN) {
+    const a = meanMargin(ds), b = meanMargin(dl);
+    const gap = b.mean - a.mean, m = Math.hypot(a.margin, b.margin);
+    dmg = (Math.exp(gap) - 1) * 100;
+    dmgMargin = (Math.exp(m) - 1) * 100;
+    // Dégâts qui progressent dans les parties longues : fin de partie (signe opposé aux deux autres mesures).
+    dmgSign = Math.abs(gap) > m ? -Math.sign(gap) : 0;
+  }
+  const all = goldSign !== 0 && goldSign === wrSign && goldSign === dmgSign ? goldSign : 0;
   return {
-    champion: championId, lane, gold: g.mean, goldMargin: g.margin, goldGames: g.n, wr, wrMargin, wrGames: short.length + long.length,
-    verdict: role === "UTILITY" ? null : goldSign !== 0 && goldSign === wrSign ? (goldSign > 0 ? "early" : champByKey(championId)?.early ? null : "late") : null,
+    champion: championId, lane, gold: g.mean, goldMargin: g.margin, goldGames: g.n, wr, wrMargin, wrGames: short.length + long.length, dmg, dmgMargin,
+    verdict: role === "UTILITY" || all === 0 ? null : all > 0 ? "early" : champByKey(championId)?.early ? null : "late",
   };
 }
 
 /** Les deux mesures en clair. */
-export const timingText = (t: Timing) => `écart d'or à 15 min contre son vis-à-vis ${fpo(t.gold)} ± ${Math.round(t.goldMargin)} (${t.goldGames} parties), win rate parties courtes − longues ${sgn(t.wr)} ± ${f1(t.wrMargin)} pts`;
+export const timingText = (t: Timing) => `écart d'or à 15 min contre son vis-à-vis ${fpo(t.gold)} ± ${Math.round(t.goldMargin)} (${t.goldGames} parties), win rate parties courtes − longues ${sgn(t.wr)} ± ${f1(t.wrMargin)} pts, dégâts face à son vis-à-vis en parties longues par rapport aux courtes ${t.dmg != null ? `${t.dmg >= 0 ? "+" : "−"}${Math.round(Math.abs(t.dmg))} % ± ${Math.round(t.dmgMargin)}` : "non mesurables"}`;
 
 /**
  * Duel en début de partie entre deux champions du même rôle (méta) : écart d'or à 15 min du premier contre le second,

@@ -504,7 +504,8 @@ export class Engine {
             game: g, detail: d, queue: rankedKeys.has(`${g.matchId}|${g.account}`) ? "ranked" : d.match.queue === 440 ? "flex" : "draftNormal",
             metrics: gameMetrics(d, new Set([420, 440, 400])), targets,
             sameChampion: before.filter((h) => h.championId === g.championId && h.role === g.role && h.season === g.season),
-            recent: before.filter((h) => h.role === g.role), ref, refName: REF_TIERS[tier].short, progression: t ? `${STAGE_LABEL[t.stage]} : ${t.text}` : null,
+            recent: before.filter((h) => h.role === g.role && h.season === g.season), // jamais d'une saison à l'autre
+            ref, refName: REF_TIERS[tier].short, progression: t ? `${STAGE_LABEL[t.stage]} : ${t.text}` : null,
           }));
         }
       } finally { db?.close(); }

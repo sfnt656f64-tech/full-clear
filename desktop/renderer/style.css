@@ -173,8 +173,8 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .an-metric.bad .an-fill { background: var(--red); }
 .an-med { text-align: right; }
 .an-focus { margin-bottom: 10px; }
-.spark { width: 100%; max-width: 260px; height: 36px; display: block; }
-.spark-line { fill: none; stroke: var(--warn); stroke-width: 2; }
+.tc { width: 100%; max-width: 260px; height: 36px; display: block; }
+.tc-line { fill: none; stroke: var(--warn); stroke-width: 2; }
 .spark-med { stroke: var(--muted); stroke-dasharray: 3 3; stroke-width: 1; }
 
 /* Analyse : vue d'ensemble */
@@ -276,3 +276,10 @@ body.app { display: flex; height: 100vh; padding: 0; overflow: hidden; }
 .good-text { color: var(--ok); }
 .bad-text { color: var(--red); }
 .moments li.death b { color: var(--red); }
+.spark-box { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px; }
+.tc { width: 100%; max-width: 360px; height: auto; }
+.tc-line { fill: none; stroke: var(--blue); stroke-width: 2; }
+.tc-dot { fill: var(--blue); }
+.tc-target { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 3; }
+.tc-label { fill: var(--muted); font-size: 10px; }
+.tc-label.strong { fill: var(--text, #ddd); }

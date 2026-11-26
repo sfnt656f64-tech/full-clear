@@ -10,13 +10,15 @@ let seq = 0;
  * Méta : un champion dans un rôle, 100 parties courtes et 100 longues (win rates donnés), face à un vis-à-vis du même
  * rôle ; son or à 15 min dépasse celui du vis-à-vis de `gold` po (± 200 de bruit alterné).
  */
-function rows(id: string, role: string, shortWr: number, longWr: number, gold: number, opp = "Garen"): MetaPartRow[] {
+function rows(id: string, role: string, shortWr: number, longWr: number, gold: number, opp = "Garen", dmg = gold > 0 ? -0.3 : gold < 0 ? 0.3 : 0): MetaPartRow[] {
   const out: MetaPartRow[] = [];
   const mk = (n: number, wr: number, dur: number) => {
     for (let i = 0; i < n; i++) {
       const m = `M${seq++}`, noise = i % 2 ? 200 : -200;
-      out.push({ matchId: m, championId: K(id), role, team: 100, win: i < wr * n, durationS: dur, gold15: 5000 + gold + noise, items: [], perks: null });
-      out.push({ matchId: m, championId: K(opp), role, team: 200, win: !(i < wr * n), durationS: dur, gold15: 5000, items: [], perks: null });
+      // Dégâts : rapport 1 en parties courtes, e^dmg en parties longues (± 10 % de bruit alterné).
+      const damage = Math.round(20000 * Math.exp((dur >= 32 * 60 ? dmg : 0) + (i % 2 ? 0.1 : -0.1)));
+      out.push({ matchId: m, championId: K(id), role, team: 100, win: i < wr * n, durationS: dur, gold15: 5000 + gold + noise, damage, items: [], perks: null });
+      out.push({ matchId: m, championId: K(opp), role, team: 200, win: !(i < wr * n), durationS: dur, gold15: 5000, damage: 20000, items: [], perks: null });
     }
   };
   mk(100, shortWr, 20 * 60); mk(100, longWr, 40 * 60);
@@ -34,6 +36,15 @@ describe("plan de partie : début ou fin de partie", () => {
     // Les deux mesures se contredisent : pas de classement.
     expect(timing(rows("Veigar", "MIDDLE", 0.4, 0.6, 400), K("Veigar"), "MIDDLE", "MIDDLE")!.verdict).toBeNull();
     expect(timing(rows("Veigar", "MIDDLE", 0.4, 0.6, -400), K("Veigar"), "MIDDLE", "MIDDLE")!.verdict).toBe("late");
+  });
+
+  it("troisième mesure : sans progression nette des dégâts face au vis-à-vis, pas de classement (cas Vi, Galio, Annie)", () => {
+    const t = timing(rows("Vi", "JUNGLE", 0.4, 0.6, -400, "Garen", 0), K("Vi"), "JUNGLE", "JUNGLE")!;
+    expect(t.dmg).toBeCloseTo(0, 5);
+    expect(t.verdict).toBeNull();
+    // Dégâts qui progressent alors que l'or et le win rate disent « début de partie » : contradiction, pas de classement.
+    expect(timing(rows("LeBlanc", "MIDDLE", 0.62, 0.42, 400, "Garen", 0.3), K("LeBlanc"), "MIDDLE", "MIDDLE")!.verdict).toBeNull();
+    expect(timing(rows("Veigar", "MIDDLE", 0.4, 0.6, -400, "Garen", 0.3), K("Veigar"), "MIDDLE", "MIDDLE")!.dmg).toBeCloseTo(35, 0);
   });
 
   it("garde-fous : support jamais classé, champion connu pour son début de partie jamais « fin de partie »", () => {

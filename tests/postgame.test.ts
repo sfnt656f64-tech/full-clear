@@ -55,3 +55,26 @@ describe("évolution d'une mesure (10 dernières contre 10 précédentes)", () =
     expect(evolution(m, games([80, 80, 80], [60, 60, 60]))).toMatch(/pas assez de valeurs/);
   });
 });
+
+describe("courbe des points à travailler (30 dernières parties, moyenne glissante sur 10)", () => {
+  const m = { key: "cs10", label: "CS à 10 min", unit: "", better: "+", value: (g: AnalysisGame) => (g as unknown as { v: number | null }).v } as never;
+  const games = (vals: (number | null)[]) => vals.map((v) => ({ v }) as unknown as AnalysisGame);
+  it("21 points de la plus ancienne à la plus récente ; cible nettement atteinte seulement au-delà de la marge", async () => {
+    const { workCurve } = await import("../desktop/analysis/postgame");
+    // Les plus récentes d'abord (comme l'appli) : 10 à 80, 20 à 60.
+    const c = workCurve(m, games([...Array(10).fill(80), ...Array(20).fill(60)]), 72, "ta cible")!;
+    expect(c.points.length).toBe(21);
+    expect(c.points[0]).toBe(60);
+    expect(c.points[20]).toBe(80);
+    expect(c.vsTarget).toMatch(/nettement mieux que la cible/);
+    const noisy = workCurve(m, games([60, 90, 50, 80, 70, 95, 55, 85, 65, 75, ...Array(20).fill(60)]), 72, "ta cible")!;
+    expect(noisy.vsTarget).toMatch(/pas d'écart net avec la cible \(marge comprise\), pas de conclusion/);
+  });
+  it("pas de courbe sous 20 parties ; un point sans 5 valeurs sur 10 est vide", async () => {
+    const { workCurve } = await import("../desktop/analysis/postgame");
+    expect(workCurve(m, games(Array(19).fill(70)), 72, "ta cible")).toBeNull();
+    const c = workCurve(m, games([...Array(20).fill(70), ...Array(10).fill(null)]), 72, "ta cible")!;
+    expect(c.points[0]).toBeNull();
+    expect(c.points[20]).toBe(70);
+  });
+});
