@@ -1,15 +1,15 @@
-// Prochain item recommandé en jeu : inventaire et or, sur le build du moteur pour Kayn (ajusté aux items
-// adverses) ou sur le build statistique Émeraude+ pour tes autres champions (coach/stat-build.ts).
-// Ne fait que suggérer : l'appli n'achète jamais rien (interdit par Riot, et impossible sans injection).
+// Build de la partie affiché dans l'overlay : décidé à partir des CHAMPIONS de la partie (ceux de la draft, que tout
+// le monde voit), jamais de ce qui se passe en jeu (or, inventaire, items adverses, kills, objectifs) : règles Riot,
+// aucun conseil qui réagit à l'état de la partie. Des règles « si… alors… » écrites avant la partie complètent le
+// build : c'est toi qui les appliques. L'appli n'achète jamais rien.
 import shopJson from "../src/data/generated/shop.json";
 import { findChamp } from "../src/data/champions";
 import { ITEMS } from "../src/data/items";
-import { STARTER_ITEM_IDS, STARTERS } from "../src/data/starters";
-import type { Champion, Form, ItemKey } from "../src/data/types";
-import { analyse, resolveForm, type Analysis } from "../src/engine/analyse";
+import { STARTERS } from "../src/data/starters";
+import type { Form } from "../src/data/types";
+import { analyse, resolveForm } from "../src/engine/analyse";
 import { chooseBuild, chooseStarter } from "../src/engine/build";
 import { DDRAGON_IMG } from "./draft-view.ts";
-import type { LiveSnapshot } from "./live-client.ts";
 import type { StatBuild } from "./coach/stat-build.ts";
 
 export interface ShopItem {
@@ -19,126 +19,29 @@ export interface ShopItem {
 export type Shop = Record<string, ShopItem>;
 export const SHOP = shopJson as Shop;
 
-/** Armure apportée par les items à partir de laquelle un adversaire non-tank compte comme « armuré ». */
-export const ARMOR_STACKER = 80;
-/** Or (estimé) en stats offensives adverses à partir duquel on tient compte des items pour AD/AP. */
-const DAMAGE_GOLD_MIN = 2500;
-const AD_GOLD = 35;
-const AP_GOLD = 20;
-
 const icon = (id: string) => `${DDRAGON_IMG}/item/${id}.png`;
-
-/** Multiset d'identifiants (inventaire), consommé au fil du calcul. */
-type Bag = Map<string, number>;
-const bagOf = (ids: number[]): Bag => {
-  const b: Bag = new Map();
-  for (const id of ids) b.set(String(id), (b.get(String(id)) ?? 0) + 1);
-  return b;
-};
-const take = (b: Bag, id: string): boolean => {
-  const n = b.get(id) ?? 0;
-  if (!n) return false;
-  b.set(id, n - 1);
-  return true;
-};
-
-/** Item (ou une de ses améliorations directes, ex. bottes de niveau 3) dans l'inventaire. */
-export function owns(bag: Bag, id: string, shop: Shop = SHOP): boolean {
-  if ((bag.get(id) ?? 0) > 0) return true;
-  return Object.entries(shop).some(([up, it]) => it.from?.includes(id) && (bag.get(up) ?? 0) > 0 && (it.boots ?? false));
-}
-
-/**
- * Or nécessaire pour finir `id`, en utilisant les composants déjà possédés (consommés dans `bag`).
- * Renvoie aussi les composants manquants (feuilles et intermédiaires) pour proposer un achat partiel.
- */
-export function remainingCost(id: string, bag: Bag, shop: Shop = SHOP): { gold: number; missing: string[] } {
-  if (take(bag, id)) return { gold: 0, missing: [] };
-  const it = shop[id];
-  if (!it) return { gold: 0, missing: [] };
-  const from = it.from ?? [];
-  const recipe = it.cost - from.reduce((s, f) => s + (shop[f]?.cost ?? 0), 0);
-  let gold = recipe;
-  const missing: string[] = [];
-  for (const f of from) {
-    const r = remainingCost(f, bag, shop);
-    gold += r.gold;
-    if (r.gold > 0) missing.push(f, ...r.missing);
-  }
-  return { gold, missing };
-}
-
-/** Lecture des items adverses : qui stacke l'armure, qui se soigne, part AD/AP réelle. */
-export interface EnemyItems {
-  armorStackers: number;
-  healers: number;
-  /** Part des dégâts physiques d'après les items, ou null si trop peu d'items offensifs. */
-  adShare: number | null;
-}
-
-export function readEnemyItems(enemies: LiveSnapshot["enemies"], champs: (Champion | null)[], shop: Shop = SHOP): EnemyItems {
-  let armorStackers = 0, healers = 0, adGold = 0, apGold = 0;
-  enemies.forEach((e, i) => {
-    const its = e.items.map((id) => shop[String(id)]).filter((x): x is ShopItem => !!x);
-    const armor = its.reduce((s, x) => s + (x.armor ?? 0), 0);
-    const c = champs[i];
-    if (armor >= ARMOR_STACKER && c?.profile !== "tank") armorStackers++;
-    if (its.some((x) => x.heal) && !c?.heals) healers++;
-    adGold += its.reduce((s, x) => s + (x.ad ?? 0), 0) * AD_GOLD;
-    apGold += its.reduce((s, x) => s + (x.ap ?? 0), 0) * AP_GOLD;
-  });
-  const total = adGold + apGold;
-  return { armorStackers, healers, adShare: total >= DAMAGE_GOLD_MIN ? adGold / total : null };
-}
-
-/** Analyse de la draft corrigée par les items adverses. Renvoie les raisons des corrections. */
-export function adjustAnalysis(x: Analysis, it: EnemyItems): { x: Analysis; reasons: string[] } {
-  const reasons: string[] = [];
-  const y = { ...x };
-  if (it.armorStackers) {
-    y.tanks += it.armorStackers;
-    reasons.push(`${it.armorStackers} adversaire(s) avec ${ARMOR_STACKER}+ d'armure en items`);
-  }
-  if (it.healers) {
-    y.heals += it.healers;
-    reasons.push(`${it.healers} adversaire(s) avec vol de vie / omnivampirisme`);
-  }
-  if (it.adShare !== null) {
-    const ad = (x.adShare + it.adShare) / 2;
-    if (Math.abs(ad - x.adShare) >= 0.1) reasons.push(`items adverses : ${Math.round(it.adShare * 100)} % de stats physiques`);
-    y.adShare = ad;
-    y.apShare = 1 - ad;
-  }
-  return { x: y, reasons };
-}
 
 export interface ItemLite { id: string; name: string; icon: string; cost: number }
 
+/** Champions de la partie (identifiants Data Dragon) : toi, tes alliés, tes adversaires. */
+export interface MatchChampions { me: string | null; allies: (string | null)[]; enemies: (string | null)[] }
+
 export interface OverlayView {
-  gold: number;
   form: Form;
   formForced: boolean;
-  /** null : build terminé. */
-  next: null | {
-    item: ItemLite;
-    /** Position dans le build (1 à 6), 0 pour le familier de jungle (item de départ). */
-    rank: number;
-    /** Justification (familier de jungle). */
-    why?: string;
-    /** Or manquant pour le finir (0 : achetable maintenant). */
-    missingGold: number;
-    /** Composant le plus cher achetable maintenant, si l'item complet ne l'est pas. */
-    component: ItemLite | null;
-  };
-  /** Les items suivants du build (aperçu). */
-  then: ItemLite[];
-  owned: number;
-  reasons: string[];
   notKayn: boolean;
   /** D'où vient le build : modèle de Kayn, méta Émeraude+ (autres champions), ou rien (pas assez de données). */
   source: "kayn" | "meta" | "none";
   /** Ton champion (nom affiché). */
   champion: string | null;
+  /** Familier de jungle (item de départ) et sa justification, ou null. */
+  starter: (ItemLite & { why: string }) | null;
+  /** Le build complet, dans l'ordre d'achat (bottes comprises). */
+  build: ItemLite[];
+  /** Ajustements à la composition (décidés en draft). */
+  reasons: string[];
+  /** Règles « si… alors… » écrites avant la partie : à appliquer toi-même. */
+  ifThen: string[];
   /** Méta : parties utilisées pour le build. */
   buildGames?: number;
   /** Conseils d'avant-partie affichés en ce moment (deux au plus), ajoutés par le processus principal. */
@@ -146,68 +49,49 @@ export interface OverlayView {
 }
 
 const lite = (id: string, shop: Shop): ItemLite => ({ id, name: shop[id]?.name ?? id, icon: icon(id), cost: shop[id]?.cost ?? 0 });
+const plain = (html: string) => html.replace(/<[^>]+>/g, "");
 
-export function buildOverlayView(s: LiveSnapshot, formChoice: Form | "auto", shop: Shop = SHOP, stat?: StatBuild | null): OverlayView {
-  const enemies = s.enemies.map((e) => (e.champion ? findChamp(e.champion) ?? null : null));
-  const allies = s.allies.map((a) => (a ? findChamp(a) ?? null : null));
-  const base = analyse(enemies, allies);
-  const form = resolveForm(base, formChoice);
-  const meChamp = s.me.champion ? findChamp(s.me.champion) ?? null : null;
-  const isKayn = !s.me.champion || s.me.champion === "Kayn";
-  const common = { gold: s.gold, form, formForced: formChoice !== "auto", notKayn: !isKayn, champion: meChamp?.name ?? null };
-
-  // Autre champion que Kayn : build statistique (ou rien sans assez de données).
-  if (!isKayn) {
-    if (!stat) return { ...common, next: null, then: [], owned: 0, reasons: [], source: "none" };
-    const pet = stat.starter ? Object.values(STARTERS).find((p) => p.id === stat.starter) : undefined;
-    const r = nextFrom(s, stat.ids, pet ? { id: pet.id, name: pet.name, cost: pet.cost, why: "Le plus joué en Émeraude+ sur ce champion." } : null, shop);
-    return { ...common, ...r, reasons: stat.reasons, source: "meta", buildGames: stat.games };
+/** Règles « si… alors… » de Kayn, écrites avant la partie (mêmes situations que les guides du simulateur). */
+function kaynIfThen(form: Form, build: string[]): string[] {
+  const out: string[] = [];
+  if (form === "blue") {
+    if (!build.includes("serylda")) out.push("Si leur frontline empile l'armure : Serylda's Grudge plus tôt (4ᵉ).");
+    if (build.includes("hubris")) out.push("Si tu n'as pas de kills : Youmuu's Ghostblade à la place d'Hubris (son passif demande des kills).");
+    out.push("Si tu domines mais n'arrives pas à fermer : Bastionbreaker en 6ᵉ pour prendre les tours.");
+  } else {
+    if (!build.includes("dd")) out.push("Si leurs dégâts physiques prennent l'avance : Death's Dance plus tôt.");
+    if (!build.includes("sterak")) out.push("Si leurs dégâts magiques prennent l'avance : Mercury's Treads et Sterak's Gage.");
+    out.push("Si tu es devant et qu'ils empilent l'armure : Serylda's Grudge après Black Cleaver.");
   }
-
-  const { x, reasons } = adjustAnalysis(base, readEnemyItems(s.enemies, enemies, shop));
-  const build: ItemKey[] = chooseBuild(x, form).b;
-  const ids = build.map((k) => ITEMS[k].id!).filter(Boolean);
-  const [key, why] = chooseStarter(base)[0];
-  const pet = STARTERS[key];
-  return { ...common, ...nextFrom(s, ids, { id: pet.id, name: pet.name, cost: pet.cost, why }, shop), reasons, source: "kayn" };
+  return out.slice(0, 3);
 }
 
-/** Prochain achat sur un build donné : familier d'abord en début de partie, puis le premier item manquant. */
-function nextFrom(s: LiveSnapshot, ids: string[], pet: { id: string; name: string; cost: number; why: string } | null, shop: Shop): Pick<OverlayView, "next" | "then" | "owned"> {
+/** Build de la partie, à partir des champions seulement (aucune donnée de l'état de la partie). */
+export function buildPlanView(m: MatchChampions, formChoice: Form | "auto", shop: Shop = SHOP, stat?: StatBuild | null): OverlayView {
+  const enemies = m.enemies.map((e) => (e ? findChamp(e) ?? null : null));
+  const allies = m.allies.map((a) => (a ? findChamp(a) ?? null : null));
+  const base = analyse(enemies, allies);
+  const form = resolveForm(base, formChoice);
+  const meChamp = m.me ? findChamp(m.me) ?? null : null;
+  const isKayn = !m.me || m.me === "Kayn";
+  const common = { form, formForced: formChoice !== "auto", notKayn: !isKayn, champion: meChamp?.name ?? null };
 
-  const bag = bagOf(s.me.items);
-  const ownedFlags = ids.map((id) => owns(bag, id, shop));
-  const idx = ownedFlags.indexOf(false);
-  let next: OverlayView["next"] = null;
-  // Début de partie : ni familier ni item du build → le familier d'abord (jungle).
-  const petOwned = s.me.items.some((id) => STARTER_ITEM_IDS.has(String(id)));
-  const starterFirst = !!pet && !petOwned && !ownedFlags.some(Boolean);
-  if (starterFirst && pet) {
-    next = {
-      item: { id: pet.id, name: pet.name, icon: icon(pet.id), cost: pet.cost },
-      rank: 0,
-      why: pet.why,
-      missingGold: Math.max(0, pet.cost - s.gold),
-      component: null,
+  if (!isKayn) {
+    if (!stat) return { ...common, source: "none", starter: null, build: [], reasons: [], ifThen: [] };
+    const pet = stat.starter ? Object.values(STARTERS).find((p) => p.id === stat.starter) : undefined;
+    return {
+      ...common, source: "meta", buildGames: stat.games,
+      starter: pet ? { ...lite(pet.id, shop), name: pet.name, cost: pet.cost, why: "Le plus joué en Émeraude+ sur ce champion." } : null,
+      build: stat.ids.map((id) => lite(id, shop)), reasons: stat.reasons, ifThen: stat.ifThen,
     };
-  } else if (idx >= 0) {
-    const id = ids[idx];
-    const r = remainingCost(id, bagOf(s.me.items), shop);
-    const missingGold = Math.max(0, r.gold - s.gold);
-    let component: ItemLite | null = null;
-    if (missingGold > 0) {
-      // Composant manquant le plus cher qu'on peut payer (prix de recette compris pour un intermédiaire).
-      const affordable = [...new Set(r.missing)]
-        .map((c) => ({ c, cost: remainingCost(c, bagOf(s.me.items), shop).gold }))
-        .filter((o) => o.cost > 0 && o.cost <= s.gold)
-        .sort((a, b) => b.cost - a.cost)[0];
-      if (affordable) component = { ...lite(affordable.c, shop), cost: affordable.cost };
-    }
-    next = { item: { ...lite(id, shop), cost: r.gold }, rank: idx + 1, missingGold, component };
   }
+  const choice = chooseBuild(base, form);
+  const [key, why] = chooseStarter(base)[0];
+  const pet = STARTERS[key];
   return {
-    next,
-    then: ids.filter((_, i) => !ownedFlags[i] && (starterFirst || i !== idx)).slice(0, 2).map((id) => lite(id, shop)),
-    owned: ownedFlags.filter(Boolean).length,
+    ...common, source: "kayn",
+    starter: { ...lite(pet.id, shop), name: pet.name, cost: pet.cost, why },
+    build: choice.b.map((k) => ITEMS[k].id!).filter(Boolean).map((id) => lite(id, shop)),
+    reasons: choice.notes.map(plain), ifThen: kaynIfThen(form, choice.b),
   };
 }

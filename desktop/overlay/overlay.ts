@@ -1,4 +1,5 @@
-// Contenu de l'overlay : prochain item, or manquant, composant achetable, deux items suivants.
+// Contenu de l'overlay : build de la partie décidé en draft, règles « si… alors… » et conseils d'avant-partie.
+// Rien ne dépend de l'état de la partie (or, items, kills, objectifs) : règles Riot.
 import type { OverlayApi } from "../ipc.ts";
 import type { ItemLite, OverlayView } from "../next-item.ts";
 
@@ -18,7 +19,6 @@ function icon(it: ItemLite, cls = "ic"): HTMLElement {
   img.addEventListener("error", () => img.classList.add("broken"), { once: true });
   return img;
 }
-const po = (n: number) => `${n.toLocaleString("fr-FR")} po`;
 
 /** Conseils d'avant-partie : bloc à part, recréé seulement quand ils changent (l'animation d'effacement continue). */
 let tipsShown = "";
@@ -31,6 +31,7 @@ function renderTips(tips: string[]): void {
   box.replaceChildren(...tips.map((t) => h("p", { class: "tip" }, t)));
 }
 
+/** Build décidé en draft (champions de la partie seulement) : rien ne change selon ce qui se passe en jeu. */
 function render(v: OverlayView | null): void {
   renderTips(v?.tips ?? []);
   const content = document.getElementById("content")!;
@@ -38,37 +39,23 @@ function render(v: OverlayView | null): void {
     content.replaceChildren(h("p", { class: "muted" }, "En attente des données de la partie…"));
     return;
   }
-  // Kayn : forme ; autres champions : build de la méta Émeraude+.
-  const formTag = v.source === "kayn"
-    ? h("span", { class: `tag ${v.form}` }, `${v.form === "blue" ? "bleu" : "rouge"}${v.formForced ? "" : " (auto)"}`)
-    : h("span", { class: "tag meta", title: `Build le plus joué en Émeraude+ (${v.buildGames ?? 0} parties), adapté à la composition` }, "Émeraude+");
-  const out: Child[] = [];
   if (v.source === "none") {
     content.replaceChildren(h("p", { class: "muted" }, `Pas encore assez de parties Émeraude+ pour proposer un build${v.champion ? ` sur ${v.champion}` : ""}.`));
     return;
   }
-  if (!v.next) {
-    out.push(h("div", { class: "row" }, h("span", { class: "ok" }, "Build terminé"), formTag));
-  } else {
-    const n = v.next;
-    out.push(h("div", { class: "row" },
-      icon(n.item),
-      h("div", {},
-        h("div", {}, h("span", { class: "title" }, `${n.rank ? `${n.rank}.` : "Départ :"} ${n.item.name}`), formTag),
-        n.missingGold === 0
-          ? h("div", { class: "ok" }, `Achetable maintenant (${po(n.item.cost)})`)
-          : h("div", { class: "small" }, h("span", { class: "gold" }, `${po(n.missingGold)} manquants`), ` · reste ${po(n.item.cost)}`))));
-    if (n.why) out.push(h("p", { class: "small muted mt4" }, n.why));
-    if (n.component) {
-      out.push(h("div", { class: "row small mt4" },
-        icon(n.component, "ic sm"), `En attendant : ${n.component.name} (${po(n.component.cost)})`));
-    }
-  }
-  if (v.then.length) {
+  // Kayn : forme ; autres champions : build de la méta Émeraude+.
+  const formTag = v.source === "kayn"
+    ? h("span", { class: `tag ${v.form}` }, `${v.form === "blue" ? "bleu" : "rouge"}${v.formForced ? "" : " (auto)"}`)
+    : h("span", { class: "tag meta", title: `Build le plus joué en Émeraude+ (${v.buildGames ?? 0} parties), adapté à la composition de la draft` }, "Émeraude+");
+  const out: Child[] = [h("div", { class: "row" }, h("span", { class: "title" }, "Build de la partie"), formTag)];
+  out.push(h("div", { class: "then" }, ...(v.starter ? [icon(v.starter, "ic sm")] : []), ...v.build.map((t, i) => h("span", { class: "step", title: `${i + 1}. ${t.name}` }, icon(t, "ic sm")))));
+  out.push(h("p", { class: "small muted" }, [v.starter ? `Départ : ${v.starter.name}` : "", ...v.build.map((t, i) => `${i + 1}. ${t.name}`)].filter(Boolean).join(" · ")));
+  if (v.reasons.length) out.push(h("p", { class: "small muted mt4" }, `Selon la draft : ${v.reasons.join(" ; ")}`));
+  if (v.ifThen.length) {
     out.push(h("div", { class: "sep" }));
-    out.push(h("div", { class: "then small muted" }, "Ensuite :", ...v.then.map((t) => icon(t, "ic sm")), v.then.map((t) => t.name).join(", ")));
+    out.push(h("p", { class: "small mt4" }, "Si… alors… (à appliquer toi-même) :"));
+    for (const t of v.ifThen) out.push(h("p", { class: "small muted" }, `• ${t}`));
   }
-  if (v.reasons.length) out.push(h("p", { class: "small muted mt4" }, `Ajusté : ${v.reasons.join(" ; ")}`));
   content.replaceChildren(...out.filter((c): c is Node | string => !!c));
 }
 

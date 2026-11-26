@@ -14,6 +14,7 @@ const calls = {
   metaView: (scope: number) => engine.metaView(scope),
   myGames: () => engine.myGames(),
   draftExtras: (...a: Parameters<Engine["draftExtras"]>) => engine.draftExtras(...a),
+  postGames: (...a: Parameters<Engine["postGames"]>) => engine.postGames(...a),
   statBuild: (...a: Parameters<Engine["statBuild"]>) => engine.statBuild(...a),
 };
 export type EngineCalls = typeof calls;

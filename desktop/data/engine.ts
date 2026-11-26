@@ -16,6 +16,7 @@ import { readMyGames, readMyMastery } from "../stats/read.ts";
 import { readGankData, readMeta, readMetaMastery, readMetaPatches } from "../meta/read.ts";
 import { metaStats } from "../meta/meta-stats.ts";
 import { recommend } from "../reco/recommend.ts";
+import { progressPriority } from "../reco/progress-draft.ts";
 import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "../reco/draft-pick.ts";
 import { laneRows, roleShares, type Lane, type LaneRow, type RoleShares } from "../reco/lanes.ts";
 import { potentialGroups, type PotentialGroups } from "../reco/potential.ts";
@@ -24,8 +25,9 @@ import { metaStyles } from "../reco/recommend.ts";
 import type { MetaTrend } from "../ipc.ts";
 import { guidePage, metaPage, type RecommendedPage } from "../runes/rune-page.ts";
 import { gamePlan, type GamePlan } from "../coach/game-plan.ts";
+import { remindersFrom, strategy, type Reminder, type Strategy } from "../coach/strategy.ts";
 import { statBuild, type StatBuild } from "../coach/stat-build.ts";
-import { readEnemyItems, SHOP } from "../next-item.ts";
+import { SHOP, type MatchChampions } from "../next-item.ts";
 import { readAllMyEvents, readAnalysisGames, readMetaDuels, readMetaMetrics, readMyEvents } from "../analysis/read.ts";
 import { analyseGame, type AnalysisGame, type DuelValues, type MetaMetricRow, type Values } from "../analysis/analysis.ts";
 import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "../analysis/overview.ts";
@@ -35,15 +37,15 @@ import { unpackDetail } from "../collector/detail.ts";
 import { myDuelValues, opponentValues } from "../analysis/opponent.ts";
 import type { DraftSnapshot } from "../champ-select.ts";
 import type { ChampLite, DraftView } from "../draft-view.ts";
-import type { LiveSnapshot } from "../live-client.ts";
 import type { AnalysisView, MetaView, OverviewView, PoolGoal, ProgressionView, RecoView, TrackEntry } from "../ipc.ts";
 import ddChamps from "../../src/data/generated/champions.json";
 import { METRICS as ALL_METRICS } from "../analysis/analysis.ts";
 import { AXES } from "../analysis/radar.ts";
 import { myGameFromDetail } from "../analysis/opponent.ts";
+import { postGame, type PostGame } from "../analysis/postgame.ts";
 import { DEFAULT_TAU, firstGamesEffect, statsSpread, WEIGHTS, type AxisGame } from "../reco/progress.ts";
 import { readJungleMastery, readJungleMeta, readOtherGames } from "../reco/progress-read.ts";
-import { progressAdvice, progression, readiness, RIFT_QUEUES, STANDARD_QUEUES, type ChampionFlag } from "../reco/progression.ts";
+import { progressAdvice, progression, readiness, RIFT_QUEUES, STAGE_LABEL, STANDARD_QUEUES, type ChampionFlag } from "../reco/progression.ts";
 
 const DIFFICULTY = new Map((Object.values(ddChamps) as { key: string | number; info: { difficulty: number } }[]).map((x) => [Number(x.key), x.info.difficulty]));
 import type { MyGameRow } from "../stats/my-stats.ts";
@@ -54,6 +56,9 @@ const RECO_PATCHES = 2;
 const META_TTL = 10 * 60_000;
 const DRAFT_ROLES: Record<string, string> = { jungle: "JUNGLE", middle: "MIDDLE" };
 const ALL_ROLES: Record<string, string> = { top: "TOP", jungle: "JUNGLE", middle: "MIDDLE", bottom: "BOTTOM", utility: "UTILITY" };
+/** Réglages utiles à la draft (mode du pool, drapeaux, référence, objectifs). */
+export interface DraftContext { goal: PoolGoal; flags: Record<string, ChampionFlag>; tier: RefTier; goalsStartMs: number | null; targets: Record<string, number> }
+export const DEFAULT_DRAFT_CONTEXT: DraftContext = { goal: "win", flags: {}, tier: DEFAULT_REF_TIER, goalsStartMs: null, targets: {} };
 /** Grille de la carte de chaleur (cases de 155 unités). */
 export const HEAT_GRID = 96;
 const MAP_SIZE = 14_900;
@@ -349,10 +354,10 @@ export class Engine {
     });
   }
 
-  /** Tes normales en draft (règles standard de la Faille), reconstruites depuis leur détail. */
+  /** Tes normales en draft et classées flexibles (règles standard de la Faille), reconstruites depuis leur détail. */
   private draftNormals(): AnalysisGame[] {
     return this.memo("draftNormals", () => {
-      const keys = new Set(readOtherGames(this.dbFile).filter((g) => g.queue === 400 && !g.remake).map((g) => `${g.matchId}|${g.account}`));
+      const keys = new Set(readOtherGames(this.dbFile).filter((g) => (g.queue === 400 || g.queue === 440) && !g.remake).map((g) => `${g.matchId}|${g.account}`));
       if (!keys.size) return [];
       const out: AnalysisGame[] = [];
       let db: DatabaseSync | null = null;
@@ -442,7 +447,7 @@ export class Engine {
       const tracked = new Map<number, TrackEntry["source"]>();
       for (const e of core.candidates.slice(0, 2)) tracked.set(e.championId, "advice");
       for (const [c, f] of fm) if (f === "progress") tracked.set(c, "flag");
-      const tracking: TrackEntry[] = [...tracked].map(([c, source]) => {
+      const track = ([c, source]: [number, TrackEntry["source"]]): TrackEntry => {
         const ranked = all.filter((g) => g.championId === c);
         const rift = others.filter((g) => g.championId === c && RIFT_QUEUES.has(g.queue));
         const draft = normals.filter((g) => g.championId === c && g.role === "JUNGLE");
@@ -451,7 +456,10 @@ export class Engine {
         const rankedRadar = radarOf(rankedJ, ref);
         const r = readiness({ experience: ranked.length + rift.length, standard, ranked: rankedRadar, rankedGames: rankedJ.length });
         return { championId: c, source, experience: ranked.length + rift.length, draftNormal: draft.length, rankedGames: rankedJ.length, standard, ranked: rankedRadar, ...r };
-      });
+      };
+      const tracking = [...tracked].map(track);
+      // Repère de chaque champion de progression (tous, hors confort) : pour l'analyse d'après-partie.
+      const readinessAll = core.candidates.map((e) => track([e.championId, tracked.get(e.championId) ?? "advice"]));
       void STANDARD_QUEUES;
 
       return {
@@ -460,7 +468,48 @@ export class Engine {
         candidates: core.candidates.slice(0, 15).map((e) => ({ ...e, myGames: core.mine.get(e.championId)?.games ?? 0, myWins: core.mine.get(e.championId)?.wins ?? 0 })),
         comfort: core.comfort, notForMe: core.notForMe, learningSpeed: firstGamesEffect(groups), tau: core.tau, calibration, tracking,
         myAxes: radarOf(all.filter((g) => g.role === "JUNGLE" && g.season === core.season), ref)?.values ?? [],
+        readinessAll,
       };
+    });
+  }
+
+/**
+   * Analyses d'après-partie de tes dernières parties (classées et normales en draft), les plus récentes d'abord.
+   * Pour chaque partie, les points à travailler et ta moyenne ne viennent que des parties d'avant.
+   */
+  postGames(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, userTargets: Record<string, number> = {}, limit = 10, flags: Record<string, ChampionFlag> = {}): PostGame[] {
+    // Cibles : les tiennes, sinon celles par défaut des objectifs.
+    const target = (k: string) => userTargets[k] ?? DEFAULT_GOALS.flatMap((g) => g.metrics).find((m) => m.key === k)?.target ?? 0;
+    const targets = { uncompensatedEarly: target("uncompensatedEarly"), deathsBeforeObj: target("deathsBeforeObj"), cs10: target("cs10") };
+    return this.memo(`postGames:${excluded.join(",")}:${tier}:${JSON.stringify(targets)}:${limit}:${JSON.stringify(flags)}`, () => {
+      const ranked = this.analysisGames(excluded);
+      const normals = this.draftNormals().filter((g) => !excluded.includes(g.championId));
+      const rankedKeys = new Set(ranked.map((g) => `${g.matchId}|${g.account}`));
+      const all = [...ranked, ...normals].sort((a, b) => b.startMs - a.startMs);
+      const tracking = new Map(this.progression(excluded, tier, "progress", flags).readinessAll.map((t) => [t.championId, t]));
+      let db: DatabaseSync | null = null;
+      const out: PostGame[] = [];
+      try {
+        db = new DatabaseSync(this.dbFile, { readOnly: true });
+        const get = db.prepare("select data from my_detail where match_id = ? and account = ?");
+        for (const g of all) {
+          if (out.length >= limit) break;
+          const row = get.get(g.matchId, g.account) as { data: Uint8Array } | undefined;
+          if (!row) continue;
+          const d = unpackDetail(row.data);
+          const before = all.filter((h) => h.startMs < g.startMs);
+          const ref = this.metaRef([g.role], tier);
+          const t = tracking.get(g.championId);
+          out.push(postGame({
+            game: g, detail: d, queue: rankedKeys.has(`${g.matchId}|${g.account}`) ? "ranked" : d.match.queue === 440 ? "flex" : "draftNormal",
+            metrics: gameMetrics(d, new Set([420, 440, 400])), targets,
+            sameChampion: before.filter((h) => h.championId === g.championId && h.role === g.role && h.season === g.season),
+            recent: before.filter((h) => h.role === g.role && h.season === g.season), // jamais d'une saison à l'autre
+            ref, refName: REF_TIERS[tier].short, progression: t ? `${STAGE_LABEL[t.stage]} : ${t.text}` : null,
+          }));
+        }
+      } finally { db?.close(); }
+      return out;
     });
   }
 
@@ -485,15 +534,53 @@ export class Engine {
 
   // ---------- Draft ----------
 
-  /** Rôles, choix du champion, plan d'avant-partie et page de runes pour une draft. */
-  draftExtras(snap: DraftSnapshot, view: DraftView, excluded: number[]): Pick<DraftView, "lanes" | "picks" | "plan" | "runePage"> {
+  /** Rôles, choix du champion, plan de partie et page de runes pour une draft. */
+  draftExtras(snap: DraftSnapshot, view: DraftView, excluded: number[], ctx: DraftContext = DEFAULT_DRAFT_CONTEXT): Pick<DraftView, "lanes" | "picks" | "plan" | "runePage" | "strategy"> {
     const lanes = this.safe("Rôles de la draft", () => this.lanes(snap, view));
+    const plan = this.safe("Plan d'avant-partie", () => this.plan(snap, lanes));
     return {
       lanes,
-      picks: this.safe("Choix de draft", () => this.picks(snap, lanes, excluded)),
-      plan: this.safe("Plan d'avant-partie", () => this.plan(snap, lanes)),
+      picks: this.safe("Choix de draft", () => this.picks(snap, lanes, excluded, ctx)),
+      plan,
+      strategy: this.safe("Plan de partie", () => this.strategyFor(snap, lanes, plan, excluded, ctx)),
       runePage: this.safe("Page de runes", () => this.runePage(snap, view)),
     };
+  }
+
+  /** Tes rappels personnels : tes objectifs de la semaine (valeur depuis le début du suivi si ≥ 5 parties, sinon d'avant). */
+  private reminders(excluded: number[], ctx: DraftContext): Reminder[] {
+    if (ctx.goalsStartMs == null) return [];
+    const g = this.goals(ctx.goalsStartMs, ctx.targets, excluded);
+    return remindersFrom(g.goals.filter((x) => x.horizon === "week").flatMap((x) => x.metrics.filter((m) => !m.info)).map((m) => {
+      const s = m.since.n >= 5 ? m.since : m.before;
+      return { key: m.key, label: m.label, unit: m.unit, better: m.better, target: m.target, value: s.value, n: s.n };
+    }));
+  }
+
+  private strategyMemo: { key: string; value: Strategy | null } | null = null;
+  /** Plan de partie : dès que ton champion est choisi (survolé ou verrouillé), provisoire tant que la draft n'est pas complète. */
+  private strategyFor(snap: DraftSnapshot, lanes: LaneRow<ChampLite>[] | null, plan: GamePlan | null, excluded: number[], ctx: DraftContext): Strategy | null {
+    const me = snap.me.championId || snap.me.intentId;
+    if (!lanes || !me) return null;
+    const myRow = lanes.find((r) => r.me);
+    const myLane = (ALL_ROLES[snap.me.position] as Lane | undefined) ?? myRow?.lane;
+    if (!myLane) return null;
+    const keyOf = (c: ChampLite | null | undefined) => (c ? findChamp(c.id)?.key ?? 0 : 0);
+    const allies: Partial<Record<Lane, number>> = {}, enemies: Partial<Record<Lane, number>> = {};
+    for (const r of lanes) {
+      if (r.me) allies[r.lane] = me;
+      else if (keyOf(r.ally)) allies[r.lane] = keyOf(r.ally);
+      if (keyOf(r.enemy)) enemies[r.lane] = keyOf(r.enemy);
+    }
+    const complete = snap.allies.filter((a) => a.championId).length >= 4 && snap.enemies.filter((e) => e.championId).length >= 5 && !!snap.me.championId;
+    const key = JSON.stringify([me, myLane, allies, enemies, snap.side, complete, !!plan, excluded, ctx.goalsStartMs, ctx.targets]);
+    if (this.strategyMemo?.key === key) return this.strategyMemo.value;
+    const value = strategy({
+      me: { championId: me, lane: myLane }, allies, enemies, side: snap.side,
+      metaParts: this.recentMeta().parts, index: this.pairs(), plan, reminders: this.reminders(excluded, ctx), complete,
+    });
+    this.strategyMemo = { key, value };
+    return value;
   }
 
   private safe<T>(label: string, fn: () => T): T | null {
@@ -510,11 +597,11 @@ export class Engine {
   }
 
   private picksMemo: { key: string; at: number; value: DraftPicks | null } | null = null;
-  private picks(snap: DraftSnapshot, lanes: LaneRow<ChampLite>[] | null, excluded: number[]): DraftPicks | null {
+  private picks(snap: DraftSnapshot, lanes: LaneRow<ChampLite>[] | null, excluded: number[], ctx: DraftContext = DEFAULT_DRAFT_CONTEXT): DraftPicks | null {
     const role = DRAFT_ROLES[snap.me.position];
     if (!role) return null;
     // Le client envoie la session très souvent : on ne recalcule que si la draft a changé (ou après 1 min).
-    const key = JSON.stringify([role, snap.myTurn, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId), snap.unavailable, excluded]);
+    const key = JSON.stringify([role, snap.myTurn, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId), snap.unavailable, excluded, snap.queueId, ctx.goal, ctx.flags, ctx.tier]);
     if (this.picksMemo && this.picksMemo.key === key && Date.now() - this.picksMemo.at < 60_000) return this.picksMemo.value;
     const enemyLanes = new Map<number, Lane>();
     snap.enemies.forEach((e) => {
@@ -529,6 +616,7 @@ export class Engine {
       enemies: snap.enemies.map((e) => e.championId).filter(Boolean),
       enemyLanes, unavailable: snap.unavailable, excluded,
       pool: r.pool, meta: this.metaView(RECO_PATCHES).champions, index: this.pairs(), provisional: reco.provisional,
+      ...(ctx.goal === "progress" && role === "JUNGLE" ? progressPriority(snap.queueId, this.progression(excluded, ctx.tier, "progress", ctx.flags)) : {}),
     }) : null;
     this.picksMemo = { key, at: Date.now(), value };
     return value;
@@ -536,12 +624,12 @@ export class Engine {
 
   private planMemo: { key: string; value: GamePlan | null } | null = null;
   private plan(snap: DraftSnapshot, lanes: LaneRow<ChampLite>[] | null): GamePlan | null {
-    if (!lanes || !snap.me.championId || snap.me.position !== "jungle") return null;
-    if (snap.enemies.filter((e) => e.championId).length < 5 || snap.allies.filter((a) => a.championId).length < 4) return null;
-    const key = JSON.stringify([snap.me.championId, snap.side, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId)]);
+    const me = snap.me.championId || snap.me.intentId;
+    if (!lanes || !me || snap.me.position !== "jungle") return null;
+    const key = JSON.stringify([me, snap.side, snap.allies.map((a) => a.championId), snap.enemies.map((e) => e.championId)]);
     if (this.planMemo?.key === key) return this.planMemo.value;
     const data = this.ganks();
-    const value = gamePlan({ meChampion: snap.me.championId, side: snap.side, lanes, kills: data.kills, parts: data.parts, index: this.pairs() });
+    const value = gamePlan({ meChampion: me, side: snap.side, lanes, kills: data.kills, parts: data.parts, index: this.pairs() });
     this.planMemo = { key, value };
     return value;
   }
@@ -569,11 +657,11 @@ export class Engine {
   // ---------- En jeu ----------
 
   /** Build statistique de ton champion (autre que Kayn) ; `draftPosition` : ton poste de la draft de cette partie. */
-  statBuild(snap: LiveSnapshot, draftPosition: string | null): StatBuild | null {
-    const ch = snap.me.champion ? findChamp(snap.me.champion) : undefined;
+  /** Build statistique d'après les champions de la partie seulement (jamais l'état de la partie). */
+  statBuild(m: MatchChampions, draftPosition: string | null): StatBuild | null {
+    const ch = m.me ? findChamp(m.me) : undefined;
     if (!ch?.key || ch.id === "Kayn") return null;
-    const enemies = snap.enemies.map((e) => (e.champion ? findChamp(e.champion) ?? null : null));
-    const enemyItems = readEnemyItems(snap.enemies, enemies, SHOP);
+    const enemies = m.enemies.map((e) => (e ? findChamp(e) ?? null : null));
     const fromDraft = draftPosition ? ALL_ROLES[draftPosition] : undefined;
     const meta = this.recentMeta();
     const rows = meta.parts.filter((p) => p.championId === ch.key);
@@ -584,6 +672,6 @@ export class Engine {
       role = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     }
     if (!role) return null;
-    return statBuild({ parts: rows.filter((r) => r.role === role), builds: meta.builds.filter((b) => b.championId === ch.key && b.role === role), role, enemies, enemyItems, shop: SHOP });
+    return statBuild({ parts: rows.filter((r) => r.role === role), builds: meta.builds.filter((b) => b.championId === ch.key && b.role === role), role, enemies, shop: SHOP });
   }
 }

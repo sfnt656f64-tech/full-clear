@@ -130,3 +130,42 @@ describe("duels : pas de conclusion sous 20 parties", () => {
     expect(many.effect).toBeGreaterThan(0);
   });
 });
+
+describe("draft en mode « Progresser »", () => {
+  const base = {
+    role: "JUNGLE", myTurn: true, allies: [] as number[], enemies: [] as number[], unavailable: [] as number[],
+    pool: [pool(KAYN, 58), pool(VIEGO, 57), pool(BRIAR, 56)],
+    meta: [meta(KAYN, 500, 50), meta(VIEGO, 500, 50), meta(BRIAR, 500, 50), meta(DIANA, 500, 51), meta(LEE, 500, 49)],
+    index: pairIndex([]),
+  };
+
+  it("champions prioritaires en tête, avec leur raison et leur étiquette ; un choix habituel reste visible", () => {
+    const r = draftPicks({ ...base, priority: [{ championId: DIANA, group: 0, tag: "Progression", why: "Champion de progression." }, { championId: LEE, group: 0, tag: "Progression", why: "Champion de progression (2)." }], rule: "Normale" });
+    expect(r.list.map((p) => p.championId)).toEqual([DIANA, LEE, KAYN]);
+    expect(r.list[0]).toMatchObject({ tag: "Progression", inPool: false });
+    expect(r.list[0].reasons[0]).toBe("Champion de progression.");
+    expect(r.rule).toBe("Normale");
+    expect(r.offPool?.championId).not.toBe(DIANA);
+  });
+
+  it("champions bloqués (« Pas pour moi », pas prêts pour la classée) jamais proposés, même dans ton pool", () => {
+    const r = draftPicks({ ...base, blocked: [KAYN, DIANA], priority: [{ championId: DIANA, group: 0, tag: "Progression", why: "x" }] });
+    expect(r.list.map((p) => p.championId)).toEqual([VIEGO, BRIAR]);
+    expect(r.offPool?.championId === KAYN || r.offPool?.championId === DIANA).toBe(false);
+  });
+
+  it("composition prise en compte entre champions prioritaires", () => {
+    const idx = pairIndex([...games(LEE, 200, 100), ...games(LEE, 60, 45, { enemy: ZED }), ...games(DIANA, 200, 100), ...games(DIANA, 60, 18, { enemy: ZED })]);
+    const r = draftPicks({ ...base, index: idx, enemies: [ZED], priority: [{ championId: DIANA, group: 0, tag: "P", why: "a" }, { championId: LEE, group: 0, tag: "P", why: "b" }] });
+    expect(r.list[0].championId).toBe(LEE);
+    expect(r.list[0].reasons.join(" ")).toMatch(/Bon contre Zed/);
+  });
+
+  it("3 champions prioritaires au plus, puis un choix habituel", () => {
+    const ids = [DIANA, LEE, ZED, AHRI, ORI];
+    const r = draftPicks({ ...base, meta: [...base.meta, meta(ZED, 500, 50), meta(AHRI, 500, 50), meta(ORI, 500, 50)], priority: ids.map((championId) => ({ championId, group: 0, tag: "P", why: "x" })) });
+    expect(r.list.length).toBe(4);
+    expect(r.list.filter((p) => p.tag).length).toBe(3);
+    expect(r.list[3].championId).toBe(KAYN);
+  });
+});

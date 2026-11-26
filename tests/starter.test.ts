@@ -69,7 +69,7 @@ describe("affichage", () => {
   it("dans la vue de draft de l'appli de bureau", () => {
     const key = (id: string) => champ(id).key!;
     const v = buildDraftView({
-      timerPhase: "BAN_PICK", timeLeftMs: 0, myTurn: false, side: null, unavailable: [],
+      timerPhase: "BAN_PICK", timeLeftMs: 0, myTurn: false, side: null, unavailable: [], queueId: 0,
       me: { championId: 141, intentId: 0, position: "jungle" },
       allies: ["Jax", "Ezreal"].map((id) => ({ championId: key(id), position: "" })),
       enemies: ["LeeSin", "Draven", "Ahri", "Ornn", "Lulu"].map((id) => ({ championId: key(id) })),

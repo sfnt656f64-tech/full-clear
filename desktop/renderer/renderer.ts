@@ -1,7 +1,9 @@
 // Fenêtre d'état. Pas d'accès à Node : tout passe par window.kayn (preload.ts).
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
+import type { PostGame } from "../analysis/postgame.ts";
 import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
+import { sparkline as targetCurve } from "../ui/sparkline.ts";
 import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
@@ -77,21 +79,22 @@ const wilsonPm = (wr: number, n: number) => {
 };
 const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
 
-/** Plan d'avant-partie (jungle) : chance de gank par lane, premier gank, départ, objectifs. */
-function renderPlan(p: NonNullable<DraftView["plan"]>): HTMLElement {
-  const label: Record<string, string> = { TOP: "Top", MIDDLE: "Mid", BOTTOM: "Bot" };
-  return h("div", { class: "plan" },
-    h("h3", {}, "Plan d'avant-partie", p.provisional ? h("span", { class: "small muted" }, " · provisoire") : null),
-    ...p.lanes.map((l) => h("div", { class: `plan-lane${l.lane === p.firstGank ? " best" : ""}` },
-      h("span", { class: "plan-name" }, label[l.lane]),
-      h("span", { class: "plan-bar" }, h("span", { class: "plan-fill", "data-pct": String(Math.round(l.chance)) })),
-      h("span", { class: "plan-pct" }, `${Math.round(l.chance)} %`),
-      h("span", { class: "small muted plan-why" }, l.reasons.join(" · ")))),
-    h("p", { class: "small" }, h("b", {}, "1er gank suggéré : "), label[p.firstGank],
-      ` · départ côté ${p.start.side}${p.start.buff ? ` (${p.start.buff})` : ""}`,
-      p.start.topShare != null ? h("span", { class: "muted" }, ` · en Émeraude+ : ${Math.round(p.start.topShare)} % des départs côté top`) : null),
-    ...p.objectives.map((o) => h("p", { class: "small" }, "› ", o)),
-    h("p", { class: "small muted" }, `Chances estimées depuis les ganks des junglers Émeraude+ avant 10 min (${p.games} parties avec ton champion), le contrôle de tes alliés, les duels et les laners adverses. Estimation, pas une mesure : les ganks ratés sans mort n'apparaissent pas dans les chronologies, la réussite est donc surestimée ; seul l'ordre entre les lanes compte. Calculé une fois, avec la draft.`));
+/**
+ * Plan de partie écrit en draft : condition de victoire, « si… alors… » à appliquer toi-même, moments de force,
+ * jungler adverse, premier chemin, objectifs et rappels. Rien ne réagit à la partie en cours (règles Riot).
+ */
+function renderStrategy(st: NonNullable<DraftView["strategy"]>): HTMLElement {
+  const list = (title: string, items: string[]) => (items.length ? [h("p", { class: "small" }, h("b", {}, title)), h("ul", { class: "why small" }, ...items.map((t) => h("li", {}, t)))] : []);
+  return h("div", { class: "plan strategy" },
+    h("h3", {}, "Plan de partie", st.provisional ? h("span", { class: "small muted" }, " · provisoire (draft incomplète)") : null),
+    h("p", { class: "small" }, h("b", {}, "Condition de victoire : "), st.winCondition.summary),
+    ...list("Si… alors… (à appliquer toi-même) :", st.winCondition.ifThen),
+    ...list("Moments de force :", st.power),
+    ...(st.enemyJungler ? [h("p", { class: "small" }, h("b", {}, "Jungler adverse : "), st.enemyJungler)] : []),
+    ...list("Premier chemin :", st.path),
+    ...list("Objectifs :", st.objectives),
+    ...list("Tes rappels :", st.reminders.map((r) => r.text)),
+    h("p", { class: "small muted" }, "Début ou fin de partie : un champion n'est classé que si trois mesures (Émeraude+) sont nettes et vont dans le même sens : son écart d'or à 15 min contre son vis-à-vis, son win rate parties courtes − longues, et la progression de ses dégâts face à son vis-à-vis entre parties courtes et longues. Duels cités à partir de 20 parties, hors marge. Écrit une fois en draft : rien ne s'adapte pendant la partie."));
 }
 
 /** Page de runes recommandée, avec le bouton d'import dans le client. */
@@ -136,12 +139,14 @@ function renderPicks(p: NonNullable<DraftView["picks"]>): HTMLElement {
       icon(ch?.image ? CDN_CHAMP + ch.image : "", ch?.name ?? "", "champ"),
       h("div", {},
         h("div", { class: "pick-name" }, `${i != null ? `${i + 1}. ` : ""}${ch?.name ?? `#${x.championId}`}`,
+          x.tag ? h("span", { class: "tag-chip" }, x.tag) : null,
           h("span", { class: "small muted", title: "Effet de cette draft sur le score (contres, synergies, dégâts)" }, ` ${sgn(delta)} avec cette draft`),
           x.provisional ? h("span", { class: "small muted" }, " · provisoire") : null),
         h("ul", { class: "why small" }, ...x.reasons.map((r) => h("li", {}, r)))));
   };
   return h("div", { class: `picks${p.myTurn ? " my-turn" : ""}` },
     h("h3", {}, p.myTurn ? "À toi de choisir" : `Tes meilleurs choix (${p.role === "JUNGLE" ? "jungle" : "milieu"})`),
+    p.rule ? h("p", { class: "small muted" }, "Mode Progresser · ", p.rule) : null,
     ...(p.list.length ? p.list.map((x, i) => card(x, i)) : [h("p", { class: "muted small" }, "Aucun champion de ton pool disponible.")]),
     ...(p.offPool ? [h("p", { class: "small muted" }, "À envisager :"), card(p.offPool, null)] : []),
     h("p", { class: "muted small" }, "Classés selon ton pool, les duels et associations en Émeraude+ et l'équilibre des dégâts. Mis à jour à chaque pick."));
@@ -213,7 +218,7 @@ function renderDraft(s: AppState): void {
     body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
     body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
   }
-  if (d.plan) body.push(renderPlan(d.plan));
+  if (d.strategy) body.push(renderStrategy(d.strategy));
   // Choix du champion : inutile une fois le tien verrouillé.
   if (d.picks && !d.me.locked) body.push(renderPicks(d.picks));
   if (d.runePage) body.push(renderRunePage(d.runePage, d.isKayn && d.runes ? d.runes.note : null));
@@ -267,8 +272,6 @@ function renderDraft(s: AppState): void {
   open.addEventListener("click", () => void window.kayn.openDraftInSimulator());
   body.push(h("div", { class: "row" }, open));
   $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
-  // Largeur des barres du plan (pas de style en ligne : politique de sécurité de la page).
-  for (const f of document.querySelectorAll<HTMLElement>(".plan-fill")) f.style.width = `${f.dataset.pct}%`;
 }
 
 // ---------- En jeu ----------
@@ -291,16 +294,11 @@ function renderLive(s: AppState): void {
     : "En jeu · overlay affiché";
   const body: Child[] = [];
   const v = l.view;
-  if (v) {
-    if (!v.next) body.push(h("p", { class: "ok-text" }, "Build terminé."));
-    else {
-      const n = v.next;
-      body.push(h("div", { class: "next" }, icon(n.item.icon, n.item.name), h("div", {},
-        h("b", {}, `${n.rank ? "Prochain" : "Départ"} : ${n.item.name}`),
-        h("div", { class: "small" }, n.missingGold ? h("span", { class: "gold" }, `${n.missingGold} po manquants (or : ${v.gold})`) : h("span", { class: "ok-text" }, "achetable maintenant"),
-          n.component ? ` · en attendant : ${n.component.name}` : ""))));
-    }
-    if (v.reasons.length) body.push(h("p", { class: "muted small" }, `Build ajusté : ${v.reasons.join(" ; ")}.`));
+  if (v && v.source !== "none") {
+    body.push(h("div", { class: "next" }, ...v.build.map((t) => icon(t.icon, t.name))));
+    body.push(h("p", { class: "small" }, [v.starter ? `Départ : ${v.starter.name}` : "", ...v.build.map((t, i) => `${i + 1}. ${t.name}`)].filter(Boolean).join(" · ")));
+    if (v.reasons.length) body.push(h("p", { class: "muted small" }, `Selon la draft : ${v.reasons.join(" ; ")}.`));
+    if (v.ifThen.length) body.push(h("p", { class: "muted small" }, `Si… alors… : ${v.ifThen.join(" ")}`));
   }
   $("live-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
   $<HTMLInputElement>("overlay-on").checked = l.overlayEnabled;
@@ -520,6 +518,7 @@ try { const x = localStorage.getItem("sub") as Sub | null; if (x && SUBS.include
 window.kayn.onNavigate((n) => {
   if (n.sub) currentSub = n.sub;
   selectTab(n.tab);
+  if (n.tab === "analysis" && n.hash?.startsWith("postgame:")) { postOpen = n.hash.slice(9); void loadPostGames(); }
   if (n.tab === "champions" && n.sub) selectSub(n.sub, n.hash);
 });
 for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
@@ -642,6 +641,51 @@ function plural(n: number, word: string): string { return `${n} ${word}${n > 1 ?
 }
 void loadTracking();
 window.setInterval(() => void loadTracking(), 120_000);
+
+// ---------- Analyses d'après-partie ----------
+
+const QUEUE_LABEL: Record<PostGame["queue"], string> = { ranked: "classée", flex: "flexible", draftNormal: "normale (draft)" };
+const num = (v: number, unit: string) => `${v.toLocaleString("fr-FR", { maximumFractionDigits: unit.trim() === "%" || Math.abs(v) >= 100 ? 0 : 1 })}${unit}`;
+let postOpen: string | null = null;
+
+function renderPostGame(p: PostGame, open: boolean): HTMLElement {
+  const mark = (b: boolean | null) => h("span", { class: b === true ? "good-text" : b === false ? "bad-text" : "muted" }, b === true ? "✔ " : b === false ? "✘ " : "= ");
+  const sec = (title: string, ...kids: (Node | null)[]) => h("div", { class: "post-part" }, h("h4", {}, title), ...kids);
+  const head = `${new Date(p.startMs).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })} · ${champName(p.championId)} · ${QUEUE_LABEL[p.queue]} · ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min · ${p.kda}${p.opponent ? ` · face à ${champName(p.opponent)}` : ""}`;
+  const d = h("details", { class: "post", id: `postgame-${p.matchId}` },
+    h("summary", {}, head),
+    sec(p.role === "JUNGLE" ? "Face au jungler adverse" : "Face à ton vis-à-vis", h("ul", { class: "why small" }, ...p.vs.filter((v) => v.mine != null).map((v) => h("li", {}, mark(v.better), `${v.label} : `,
+      v.diff ? `${v.mine! >= 0 ? "+" : "−"}${num(Math.abs(v.mine!), v.unit)} (${v.mine! > 0 ? "en ta faveur" : v.mine! < 0 ? "en sa faveur" : "égalité"})` : `${num(v.mine!, v.unit)} contre ${v.opp != null ? num(v.opp, v.unit) : "–"}`,
+      v.outcomeLinked ? h("span", { class: "muted" }, " (toute la partie : suit en partie l'issue)") : null)))),
+    sec("Tes objectifs de la semaine (cette partie)", p.goals.length ? h("ul", { class: "why small" }, ...p.goals.map((g) => h("li", {}, mark(g.met), `${g.label} : ${g.value} (cible ${g.target})`)))
+      : h("p", { class: "small muted" }, "Tes objectifs portent sur la jungle : pas suivis sur une partie dans un autre rôle.")),
+    sec("Moments clés", p.moments.length ? h("ul", { class: "why small moments" }, ...p.moments.map((m) => h("li", { class: m.kind }, h("b", {}, m.time), " ", m.text))) : h("p", { class: "small muted" }, "Chronologie pas encore lue pour cette partie.")),
+    sec(p.average ? `Ta moyenne sur ${champName(p.championId)} (${p.average.games} autres parties cette saison)` : "Ta moyenne sur ce champion",
+      p.average ? h("ul", { class: "why small" }, ...p.average.lines.map((l) => h("li", {}, mark(l.better), `${l.label} : ${num(l.game, l.unit)} contre ${num(l.average, l.unit)} en moyenne`)))
+        : h("p", { class: "small muted" }, "Moins de 5 autres parties sur ce champion cette saison : pas de comparaison.")),
+    p.progression ? sec("Repère de progression", h("p", { class: "small" }, p.progression)) : null,
+    sec("À travailler (d'après tes 20 parties précédentes)", h("ul", { class: "why small" }, ...p.work.map((w, i) => {
+      const c = p.curves?.[i];
+      return h("li", {}, w, c ? h("div", { class: "spark-box" },
+        h("span", { class: "small muted" }, `${c.label} : moyenne glissante sur 10 parties, tes ${c.games} dernières parties (de la plus ancienne à la plus récente).`),
+        targetCurve({ points: c.points, target: c.target, targetLabel: c.targetLabel, fmt: (v) => num(v, c.unit) }),
+        h("span", { class: "small" }, c.vsTarget)) : null);
+    }))),
+    sec("Point fort", h("p", { class: "small" }, p.strength)));
+  if (open) d.setAttribute("open", "");
+  return d;
+}
+
+async function loadPostGames(): Promise<void> {
+  const list = await window.kayn.getPostGames().catch(() => null);
+  const sec = $("post-sec");
+  if (!list || !list.length) { sec.hidden = true; return; }
+  sec.hidden = false;
+  $("post").replaceChildren(...list.map((p, i) => renderPostGame(p, postOpen ? p.matchId === postOpen : i === 0)));
+  if (postOpen) document.getElementById(`postgame-${postOpen}`)?.scrollIntoView({ block: "start" });
+}
+void loadPostGames();
+window.kayn.onPostGameReady(() => { postOpen = null; void loadPostGames(); });
 
 // Niveau de référence : mémorisé dans les réglages (partagé avec Champions recommandés), puis tout est recalculé.
 $<HTMLSelectElement>("af-ref").addEventListener("change", (e) => {

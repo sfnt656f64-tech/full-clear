@@ -3,6 +3,7 @@ import type { ComfortEntry, ProgressEntry, Stage } from "./reco/progression.ts";
 import type { FirstGames } from "./reco/progress.ts";
 import type { RefInfo, RefTier } from "./analysis/ref-tier.ts";
 import type { DraftView } from "./draft-view.ts";
+import type { PostGame } from "./analysis/postgame.ts";
 import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
 import type { MetaChampion } from "./meta/meta-stats.ts";
@@ -155,12 +156,16 @@ export interface KaynApi {
   getAnalysis(key: string | null, filter?: OverviewFilter): Promise<AnalysisView>;
   /** Navigation demandée par le processus principal (menu de l'icône, simulateur). */
   onNavigate(cb: (nav: Navigation) => void): void;
+  /** Nouvelle analyse d'après-partie disponible. */
+  onPostGameReady(cb: () => void): void;
   /** Niveau de référence des comparaisons (Analyse, Champions). */
   setRefTier(tier: RefTier): Promise<AppState>;
   /** Objectif du pool, et choix par champion (null : retirer le choix). */
   setPoolGoal(goal: PoolGoal): Promise<AppState>;
   setChampionFlag(id: string, flag: "notForMe" | "progress" | null): Promise<AppState>;
   getProgression(): Promise<ProgressionView>;
+  /** Analyses d'après-partie de tes dernières parties (les plus récentes d'abord). */
+  getPostGames(): Promise<PostGame[]>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Suivi de tes objectifs (jungle). */
   getGoals(): Promise<GoalsView>;
@@ -199,7 +204,9 @@ export const IPC = {
   setPoolGoal: "kayn:set-pool-goal",
   setChampionFlag: "kayn:set-champion-flag",
   getProgression: "kayn:get-progression",
+  getPostGames: "kayn:get-postgames",
   navigate: "kayn:navigate",
+  postGameReady: "kayn:postgame-ready",
   getOverview: "kayn:get-overview",
   getGoals: "kayn:get-goals",
   restartGoals: "kayn:restart-goals",
@@ -267,4 +274,6 @@ export interface ProgressionView {
   tracking: TrackEntry[];
   /** Ton radar en jungle (saison en cours) : tes axes forts. */
   myAxes: (number | null)[];
+  /** Repère de chaque champion de progression (hors confort), pour l'analyse d'après-partie. */
+  readinessAll: TrackEntry[];
 }

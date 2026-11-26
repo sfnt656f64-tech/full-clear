@@ -59,14 +59,14 @@ export function readMeta(dbFile: string, patches: string[]): MetaInput {
     const sel = `select match_id from meta_games where remake = 0 and patch in (${marks})`;
     const matches = (db.prepare(`select count(*) n from meta_games where remake = 0 and patch in (${marks})`).get(...patches) as { n: number }).n;
     const parts = (db.prepare(`select p.match_id, p.team, p.champion_id, p.role, p.win, p.kills, p.deaths, p.assists, p.items, p.perks,
-        p.kills15, p.assists15, p.team_kills15, p.gold15, g.duration_s
+        p.kills15, p.assists15, p.team_kills15, p.gold15, p.damage, g.duration_s
         from meta_parts p join meta_games g on g.match_id = p.match_id where g.remake = 0 and g.patch in (${marks})`).all(...patches) as
       { match_id: string; team: number; champion_id: number; role: string; win: number; kills: number; deaths: number; assists: number; items: string; perks: string | null;
-        kills15: number | null; assists15: number | null; team_kills15: number | null; gold15: number | null; duration_s: number }[])
+        kills15: number | null; assists15: number | null; team_kills15: number | null; gold15: number | null; damage: number | null; duration_s: number }[])
       .map((r) => ({
         matchId: r.match_id, championId: r.champion_id, role: r.role, win: !!r.win, items: JSON.parse(r.items) as number[], perks: r.perks ? (JSON.parse(r.perks) as RunePage) : null,
         team: r.team, kills: r.kills, deaths: r.deaths, assists: r.assists, durationS: r.duration_s,
-        kills15: r.kills15, assists15: r.assists15, teamKills15: r.team_kills15, gold15: r.gold15,
+        kills15: r.kills15, assists15: r.assists15, teamKills15: r.team_kills15, gold15: r.gold15, damage: r.damage,
       }));
     const builds = (db.prepare(`select champion_id, role, win, items from meta_builds where match_id in (${sel})`).all(...patches) as
       { champion_id: number; role: string; win: number; items: string }[])
