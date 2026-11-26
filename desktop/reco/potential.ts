@@ -39,6 +39,8 @@ export interface PotentialEntry {
   winRate: number | null;
   radar: Radar | null;
   text: string;
+  /** Pourquoi, en une ligne courte et sans chiffre (vue principale ; text : les détails). */
+  short: string;
   /** Moins de 20 parties ou pas de radar : à confirmer. */
   provisional: boolean;
   /** Score du pool (tri dans le groupe), null hors pool. */
@@ -83,29 +85,29 @@ export function classifyPool(p: PoolPick, radar: Radar | null, ref = "Émeraude"
 
   if (s == null || !radar) {
     const group: PotentialGroup = keepOk ? "keep" : wr < SHELVE_WR ? "shelve" : "neutral";
-    return { ...base, group, provisional: true, text: `${wrText}. Stats de jeu pas encore disponibles (moins de 5 parties relues) : classement provisoire, sur le win rate seul.` };
+    return { ...base, group, provisional: true, short: group === "keep" ? "Tu gagnes ; stats de jeu pas encore relues." : group === "shelve" ? "Peu de victoires ; stats de jeu pas encore relues." : "Stats de jeu pas encore relues : rien de net.", text: `${wrText}. Stats de jeu pas encore disponibles (moins de 5 parties relues) : classement provisoire, sur le win rate seul.` };
   }
   const { strong, weak } = axesText(radar);
   const stats = statsText(radar, ref);
   const level = statsLevel(radar)!;
   if (keepOk && level !== "below") {
-    return { ...base, group: "keep", text: `${wrText}, ${stats}, ${level === "above" ? "au-dessus de la médiane" : "autour de la médiane (marge comprise)"}${strong ? `, points forts : ${strong}` : ""} : à garder.${confirm}` };
+    return { ...base, group: "keep", short: level === "above" ? "Tu gagnes et tes stats sont au-dessus de la médiane." : "Tu gagnes, stats dans la moyenne : à garder.", text: `${wrText}, ${stats}, ${level === "above" ? "au-dessus de la médiane" : "autour de la médiane (marge comprise)"}${strong ? `, points forts : ${strong}` : ""} : à garder.${confirm}` };
   }
   if (keepOk) {
-    return { ...base, group: "keep", text: `Tu gagnes (${wrText}), mais ${stats}, sous la médiane : à consolider sur ${weak || "l'ensemble des axes"}.${confirm}` };
+    return { ...base, group: "keep", short: "Tu gagnes, mais tes stats sont sous la médiane.", text: `Tu gagnes (${wrText}), mais ${stats}, sous la médiane : à consolider sur ${weak || "l'ensemble des axes"}.${confirm}` };
   }
   if (level === "above") {
-    return { ...base, group: "potential", text: `${stats}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, mais ${wrText} : potentiel à développer.${confirm}${notYet}` };
+    return { ...base, group: "potential", short: "Bonnes stats, les victoires ne suivent pas encore.", text: `${stats}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, mais ${wrText} : potentiel à développer.${confirm}${notYet}` };
   }
   if (level === "around") {
     return few
-      ? { ...base, group: "potential", text: `${stats}, autour de la médiane, et ${wrText} : potentiel à confirmer (moins de ${CONFIRM_GAMES} parties).${notYet}` }
-      : { ...base, group: "neutral", text: `${stats}, autour de la médiane, et ${wrText} : neutre, pas prioritaire.` };
+      ? { ...base, group: "potential", short: "Stats dans la moyenne, trop peu de parties pour juger.", text: `${stats}, autour de la médiane, et ${wrText} : potentiel à confirmer (moins de ${CONFIRM_GAMES} parties).${notYet}` }
+      : { ...base, group: "neutral", short: "Rien de net : pas prioritaire.", text: `${stats}, autour de la médiane, et ${wrText} : neutre, pas prioritaire.` };
   }
   if (wr >= SHELVE_WR) {
-    return { ...base, group: "neutral", text: `${wrText}, mais ${stats}, sous la médiane sur ${weak || "plusieurs axes"} : neutre, pas prioritaire.${confirm}${notYet}` };
+    return { ...base, group: "neutral", short: "Stats sous la médiane : pas prioritaire.", text: `${wrText}, mais ${stats}, sous la médiane sur ${weak || "plusieurs axes"} : neutre, pas prioritaire.${confirm}${notYet}` };
   }
-  return { ...base, group: "shelve", text: `${stats}, sous la médiane sur ${weak || "plusieurs axes"}, et ${wrText} : à mettre de côté.${confirm}` };
+  return { ...base, group: "shelve", short: "Stats et victoires basses : à mettre de côté.", text: `${stats}, sous la médiane sur ${weak || "plusieurs axes"}, et ${wrText} : à mettre de côté.${confirm}` };
 }
 
 /** Champion joué 5 à 9 fois (hors pool) : « Potentiel à développer » seulement avec des stats au-dessus de la médiane, marge comprise. */
@@ -114,6 +116,7 @@ export function classifyTried(t: TriedChampion, radar: Radar | null, ref = "Éme
   const { strong } = axesText(radar);
   return {
     championId: t.championId, group: "potential", games: t.games, winRate: (t.wins / t.games) * 100, radar, score: null, provisional: true,
+    short: "Bonnes stats sur peu de parties : à essayer davantage.",
     text: `${statsText(radar, ref)}, au-dessus de la médiane${strong ? `, points forts : ${strong}` : ""}, sur seulement ${t.games} parties (${t.wins} victoire${t.wins > 1 ? "s" : ""}) : potentiel à développer. À confirmer : moins de ${CONFIRM_GAMES} parties.`,
   };
 }

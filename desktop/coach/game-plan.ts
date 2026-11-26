@@ -159,7 +159,7 @@ export function gamePlan(input: GamePlanInput): GamePlan | null {
   const topShare = starts.length >= 10 ? (starts.filter((p) => p.startSide === "top").length / starts.length) * 100 : null;
   const side: "top" | "bot" = first === "TOP" ? "bot" : first === "BOTTOM" ? "top" : topShare != null && topShare >= 50 ? "top" : "bot";
   // Équipe bleue : Blue Buff côté top, Red Buff côté bot ; équipe rouge : l'inverse.
-  const buff = input.side == null ? null : (input.side === "blue") === (side === "top") ? "Blue Buff" : "Red Buff";
+  const buff = input.side == null ? null : (input.side === "blue") === (side === "top") ? "buff bleu" : "buff rouge";
 
   return {
     lanes,

@@ -10,10 +10,11 @@ import type { Form } from "../src/data/types";
 import { analyse, resolveForm } from "../src/engine/analyse";
 import { chooseBuild, chooseStarter } from "../src/engine/build";
 import { DDRAGON_IMG } from "./draft-view.ts";
-import type { StatBuild } from "./coach/stat-build.ts";
+import type { BuildRule, StatBuild } from "./coach/stat-build.ts";
 
 export interface ShopItem {
-  name: string; cost: number; from?: string[];
+  /** Nom anglais ; nameFr : nom affiché (langue du client, Data Dragon fr_FR). */
+  name: string; nameFr?: string; cost: number; from?: string[];
   ad?: number; ap?: number; armor?: number; mr?: number; hp?: number; heal?: true; boots?: true;
 }
 export type Shop = Record<string, ShopItem>;
@@ -40,28 +41,52 @@ export interface OverlayView {
   build: ItemLite[];
   /** Ajustements à la composition (décidés en draft). */
   reasons: string[];
-  /** Règles « si… alors… » écrites avant la partie : à appliquer toi-même. */
-  ifThen: string[];
+  /** Règles « si… alors… » écrites avant la partie : à appliquer toi-même (texte : ruleText). */
+  rules: BuildRule[];
   /** Méta : parties utilisées pour le build. */
   buildGames?: number;
-  /** Conseils d'avant-partie affichés en ce moment (deux au plus), ajoutés par le processus principal. */
-  tips?: string[];
+  /** Plan écrit en draft (vue simple), ajouté par le processus principal au début de la partie ; rien ne change ensuite. */
+  plan?: import("./coach/plain.ts").PlainPlan | null;
 }
 
-const lite = (id: string, shop: Shop): ItemLite => ({ id, name: shop[id]?.name ?? id, icon: icon(id), cost: shop[id]?.cost ?? 0 });
+/** Paires nom anglais → nom français des items (les plus longs d'abord), pour les textes venus du modèle de Kayn. */
+const EN_FR = Object.values(SHOP).filter((i) => i.nameFr && i.nameFr !== i.name).map((i) => [i.name, i.nameFr!] as const).sort((a, b) => b[0].length - a[0].length);
+/** Remplace les noms anglais d'items par ceux du client (français). */
+export function frenchify(text: string): string {
+  let out = text;
+  for (const [en, fr] of EN_FR) if (out.includes(en)) out = out.split(en).join(fr);
+  return out;
+}
+
+/** Nom affiché d'un item : celui du client (français), sinon l'anglais. */
+export const itemName = (id: string, shop: Shop = SHOP): string => shop[id]?.nameFr ?? shop[id]?.name ?? id;
+const lite = (id: string, shop: Shop): ItemLite => ({ id, name: itemName(id, shop), icon: icon(id), cost: shop[id]?.cost ?? 0 });
+
+/**
+ * « Leur carry AD est fed → Ange gardien » (noms dans la langue du client). « au lieu de … » seulement si la ligne
+ * reste courte (12 mots au plus).
+ */
+export function ruleText(r: BuildRule, shop: Shop = SHOP): string {
+  const base = `${r.cond} → ${itemName(r.id, shop)}`;
+  if (!r.instead) return base;
+  const other = itemName(r.instead, shop);
+  const full = `${base} au lieu ${/^[aeiouyéèêàh]/i.test(other) ? "d'" : "de "}${other}`;
+  return full.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length <= 12 ? full : base;
+}
 const plain = (html: string) => html.replace(/<[^>]+>/g, "");
 
 /** Règles « si… alors… » de Kayn, écrites avant la partie (mêmes situations que les guides du simulateur). */
-function kaynIfThen(form: Form, build: string[]): string[] {
-  const out: string[] = [];
+function kaynRules(form: Form, build: string[]): BuildRule[] {
+  const id = (k: string) => ITEMS[k as keyof typeof ITEMS]?.id ?? k;
+  const out: BuildRule[] = [];
   if (form === "blue") {
-    if (!build.includes("serylda")) out.push("Si leur frontline empile l'armure : Serylda's Grudge plus tôt (4ᵉ).");
-    if (build.includes("hubris")) out.push("Si tu n'as pas de kills : Youmuu's Ghostblade à la place d'Hubris (son passif demande des kills).");
-    out.push("Si tu domines mais n'arrives pas à fermer : Bastionbreaker en 6ᵉ pour prendre les tours.");
+    if (!build.includes("serylda")) out.push({ cond: "Leurs tanks empilent l'armure", id: id("serylda") });
+    if (build.includes("hubris")) out.push({ cond: "Peu de kills tôt", id: id("youmuu"), instead: id("hubris") });
+    out.push({ cond: "Tu domines sans finir", id: id("bastion") });
   } else {
-    if (!build.includes("dd")) out.push("Si leurs dégâts physiques prennent l'avance : Death's Dance plus tôt.");
-    if (!build.includes("sterak")) out.push("Si leurs dégâts magiques prennent l'avance : Mercury's Treads et Sterak's Gage.");
-    out.push("Si tu es devant et qu'ils empilent l'armure : Serylda's Grudge après Black Cleaver.");
+    if (!build.includes("dd")) out.push({ cond: "Leurs dégâts physiques prennent l'avance", id: id("dd") });
+    if (!build.includes("sterak")) out.push({ cond: "Leurs dégâts magiques prennent l'avance", id: id("sterak") });
+    out.push({ cond: "Tu es devant, ils empilent l'armure", id: id("serylda") });
   }
   return out.slice(0, 3);
 }
@@ -77,12 +102,12 @@ export function buildPlanView(m: MatchChampions, formChoice: Form | "auto", shop
   const common = { form, formForced: formChoice !== "auto", notKayn: !isKayn, champion: meChamp?.name ?? null };
 
   if (!isKayn) {
-    if (!stat) return { ...common, source: "none", starter: null, build: [], reasons: [], ifThen: [] };
+    if (!stat) return { ...common, source: "none", starter: null, build: [], reasons: [], rules: [] };
     const pet = stat.starter ? Object.values(STARTERS).find((p) => p.id === stat.starter) : undefined;
     return {
       ...common, source: "meta", buildGames: stat.games,
-      starter: pet ? { ...lite(pet.id, shop), name: pet.name, cost: pet.cost, why: "Le plus joué en Émeraude+ sur ce champion." } : null,
-      build: stat.ids.map((id) => lite(id, shop)), reasons: stat.reasons, ifThen: stat.ifThen,
+      starter: pet ? { ...lite(pet.id, shop), name: pet.nameFr, cost: pet.cost, why: "Le plus joué en Émeraude+ sur ce champion." } : null,
+      build: stat.ids.map((id) => lite(id, shop)), reasons: stat.reasons, rules: stat.rules,
     };
   }
   const choice = chooseBuild(base, form);
@@ -90,8 +115,8 @@ export function buildPlanView(m: MatchChampions, formChoice: Form | "auto", shop
   const pet = STARTERS[key];
   return {
     ...common, source: "kayn",
-    starter: { ...lite(pet.id, shop), name: pet.name, cost: pet.cost, why },
+    starter: { ...lite(pet.id, shop), name: pet.nameFr, cost: pet.cost, why },
     build: choice.b.map((k) => ITEMS[k].id!).filter(Boolean).map((id) => lite(id, shop)),
-    reasons: choice.notes.map(plain), ifThen: kaynIfThen(form, choice.b),
+    reasons: choice.notes.map(plain), rules: kaynRules(form, choice.b),
   };
 }

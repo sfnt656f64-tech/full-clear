@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { championOf, toLiveSnapshot } from "../desktop/live-client";
-import { buildPlanView } from "../desktop/next-item";
+import { buildPlanView, SHOP } from "../desktop/next-item";
 import { parseSettings, parseWindowMode } from "../desktop/settings";
 import { champ } from "../src/data/champions";
 import { analyse } from "../src/engine/analyse";
@@ -66,10 +66,11 @@ describe("overlay : build décidé en draft, jamais selon l'état de la partie (
     const expected = chooseBuild(analyse(champs.enemies.map(champ), champs.allies.map(champ)), "blue").b.map((k) => ITEMS[k].id);
     expect(v.build.map((t) => t.id)).toEqual(expected);
     // Ornn, Syndra et Nautilus ont du CC pour suivre les ganks → Gustwalker (vent).
-    expect(v.starter).toMatchObject({ id: "1102", name: "Gustwalker Hatchling" });
+    expect(v.starter).toMatchObject({ id: "1102", name: "Bébé Saute-nuages" });
     expect(v.starter?.why).toMatch(/ganks/);
-    expect(v.ifThen.length).toBeGreaterThan(0);
-    expect(v.ifThen.every((t) => t.startsWith("Si "))).toBe(true);
+    expect(v.rules.length).toBeGreaterThan(0);
+    // Noms dans la langue du client.
+    expect(v.build.every((t) => t.name === (SHOP[t.id]?.nameFr ?? t.name))).toBe(true);
     // Aucune trace d'or, d'inventaire ou d'item « suivant ».
     expect(Object.keys(v)).not.toEqual(expect.arrayContaining(["gold", "next", "owned"]));
   });

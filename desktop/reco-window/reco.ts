@@ -32,8 +32,10 @@ function portrait(id: number, cls = "portrait"): HTMLElement {
   i.addEventListener("error", () => { i.style.visibility = "hidden"; }, { once: true });
   return i;
 }
-const prov = (on: boolean) => (on ? [el("span", { class: "tag-prov", title: "Pas encore assez de parties de méta : à confirmer" }, "provisoire")] : []);
-const reasons = (rs: string[]) => el("ul", {}, ...rs.map((r) => el("li", {}, r)));
+/** Détails repliés par défaut (chiffres, marges, méthode). */
+const details = (...kids: (Node | string)[]) => el("details", { class: "det" }, el("summary", { class: "small muted" }, "Détails"), ...kids);
+/** La ligne courte qui dit pourquoi le champion est proposé. */
+const why = (t: string) => el("p", { class: "why1" }, t);
 
 const STYLE_LABEL: Record<PlayProfile["style"], string> = { early: "joueur d'early game", scaling: "joueur de fin de partie", balanced: "style équilibré" };
 
@@ -93,11 +95,11 @@ function potentialCard(e: PotentialEntry, pick: PoolPick | undefined): HTMLEleme
   return el("li", { class: "card pcard" },
     portrait(e.championId),
     el("div", {},
-      el("div", { class: "name" }, champName(e.championId), ...prov(e.provisional), ...(pick ? [el("span", { class: "pscore", title: "Score du pool (proche d'un win rate attendu)" }, ` · score ${nf(pick.score, 1)}`)] : [])),
-      el("div", { class: "facts" }, facts, el("span", { class: "muted" }, " · méta"), trendEl(view?.trends?.[role]?.[e.championId]))),
-    radar,
-    el("p", { class: "ptext" }, e.text),
-    ...(pick ? [breakdown(pick)] : []));
+      el("div", { class: "name" }, champName(e.championId)),
+      why(e.short),
+      details(
+        el("div", { class: "facts" }, facts, ...(pick ? [` · score ${nf(pick.score, 1)}`] : []), el("span", { class: "muted" }, " · méta"), trendEl(view?.trends?.[role]?.[e.championId]), ...(e.provisional ? [" · provisoire"] : [])),
+        radar, el("p", { class: "ptext" }, e.text), ...(pick ? [breakdown(pick)] : []))));
 }
 
 /** Calcul du score en clair : la somme des 4 termes. */
@@ -116,10 +118,11 @@ function tryCard(t: TryPick, i: number): HTMLElement {
     el("span", { class: "rank" }, String(i + 1)),
     portrait(t.championId),
     el("div", {},
-      el("div", { class: "name" }, champName(t.championId), ...prov(t.provisional)),
-      el("div", { class: "facts" }, `méta ${wrPm(t.meta.winRate, t.meta.games)} (${nf(t.meta.games)} parties)`, trendEl(view?.trends?.[role]?.[t.championId]), ` · ${learningLabel(t.learning)}`, ...similar)),
-    el("div", { class: "score", title: "Score de recommandation sur 100" }, nf(t.score), el("small", {}, "/ 100")),
-    reasons(t.reasons));
+      el("div", { class: "name" }, champName(t.championId)),
+      why(t.short),
+      details(
+        el("div", { class: "facts" }, `méta ${wrPm(t.meta.winRate, t.meta.games)} (${nf(t.meta.games)} parties)`, trendEl(view?.trends?.[role]?.[t.championId]), ` · ${learningLabel(t.learning)}`, ` · score ${nf(t.score)}/100`, ...(t.provisional ? [" · provisoire"] : []), ...similar),
+        el("ul", {}, ...t.reasons.map((r) => el("li", {}, r))))));
 }
 
 function render(): void {
@@ -153,8 +156,8 @@ function renderAdvice(): void {
   $("advice").hidden = false;
   $("advice").replaceChildren(
     el("h2", {}, "Pool conseillé", a.fromMeta ? el("span", { class: "tag-prov" }, "d'après la méta") : ""),
-    el("ol", { class: "advice-list" }, ...a.picks.map((p) => el("li", {}, portrait(p.championId, "advice-ic"), el("div", {}, el("b", {}, champName(p.championId)), ...prov(p.provisional), el("div", { class: "small muted" }, p.why.join(" · ")))))),
-    el("p", { class: "small" }, a.text));
+    el("ol", { class: "advice-list" }, ...a.picks.map((p) => el("li", {}, portrait(p.championId, "advice-ic"), el("div", {}, el("b", {}, champName(p.championId)), why(p.short))))),
+    details(...a.picks.map((p) => el("p", { class: "small" }, `${champName(p.championId)} : ${p.why.join(" · ")}${p.provisional ? " · provisoire" : ""}`)), el("p", { class: "small" }, a.text)));
 }
 
 let prog: ProgressionView | null = null;
@@ -187,36 +190,49 @@ function renderProgression(): void {
   sec.hidden = false;
   const strong = p.myAxes.map((v, i) => ({ v, l: AXES[i]?.label })).filter((x) => x.v != null && x.v > 50).map((x) => `${x.l} (${f1(x.v!)})`).join(", ");
   const w = p.weights;
+  // Une ligne : seulement ce qui est net (force au-delà de sa marge, accord avec tes axes au-delà de sa marge), et la
+  // difficulté Riot quand elle est marquée.
+  const oneLine = (e: ProgressionView["candidates"][number]) => {
+    const parts = [
+      ...(e.flag === "progress" ? ["choisi par toi"] : []),
+      ...(e.force.adjusted - e.force.margin > 50 ? ["fort en ce moment"] : []),
+      ...(e.fit.value - e.fit.margin > 0 ? ["colle à tes points forts"] : []),
+      ...(e.difficulty <= 4 ? ["facile à prendre en main"] : e.difficulty >= 8 ? ["difficile à prendre en main"] : []),
+    ].slice(0, 3);
+    const t = parts.length ? parts.join(", ") : "rien de net : classé sur l'ensemble des critères";
+    return `${t[0].toUpperCase()}${t.slice(1)}.`;
+  };
   const row = (e: ProgressionView["candidates"][number], i: number) => el("li", { class: "card prog" },
     el("span", { class: "rank" }, String(i + 1)), portrait(e.championId),
     el("div", {},
-      el("div", { class: "name" }, champName(e.championId), e.flag === "progress" ? el("span", { class: "tag-prov" }, "choisi") : "", el("span", { class: "pscore" }, ` · potentiel ${f1(e.score.total)}`)),
-      el("div", { class: "facts" },
+      el("div", { class: "name" }, champName(e.championId)),
+      why(oneLine(e)),
+      details(el("div", { class: "facts" }, `potentiel ${f1(e.score.total)} · `,
         `force à maîtrise égale ${f1(e.force.adjusted)} % `, e.force.mixMeasured ? "" : el("span", { class: "tag-prov", title: "Part de débutants tirée de son groupe de difficulté : moins de 100 parties avec maîtrise sur ce champion" }, "à confirmer"),
         ` (brut ${f1(e.force.raw)} % ± ${f1(e.force.margin)} sur ${nf(e.force.games)} parties → corrigé de maîtrise ${f1(e.force.equal)} % → rapproché de 50 % selon les parties : ${f1(e.force.adjusted)} %) · accord avec tes axes forts ${sg(e.fit.value)} ± ${f1(e.fit.margin)} pts de win rate · difficulté Riot ${e.difficulty}/10`,
         e.ceiling.measurable ? ` · plafond ${sg(e.ceiling.delta)} ± ${f1(e.ceiling.margin)} (info)` : " · plafond non mesurable (info)"),
       el("div", { class: "small muted" }, e.score.mine
         ? `Toi : ${e.score.mine.games} parties, stats ${f1(e.score.mine.stats)} → ${f1(e.score.mine.shrunk)} rapprochées de 50 selon leur marge, poids ${Math.round(e.score.mine.weight * 100)} % (potentiel seul ${f1(e.score.potential)})${e.score.mine.games < 20 ? " · moins de 20 parties" : ""}`
-        : `Toi : ${e.myGames ? `${e.myGames} partie${e.myGames > 1 ? "s" : ""} en jungle, pas encore de stats (moins de 5 parties)` : "jamais joué en jungle"}`),
+        : `Toi : ${e.myGames ? `${e.myGames} partie${e.myGames > 1 ? "s" : ""} en jungle, pas encore de stats (moins de 5 parties)` : "jamais joué en jungle"}`)),
       el("div", { class: "row" }, e.flag === "progress" ? flagButton(e.championId, null, "Retirer le choix") : flagButton(e.championId, "progress", "Je veux progresser dessus"), flagButton(e.championId, "notForMe", "Pas pour moi"))));
   const comfort = p.comfort.map((c) => el("li", {}, portrait(c.championId, "advice-ic"),
-    el("div", {}, el("b", {}, champName(c.championId)), el("div", { class: "small muted" },
-      `${c.games} parties en jungle (deux saisons) · ${c.games ? `${nf((c.wins / c.games) * 100)} % ± ${nf(wilson(c.wins, c.games))} de victoires` : "–"} · stats ${c.stats != null ? `${f1(c.stats)}${c.margin != null ? ` ± ${f1(c.margin)}` : ""}` : "–"} · confort : ${c.reason}`),
+    el("div", {}, el("b", {}, champName(c.championId)), why("Ton champion de confort : tu le joues beaucoup."), details(el("div", { class: "small muted" },
+      `${c.games} parties en jungle (deux saisons) · ${c.games ? `${nf((c.wins / c.games) * 100)} % ± ${nf(wilson(c.wins, c.games))} de victoires` : "–"} · stats ${c.stats != null ? `${f1(c.stats)}${c.margin != null ? ` ± ${f1(c.margin)}` : ""}` : "–"} · confort : ${c.reason}`)),
       el("div", { class: "row" }, flagButton(c.championId, "progress", "Je veux progresser dessus"), flagButton(c.championId, "notForMe", "Pas pour moi")))));
   const banned = p.notForMe.map((c) => el("li", {}, champName(c), " ", flagButton(c, null, "Rétablir")));
   const ls = p.learningSpeed;
   sec.replaceChildren(
     el("h2", {}, "Progression (jungle)"),
-    el("p", { class: "small" }, `Potentiel = ${Math.round(w.force * 100)} % force à maîtrise égale + ${Math.round(w.fit * 100)} % accord avec tes axes forts${w.learning ? ` + ${Math.round(w.learning * 100)} % durée d'apprentissage` : " (durée d'apprentissage : 0 % pour l'instant, difficulté Riot en information)"}. Tes axes forts : ${strong || "aucun au-dessus de la médiane"}. Tes stats sur un champion comptent de plus en plus avec tes parties (moitié-moitié à 20 parties), rapprochées de 50 selon leur marge.`),
+    details(el("p", { class: "small" }, `Potentiel = ${Math.round(w.force * 100)} % force à maîtrise égale + ${Math.round(w.fit * 100)} % accord avec tes axes forts${w.learning ? ` + ${Math.round(w.learning * 100)} % durée d'apprentissage` : " (durée d'apprentissage : 0 % pour l'instant, difficulté Riot en information)"}. Tes axes forts : ${strong || "aucun au-dessus de la médiane"}. Tes stats sur un champion comptent de plus en plus avec tes parties (moitié-moitié à 20 parties), rapprochées de 50 selon leur marge.`)),
     el("ol", { class: "cards" }, ...p.candidates.slice(0, 10).map(row)),
     el("h3", { class: "grp keep" }, "Confort (déjà beaucoup joués) : tes résultats"),
     el("ol", { class: "advice-list" }, ...(comfort.length ? comfort : [el("li", { class: "empty" }, "Aucun.")])),
     ...(banned.length ? [el("h3", { class: "grp shelve" }, "Pas pour moi"), el("ul", { class: "small" }, ...banned)] : []),
-    el("p", { class: "small muted" }, [
+    details(el("p", { class: "small muted" }, [
       `Méta : ${nf(p.masteryGames)} parties de jungle avec maîtrise (la collecte en ajoute à chaque partie).`,
       ls ? `Ta vitesse d'apprentissage : ${sg(ls.diff)} ± ${f1(ls.margin)} entre tes 10 premières parties et les suivantes (${ls.champions} champions)${Math.abs(ls.diff) > ls.margin ? "." : " : pas encore mesurable, vitesse moyenne utilisée."}` : "Ta vitesse d'apprentissage : pas encore mesurable.",
       p.calibration ? `Points de maîtrise par partie (tous modes) : ${nf(p.calibration.median)} (${nf(p.calibration.low)}–${nf(p.calibration.high)}, ${p.calibration.champions} champions).` : "Points par partie : en attente du comptage de toutes tes parties (collecte).",
-    ].join(" ")));
+    ].join(" "))));
 }
 
 async function reload(): Promise<void> {

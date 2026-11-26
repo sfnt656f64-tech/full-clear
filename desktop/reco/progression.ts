@@ -126,7 +126,7 @@ export function readiness(x: { experience: number; standard: Radar | null; ranke
 
 // ---------- Pool conseillé en mode « Progresser » ----------
 
-export interface AdviceLite { picks: { championId: number; why: string[]; fromMeta: boolean; provisional: boolean }[]; coverage: null; fromMeta: boolean; text: string }
+export interface AdviceLite { picks: { championId: number; why: string[]; fromMeta: boolean; provisional: boolean; short: string }[]; coverage: null; fromMeta: boolean; text: string }
 
 /**
  * 2 champions de progression (les mieux classés, hors confort et « Pas pour moi ») et 1 champion de confort : ton
@@ -140,6 +140,8 @@ export function progressAdvice(p: Progression, keep: { championId: number; games
   const comfortId = keep.find((k) => !banned.has(k.championId) && !used.has(k.championId))?.championId ?? (firstPool != null && !used.has(firstPool) && !banned.has(firstPool) ? firstPool : null);
   const picks = prog.map((e) => ({
     championId: e.championId, fromMeta: false, provisional: !e.force.mixMeasured || (e.score.mine?.games ?? 0) < 20,
+    // Une ligne : seulement ce qui est net (force et accord au-delà de leur marge).
+    short: `À faire progresser${[...(e.force.adjusted - e.force.margin > 50 ? ["fort en ce moment"] : []), ...(e.fit.value - e.fit.margin > 0 ? ["colle à tes points forts"] : [])].map((x, i) => (i ? `, ${x}` : ` : ${x}`)).join("")}.`,
     why: [
       `Progression · potentiel ${f1(e.score.total)}`,
       `force à maîtrise égale ${f1(e.force.adjusted)} %${e.force.mixMeasured ? "" : " (à confirmer)"}`,
@@ -150,7 +152,7 @@ export function progressAdvice(p: Progression, keep: { championId: number; games
   }));
   if (comfortId != null) {
     const k = keep.find((x) => x.championId === comfortId);
-    picks.push({ championId: comfortId, fromMeta: false, provisional: false, why: [`Confort · ton meilleur « À garder »${k ? ` (${k.games} parties)` : ""}`, "pour les parties où tu veux gagner tout de suite"] });
+    picks.push({ championId: comfortId, fromMeta: false, provisional: false, short: "Confort : pour les parties où tu veux gagner.", why: [`Confort · ton meilleur « À garder »${k ? ` (${k.games} parties)` : ""}`, "pour les parties où tu veux gagner tout de suite"] });
   }
   return {
     picks, coverage: null, fromMeta: false,

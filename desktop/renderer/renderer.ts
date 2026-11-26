@@ -3,12 +3,13 @@ import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
 import type { PostGame } from "../analysis/postgame.ts";
 import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
+import { frenchify, ruleText } from "../next-item.ts";
 import { sparkline as targetCurve } from "../ui/sparkline.ts";
 import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
 import { DDRAGON_VERSION, officialPatch } from "../../src/data/version";
-import { runeIconUrl, runeName, RUNE_TREES, RUNES_BY_ID } from "../../src/data/runes";
+import { runeIconUrl, runeNameFr, RUNE_TREES, RUNES_BY_ID } from "../../src/data/runes";
 
 declare global {
   interface Window { kayn: KaynApi }
@@ -47,15 +48,6 @@ function h(tag: string, attrs: Record<string, string> = {}, ...children: Child[]
   return el;
 }
 
-/** Texte du moteur où seul <b>…</b> est autorisé : tout le reste est affiché tel quel. */
-function boldText(s: string): HTMLElement {
-  const p = h("p");
-  s.split(/(<b>.*?<\/b>)/).forEach((part) => {
-    const m = part.match(/^<b>(.*)<\/b>$/);
-    p.append(m ? h("b", {}, m[1]) : part);
-  });
-  return p;
-}
 
 function icon(src: string, title: string, cls = "ic"): HTMLElement {
   const img = h("img", { src, alt: "", title, class: cls, draggable: "false" }) as HTMLImageElement;
@@ -79,34 +71,42 @@ const wilsonPm = (wr: number, n: number) => {
 };
 const sgn = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(x).toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}`;
 
-/**
- * Plan de partie écrit en draft : condition de victoire, « si… alors… » à appliquer toi-même, moments de force,
- * jungler adverse, premier chemin, objectifs et rappels. Rien ne réagit à la partie en cours (règles Riot).
- */
-function renderStrategy(st: NonNullable<DraftView["strategy"]>): HTMLElement {
-  const list = (title: string, items: string[]) => (items.length ? [h("p", { class: "small" }, h("b", {}, title)), h("ul", { class: "why small" }, ...items.map((t) => h("li", {}, t)))] : []);
-  return h("div", { class: "plan strategy" },
-    h("h3", {}, "Plan de partie", st.provisional ? h("span", { class: "small muted" }, " · provisoire (draft incomplète)") : null),
-    h("p", { class: "small" }, h("b", {}, "Condition de victoire : "), st.winCondition.summary),
-    ...list("Si… alors… (à appliquer toi-même) :", st.winCondition.ifThen),
-    ...list("Moments de force :", st.power),
-    ...(st.enemyJungler ? [h("p", { class: "small" }, h("b", {}, "Jungler adverse : "), st.enemyJungler)] : []),
-    ...list("Premier chemin :", st.path),
-    ...list("Objectifs :", st.objectives),
-    ...list("Tes rappels :", st.reminders.map((r) => r.text)),
-    h("p", { class: "small muted" }, "Début ou fin de partie : un champion n'est classé que si trois mesures (Émeraude+) sont nettes et vont dans le même sens : son écart d'or à 15 min contre son vis-à-vis, son win rate parties courtes − longues, et la progression de ses dégâts face à son vis-à-vis entre parties courtes et longues. Duels cités à partir de 20 parties, hors marge. Écrit une fois en draft : rien ne s'adapte pendant la partie."));
+/** Bloc « Détails » replié par défaut : chiffres, marges, méthode. Une section sans rien de net = « Rien de net ». */
+function detailsBlock(sections: { title: string; lines: (string | Node)[] }[], summary = "Détails"): HTMLElement {
+  return h("details", { class: "details" }, h("summary", { class: "small muted" }, summary),
+    ...sections.map((s) => h("div", { class: "det" }, h("p", { class: "small" }, h("b", {}, s.title)),
+      h("ul", { class: "why small" }, ...(s.lines.length ? s.lines : ["Rien de net."]).map((l) => h("li", {}, l))))));
 }
 
-/** Page de runes recommandée, avec le bouton d'import dans le client. */
+/** Liste à puces de consignes (vue principale). */
+const bullets = (lines: string[], cls = "") => h("ul", { class: `plain-list ${cls}` }, ...lines.map((l) => h("li", {}, l)));
+
+/**
+ * Plan de partie écrit en draft, vue simple : À RETENIR, BUILD, SI… ALORS…, MES RAPPELS, puis « Détails » replié.
+ * Rien ne réagit à la partie en cours (règles Riot).
+ */
+function renderPlain(p: NonNullable<DraftView["plain"]>, extra: { title: string; lines: (string | Node)[] }[]): HTMLElement {
+  const build = [...(p.starter ? [p.starter] : []), ...p.build];
+  return h("div", { class: "plan plain" },
+    h("h3", {}, "Plan de partie", p.provisional ? h("span", { class: "small muted" }, " · provisoire, la draft n'est pas finie") : null),
+    ...(p.retain.length ? [h("h4", {}, "À retenir"), bullets(p.retain)] : []),
+    ...(build.length ? [h("h4", {}, "Build", p.form ? h("span", { class: "small muted" }, ` · ${p.form}`) : null),
+      h("div", { class: "plain-build" }, ...build.flatMap((it, i) => [...(i ? [h("span", { class: "pb-arrow muted" }, "→")] : []), h("span", { class: "pb-item" }, icon(it.icon, it.name, "pb-ic"), h("span", { class: "small" }, it.name))]))] : []),
+    ...(p.ifThen.length ? [h("h4", {}, "Si… alors…"), bullets(p.ifThen)] : []),
+    ...(p.reminders.length ? [h("h4", {}, "Mes rappels"), h("ul", { class: "plain-list" }, ...p.reminders.map((r) => h("li", {}, r.text, r.value ? h("span", { class: "muted" }, ` (${r.value})`) : null)))] : []),
+    detailsBlock([...p.details, ...extra]));
+}
+
+/** Page de runes recommandée : icônes et bouton d'import ; noms et source dans les détails. */
 function renderRunePage(p: NonNullable<DraftView["runePage"]>, note: string | null): HTMLElement {
   const runeIcon = (id: number, cls: string) => {
     const r = RUNES_BY_ID[id];
-    return r ? icon(runeIconUrl(r.icon), runeName(id), cls) : h("span", { class: cls });
+    return r ? icon(runeIconUrl(r.icon), runeNameFr(id), cls) : h("span", { class: cls });
   };
-  const tree = (id: number) => RUNE_TREES[id]?.nameEn ?? String(id);
+  const tree = (id: number) => RUNE_TREES[id]?.name ?? String(id);
   const source = p.source === "guide"
     ? "Guide Kayn pour la forme recommandée."
-    : `Page la plus jouée en Émeraude+ avec ${runeName(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % ± ${Math.round(wilsonPm(p.winRate ?? 0, p.games ?? 0))} de victoires.`;
+    : `Page la plus jouée en Émeraude+ avec ${runeNameFr(p.selections[0])} : ${p.games} parties, ${Math.round(p.winRate ?? 0)} % ± ${Math.round(wilsonPm(p.winRate ?? 0, p.games ?? 0))} de victoires.`;
   const status = h("p", { class: "small muted", role: "status" });
   const btn = h("button", { type: "button" }, "Importer dans le client") as HTMLButtonElement;
   btn.addEventListener("click", async () => {
@@ -121,35 +121,38 @@ function renderRunePage(p: NonNullable<DraftView["runePage"]>, note: string | nu
     h("h3", {}, `Runes · ${p.championName}`),
     h("div", { class: "rune-row" }, runeIcon(p.selections[0], "keystone"), ...p.selections.slice(1, 4).map((id) => runeIcon(id, "rune")),
       h("span", { class: "rune-sep" }), ...p.selections.slice(4).map((id) => runeIcon(id, "rune"))),
-    h("p", { class: "small" }, h("b", {}, `${tree(p.primary)} : `), p.selections.slice(0, 4).map(runeName).join(" · ")),
-    h("p", { class: "small" }, h("b", {}, `${tree(p.sub)} : `), p.selections.slice(4).map(runeName).join(" · ")),
-    h("p", { class: "small muted" }, `Shards : ${p.shards.map(runeName).join(", ")}`),
-    note ? boldText(note) : null,
-    h("p", { class: "small muted" }, source),
     h("div", { class: "row" }, btn),
-    status);
+    status,
+    detailsBlock([{ title: "Page", lines: [
+      `${tree(p.primary)} : ${p.selections.slice(0, 4).map(runeNameFr).join(" · ")}`,
+      `${tree(p.sub)} : ${p.selections.slice(4).map(runeNameFr).join(" · ")}`,
+      `Fragments : ${p.shards.map(runeNameFr).join(", ")}`,
+      ...(note ? [frenchify(note.replace(/<[^>]+>/g, ""))] : []),
+      source,
+    ] }]));
 }
 
-/** Tes meilleurs choix pour cette draft : mis en avant, c'est toi qui choisis. */
+/** Tes meilleurs choix pour cette draft : une ligne par champion, le détail replié. */
 function renderPicks(p: NonNullable<DraftView["picks"]>): HTMLElement {
+  const all = [...p.list, ...(p.offPool ? [p.offPool] : [])];
   const card = (x: NonNullable<DraftView["picks"]>["list"][number], i: number | null) => {
     const ch = champByKey(x.championId);
-    const delta = x.score - x.base;
     return h("div", { class: `pick${i === 0 ? " best" : ""}${x.inPool ? "" : " off"}` },
       icon(ch?.image ? CDN_CHAMP + ch.image : "", ch?.name ?? "", "champ"),
       h("div", {},
-        h("div", { class: "pick-name" }, `${i != null ? `${i + 1}. ` : ""}${ch?.name ?? `#${x.championId}`}`,
-          x.tag ? h("span", { class: "tag-chip" }, x.tag) : null,
-          h("span", { class: "small muted", title: "Effet de cette draft sur le score (contres, synergies, dégâts)" }, ` ${sgn(delta)} avec cette draft`),
-          x.provisional ? h("span", { class: "small muted" }, " · provisoire") : null),
-        h("ul", { class: "why small" }, ...x.reasons.map((r) => h("li", {}, r)))));
+        h("div", { class: "pick-name" }, `${i != null ? `${i + 1}. ` : ""}${ch?.name ?? `#${x.championId}`}`, x.tag ? h("span", { class: "tag-chip" }, x.tag) : null),
+        h("p", { class: "small pick-why" }, x.short)));
   };
   return h("div", { class: `picks${p.myTurn ? " my-turn" : ""}` },
     h("h3", {}, p.myTurn ? "À toi de choisir" : `Tes meilleurs choix (${p.role === "JUNGLE" ? "jungle" : "milieu"})`),
-    p.rule ? h("p", { class: "small muted" }, "Mode Progresser · ", p.rule) : null,
+    p.ruleShort ? h("p", { class: "small muted" }, p.ruleShort) : null,
     ...(p.list.length ? p.list.map((x, i) => card(x, i)) : [h("p", { class: "muted small" }, "Aucun champion de ton pool disponible.")]),
     ...(p.offPool ? [h("p", { class: "small muted" }, "À envisager :"), card(p.offPool, null)] : []),
-    h("p", { class: "muted small" }, "Classés selon ton pool, les duels et associations en Émeraude+ et l'équilibre des dégâts. Mis à jour à chaque pick."));
+    detailsBlock([
+      ...(p.rule ? [{ title: "Règle du mode Progresser", lines: [p.rule] }] : []),
+      ...all.map((x) => ({ title: `${champByKey(x.championId)?.name ?? x.championId} · ${sgn(x.score - x.base)} avec cette draft${x.provisional ? " · provisoire" : ""}`, lines: x.reasons })),
+      { title: "Méthode", lines: ["Classés selon ton pool, les duels et associations en Émeraude+ et l'équilibre des dégâts. Mis à jour à chaque pick."] },
+    ]));
 }
 
 // ---------- Draft par rôle ----------
@@ -183,8 +186,8 @@ function renderLanes(rows: NonNullable<DraftView["lanes"]>): HTMLElement {
     ...rows.map((r) => h("div", { class: `lane-row${r.me ? " me" : ""}` },
       h("span", { class: "lane-label", title: LANE_LABELS[r.lane] }, laneIcon(r.lane), h("span", { class: "small" }, LANE_LABELS[r.lane])),
       cell(r.ally, "al", r.me ? h("span", { class: "small muted" }, " (toi)") : null),
-      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: "Rôle déduit de la méta Émeraude+ : part de ses parties dans ce rôle" },
-        r.games == null || r.games < 20 ? " rôle incertain (moins de 20 parties de méta)" : ` probable (${Math.round(r.share ?? 0)} % de ses ${r.games.toLocaleString("fr-FR")} parties)`) : null))));
+      cell(r.enemy, "en", r.enemy && r.probable ? h("span", { class: "small muted", title: r.games == null || r.games < 20 ? "Moins de 20 parties de méta" : `Rôle déduit de la méta Émeraude+ : ${Math.round(r.share ?? 0)} % de ses ${r.games.toLocaleString("fr-FR")} parties` },
+        r.games == null || r.games < 20 ? " rôle incertain" : " probable") : null))));
 }
 
 let timerHandle: number | undefined;
@@ -218,59 +221,31 @@ function renderDraft(s: AppState): void {
     body.push(h("div", { class: "team" }, h("span", { class: "tl red" }, "En face"), slots(d.enemies, "en")));
     body.push(h("div", { class: "team" }, h("span", { class: "tl blue" }, "Alliés"), slots(d.allies, "al")));
   }
-  if (d.strategy) body.push(renderStrategy(d.strategy));
+  if (d.unknown) body.push(h("p", { class: "warn-text small" }, `${d.unknown} champion(s) inconnu(s) : relance npm run sync pour mettre les données à jour.`));
   // Choix du champion : inutile une fois le tien verrouillé.
   if (d.picks && !d.me.locked) body.push(renderPicks(d.picks));
-  if (d.runePage) body.push(renderRunePage(d.runePage, d.isKayn && d.runes ? d.runes.note : null));
-  // Section Kayn (forme, runes, build) : seulement si tu survoles ou as verrouillé Kayn.
-  if (!d.isKayn) {
-    $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
-    return;
-  }
-  if (d.unknown) body.push(h("p", { class: "warn-text small" }, `${d.unknown} champion(s) inconnu(s) : relance npm run sync pour mettre les données à jour.`));
-
-  if (!d.form) {
-    body.push(h("p", { class: "muted" }, "En attente du premier champion adverse…"));
-  } else {
+  // Kayn : forme, familier, bottes et notes du modèle, dans les détails du plan.
+  const kayn: { title: string; lines: (string | Node)[] }[] = [];
+  if (d.isKayn && d.form) {
     const f = d.form;
-    const name = f.value === "blue" ? "Bleu · assassin (Shadow Assassin)" : "Rouge · Rhaast";
-    body.push(h("div", { class: `form ${f.value}` },
-      h("strong", {}, `Forme recommandée : ${name}`),
-      h("span", { class: "small" }, `${f.provisional ? `provisoire (${d.enemyCount}/5 adversaires)` : `${d.enemyCount}/5 adversaires`}${f.close ? " · c'est serré" : ""} · score ${f.score > 0 ? "+" : ""}${f.score}`)));
-    body.push(h("ul", { class: "why small" }, ...f.why.map((w) => h("li", {}, w))));
+    kayn.push({ title: `Kayn : forme ${f.value === "blue" ? "bleue (assassin)" : "rouge (Rhaast)"}, ${f.provisional ? `provisoire (${d.enemyCount}/5 adversaires)` : `${d.enemyCount}/5 adversaires`}${f.close ? ", c'est serré" : ""}, score ${f.score > 0 ? "+" : ""}${f.score}`, lines: f.why.map(frenchify) });
   }
-
-  if (d.runes && !d.runePage) {
-    const r = d.runes;
-    body.push(h("div", { class: "runes" },
-      h("h3", {}, r.title),
-      h("p", {}, h("b", {}, `${r.primary[0]} : `), r.primary[1]),
-      h("p", {}, h("b", {}, `${r.secondary[0]} : `), r.secondary[1]),
-      h("p", { class: "small muted" }, `Fragments : ${r.shards}`),
-      boldText(r.note)));
-  }
-
-  if (d.build) {
+  if (d.isKayn && d.build) {
     const b = d.build;
-    body.push(h("h3", {}, "Build (ordre d'achat)"));
-    const [pet, ...petAlts] = b.starter;
-    body.push(h("div", { class: "items" },
-      h("div", { class: "item", title: `${pet.name} · ${pet.cost} po` }, icon(pet.icon, pet.name), h("span", { class: "small" }, `Départ. ${pet.name}`)),
-      ...b.items.map((it, i) =>
-      h("div", { class: "item", title: `${it.name} · ${it.cost} po` }, it.icon ? icon(it.icon, it.name) : null, h("span", { class: "small" }, `${i + 1}. ${it.name}`)))));
-    body.push(h("p", { class: "small" }, h("b", {}, `Familier : ${pet.name}`), ` (${pet.cost} po) : ${pet.why}`));
-    body.push(h("p", { class: "small muted" }, `Adulte : ${pet.effect}`));
-    for (const a of petAlts) body.push(h("p", { class: "small muted" }, `Sinon ${a.name} : ${a.why}`));
-    const [boot, ...alts] = b.boots;
-    body.push(h("p", { class: "small" }, h("b", {}, `Bottes : ${boot.name}`), ` (${boot.t3}) : ${boot.why}`));
-    for (const a of alts) body.push(h("p", { class: "small muted" }, `Sinon ${a.name} : ${a.why}`));
-    for (const n of b.notes) { const p = boldText(n); p.classList.add("small"); body.push(p); }
-  } else if (d.form) {
-    body.push(h("p", { class: "muted small" }, "Build complet dès 3 adversaires connus."));
+    kayn.push({ title: "Kayn : familier et bottes", lines: [
+      ...b.starter.map((s, i) => `${i ? "Sinon " : ""}${s.nameFr} (${s.cost} po) : ${frenchify(s.why)}${i ? "" : ` Adulte : ${s.effect}`}`),
+      ...b.boots.map((x, i) => `${i ? "Sinon " : ""}${x.name} (${frenchify(x.t3)}) : ${frenchify(x.why)}`),
+      ...b.notes.map((n) => frenchify(n.replace(/<[^>]+>/g, ""))),
+    ] });
   }
-  const open = h("button", { type: "button" }, "Ouvrir dans le simulateur");
-  open.addEventListener("click", () => void window.kayn.openDraftInSimulator());
-  body.push(h("div", { class: "row" }, open));
+  if (d.plain) body.push(renderPlain(d.plain, kayn));
+  else if (me) body.push(h("p", { class: "muted small" }, "Plan de partie en préparation…"));
+  if (d.runePage) body.push(renderRunePage(d.runePage, d.isKayn && d.runes ? d.runes.note : null));
+  if (d.isKayn) {
+    const open = h("button", { type: "button" }, "Ouvrir dans le simulateur");
+    open.addEventListener("click", () => void window.kayn.openDraftInSimulator());
+    body.push(h("div", { class: "row" }, open));
+  }
   $("draft-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
 }
 
@@ -296,9 +271,8 @@ function renderLive(s: AppState): void {
   const v = l.view;
   if (v && v.source !== "none") {
     body.push(h("div", { class: "next" }, ...v.build.map((t) => icon(t.icon, t.name))));
-    body.push(h("p", { class: "small" }, [v.starter ? `Départ : ${v.starter.name}` : "", ...v.build.map((t, i) => `${i + 1}. ${t.name}`)].filter(Boolean).join(" · ")));
-    if (v.reasons.length) body.push(h("p", { class: "muted small" }, `Selon la draft : ${v.reasons.join(" ; ")}.`));
-    if (v.ifThen.length) body.push(h("p", { class: "muted small" }, `Si… alors… : ${v.ifThen.join(" ")}`));
+    body.push(h("p", { class: "small" }, [v.starter?.name, ...v.build.map((t) => t.name)].filter(Boolean).join(" → ")));
+    for (const r of v.rules) body.push(h("p", { class: "muted small" }, `• ${ruleText(r)}`));
   }
   $("live-body").replaceChildren(...body.filter((c): c is Node | string => !!c));
   $<HTMLInputElement>("overlay-on").checked = l.overlayEnabled;
@@ -649,29 +623,29 @@ const num = (v: number, unit: string) => `${v.toLocaleString("fr-FR", { maximumF
 let postOpen: string | null = null;
 
 function renderPostGame(p: PostGame, open: boolean): HTMLElement {
-  const mark = (b: boolean | null) => h("span", { class: b === true ? "good-text" : b === false ? "bad-text" : "muted" }, b === true ? "✔ " : b === false ? "✘ " : "= ");
-  const sec = (title: string, ...kids: (Node | null)[]) => h("div", { class: "post-part" }, h("h4", {}, title), ...kids);
-  const head = `${new Date(p.startMs).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })} · ${champName(p.championId)} · ${QUEUE_LABEL[p.queue]} · ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min · ${p.kda}${p.opponent ? ` · face à ${champName(p.opponent)}` : ""}`;
+  const mark = (b: boolean | null) => (b === true ? "✔ " : b === false ? "✘ " : "= ");
+  const head = `${new Date(p.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} · ${champName(p.championId)} · ${QUEUE_LABEL[p.queue]} · ${p.win ? "victoire" : "défaite"}${p.opponent ? ` · contre ${champName(p.opponent)}` : ""}`;
+  const c = p.top.point && p.curves?.[0];
+  const details: { title: string; lines: (string | Node)[] }[] = [
+    { title: `Partie : ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min, ${p.kda}`, lines: [] },
+    { title: p.role === "JUNGLE" ? "Face au jungler adverse" : "Face à ton vis-à-vis", lines: p.vs.filter((v) => v.mine != null).map((v) => `${mark(v.better)}${v.label} : ${v.diff ? `${v.mine! >= 0 ? "+" : "−"}${num(Math.abs(v.mine!), v.unit)} (${v.mine! > 0 ? "en ta faveur" : v.mine! < 0 ? "en sa faveur" : "égalité"})` : `${num(v.mine!, v.unit)} contre ${v.opp != null ? num(v.opp, v.unit) : "–"}`}${v.outcomeLinked ? " (toute la partie : suit en partie l'issue)" : ""}`) },
+    { title: "Tes objectifs de la semaine (cette partie)", lines: p.goals.length ? p.goals.map((g) => `${mark(g.met)}${g.label} : ${g.value} (cible ${g.target})`) : ["Tes objectifs portent sur la jungle : pas suivis sur une partie dans un autre rôle."] },
+    { title: "Moments clés", lines: p.moments.length ? p.moments.map((m) => `${m.time} ${m.text}`) : ["Chronologie pas encore lue pour cette partie."] },
+    { title: p.average ? `Ta moyenne sur ${champName(p.championId)} (${p.average.games} autres parties cette saison)` : "Ta moyenne sur ce champion", lines: p.average ? p.average.lines.map((l) => `${mark(l.better)}${l.label} : ${num(l.game, l.unit)} contre ${num(l.average, l.unit)} en moyenne`) : ["Moins de 5 autres parties sur ce champion cette saison : pas de comparaison."] },
+    ...(p.progression ? [{ title: "Repère de progression", lines: [p.progression] }] : []),
+    { title: "À travailler (tes 20 parties précédentes)", lines: [...p.work, ...(c ? [c.vsTarget] : [])] },
+    { title: "Point fort", lines: [p.strength] },
+  ];
   const d = h("details", { class: "post", id: `postgame-${p.matchId}` },
     h("summary", {}, head),
-    sec(p.role === "JUNGLE" ? "Face au jungler adverse" : "Face à ton vis-à-vis", h("ul", { class: "why small" }, ...p.vs.filter((v) => v.mine != null).map((v) => h("li", {}, mark(v.better), `${v.label} : `,
-      v.diff ? `${v.mine! >= 0 ? "+" : "−"}${num(Math.abs(v.mine!), v.unit)} (${v.mine! > 0 ? "en ta faveur" : v.mine! < 0 ? "en sa faveur" : "égalité"})` : `${num(v.mine!, v.unit)} contre ${v.opp != null ? num(v.opp, v.unit) : "–"}`,
-      v.outcomeLinked ? h("span", { class: "muted" }, " (toute la partie : suit en partie l'issue)") : null)))),
-    sec("Tes objectifs de la semaine (cette partie)", p.goals.length ? h("ul", { class: "why small" }, ...p.goals.map((g) => h("li", {}, mark(g.met), `${g.label} : ${g.value} (cible ${g.target})`)))
-      : h("p", { class: "small muted" }, "Tes objectifs portent sur la jungle : pas suivis sur une partie dans un autre rôle.")),
-    sec("Moments clés", p.moments.length ? h("ul", { class: "why small moments" }, ...p.moments.map((m) => h("li", { class: m.kind }, h("b", {}, m.time), " ", m.text))) : h("p", { class: "small muted" }, "Chronologie pas encore lue pour cette partie.")),
-    sec(p.average ? `Ta moyenne sur ${champName(p.championId)} (${p.average.games} autres parties cette saison)` : "Ta moyenne sur ce champion",
-      p.average ? h("ul", { class: "why small" }, ...p.average.lines.map((l) => h("li", {}, mark(l.better), `${l.label} : ${num(l.game, l.unit)} contre ${num(l.average, l.unit)} en moyenne`)))
-        : h("p", { class: "small muted" }, "Moins de 5 autres parties sur ce champion cette saison : pas de comparaison.")),
-    p.progression ? sec("Repère de progression", h("p", { class: "small" }, p.progression)) : null,
-    sec("À travailler (d'après tes 20 parties précédentes)", h("ul", { class: "why small" }, ...p.work.map((w, i) => {
-      const c = p.curves?.[i];
-      return h("li", {}, w, c ? h("div", { class: "spark-box" },
-        h("span", { class: "small muted" }, `${c.label} : moyenne glissante sur 10 parties, tes ${c.games} dernières parties (de la plus ancienne à la plus récente).`),
-        targetCurve({ points: c.points, target: c.target, targetLabel: c.targetLabel, fmt: (v) => num(v, c.unit) }),
-        h("span", { class: "small" }, c.vsTarget)) : null);
-    }))),
-    sec("Point fort", h("p", { class: "small" }, p.strength)));
+    h("ul", { class: "plain-list post-top" },
+      h("li", {}, h("span", { class: "good-text" }, "Bien : "), p.top.well),
+      h("li", {}, h("span", { class: "bad-text" }, "À travailler : "), p.top.point, p.top.moment ? h("div", { class: "small" }, p.top.moment) : null),
+      h("li", {}, h("b", {}, "Prochaine partie : "), p.top.next)),
+    c ? h("div", { class: "spark-box" },
+      h("span", { class: "small muted" }, `${c.label} : moyenne sur 10 parties, tes ${c.games} dernières (la plus récente à droite).`),
+      targetCurve({ points: c.points, target: c.target, targetLabel: c.targetLabel, fmt: (v) => num(v, c.unit) })) : null,
+    detailsBlock(details));
   if (open) d.setAttribute("open", "");
   return d;
 }

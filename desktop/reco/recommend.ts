@@ -123,6 +123,8 @@ export interface TryPick {
   /** Tes parties sur ce champion dans le rôle (moins que le minimum du pool). */
   tried: { games: number; wins: number } | null;
   reasons: string[];
+  /** Pourquoi il est proposé, en une ligne courte et sans chiffre (vue principale ; reasons : les détails). */
+  short: string;
   provisional: boolean;
 }
 
@@ -435,10 +437,12 @@ export function recommend(input: RecoInput): Recommendations {
         similarTo: sims.filter((x) => x.sim >= SIMILAR).slice(0, 2).map((x) => x.id),
         learning: learn,
         tried: triedOf(role, m.championId),
-        reasons: [],
+        reasons: [], short: "",
         provisional: provisional || m.games < PROVISIONAL_META || learn.games == null,
       };
-      pick.reasons = tryReasons(pick, c, sims[0] ? champByKey(sims[0].id) : undefined, sim, metaAdj, learn, profile, st, fit);
+      const why = tryReasons(pick, c, sims[0] ? champByKey(sims[0].id) : undefined, sim, metaAdj, learn, profile, st, fit);
+      pick.reasons = why.reasons;
+      pick.short = why.short;
       tryList.push(pick);
     }
     tryList.sort((x, y) => y.score - x.score || y.meta.games - x.meta.games);
@@ -470,30 +474,44 @@ function poolReasons(p: PoolPick, current: number | null, metaAdj: number): stri
   return top(r);
 }
 
-function tryReasons(p: TryPick, c: Champion, near: Champion | undefined, sim: number, metaAdj: number, l: Learning, profile: PlayProfile, st: ChampStyle | undefined, fit: number): string[] {
-  const r: { w: number; text: string }[] = [];
-  if (near && sim >= SIMILAR) r.push({ w: sim * 10, text: `Proche de ${near.name}, un de tes meilleurs champions : ${describe(c)}.` });
-  if (metaAdj >= 51) r.push({ w: (metaAdj - 50) * 2.5, text: `${nf(p.meta.winRate, 1)} % de victoires en Émeraude+ (${nf(p.meta.games)} parties).` });
+/** Marge à 95 % (Wilson) d'un win rate, en points. */
+function wilsonMargin(w: number, n: number): number {
+  const z = 1.96, p = w / n, d = 1 + (z * z) / n;
+  return ((z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d) * 100;
+}
+
+function tryReasons(p: TryPick, c: Champion, near: Champion | undefined, sim: number, metaAdj: number, l: Learning, profile: PlayProfile, st: ChampStyle | undefined, fit: number): { reasons: string[]; short: string } {
+  const r: { w: number; text: string; short?: string }[] = [];
+  // « Fort en ce moment » seulement si son win rate de méta dépasse 50 % au-delà de la marge.
+  const mw = Math.round((p.meta.winRate / 100) * p.meta.games);
+  const metaNet = p.meta.games > 0 && p.meta.winRate - wilsonMargin(mw, p.meta.games) > 50;
+  if (near && sim >= SIMILAR) r.push({ w: sim * 10, short: `Proche de ${near.name}, un de tes meilleurs`, text: `Proche de ${near.name}, un de tes meilleurs champions : ${describe(c)}.` });
+  if (metaAdj >= 51) r.push({ w: (metaAdj - 50) * 2.5, short: metaNet ? "Fort en ce moment en Émeraude+" : undefined, text: `${nf(p.meta.winRate, 1)} % de victoires en Émeraude+ (${nf(p.meta.games)} parties).` });
   // Prise en main : « rapide » seulement si les débutants (assez nombreux) gagnent presque autant que ceux qui le
   // maîtrisent ; nettement moins → « difficile », chiffres à l'appui.
   const nov = l.novice && l.novice.games >= LEARN_MIN ? l.novice : null;
   const exp = l.expert && l.expert.games >= LEARN_MIN ? l.expert : null;
   if (nov && exp && nov.winRate <= exp.winRate - 8) {
-    r.push({ w: 5, text: `Prise en main difficile : ceux qui le découvrent gagnent ${nf(nov.winRate)} % (${nov.games} parties), contre ${nf(exp.winRate)} % pour ceux qui le maîtrisent.` });
+    r.push({ w: 5, short: "Difficile à prendre en main", text: `Prise en main difficile : ceux qui le découvrent gagnent ${nf(nov.winRate)} % (${nov.games} parties), contre ${nf(exp.winRate)} % pour ceux qui le maîtrisent.` });
   } else if (nov && exp && l.games != null && l.games <= 30 && nov.winRate >= exp.winRate - 3) {
     // Pas assez de débutants mesurés (moins de LEARN_MIN parties) : aucune affirmation sur la prise en main.
-    r.push({ w: l.games <= 10 ? 6 : 4, text: `Rapide à prendre en main : ceux qui le découvrent gagnent déjà ${nf(nov.winRate)} % (${nov.games} parties), contre ${nf(exp.winRate)} % pour ceux qui le maîtrisent.` });
+    r.push({ w: l.games <= 10 ? 6 : 4, short: "Rapide à prendre en main", text: `Rapide à prendre en main : ceux qui le découvrent gagnent déjà ${nf(nov.winRate)} % (${nov.games} parties), contre ${nf(exp.winRate)} % pour ceux qui le maîtrisent.` });
   }
-  if (p.tried) r.push({ w: 9, text: `Tu l'as déjà joué ${p.tried.games} fois (${p.tried.wins} victoire${p.tried.wins > 1 ? "s" : ""}) : pas encore assez pour ton pool.` });
-  if (l.games != null && l.games > 100) r.push({ w: 3, text: "Long à maîtriser : prévois de nombreuses parties avant d'être à l'aise." });
+  if (p.tried) r.push({ w: 9, short: "Déjà essayé, pas encore assez joué", text: `Tu l'as déjà joué ${p.tried.games} fois (${p.tried.wins} victoire${p.tried.wins > 1 ? "s" : ""}) : pas encore assez pour ton pool.` });
+  if (l.games != null && l.games > 100) r.push({ w: 3, short: "Long à maîtriser", text: "Long à maîtriser : prévois de nombreuses parties avant d'être à l'aise." });
   if (st && fit > 0.3) {
     // Le texte cite les chiffres de ton profil (saison en cours) qui fondent ce style.
     const facts = [
       profile.kp15 != null && profile.metaKp15 != null ? `participation aux kills avant 15 min ${nf(profile.kp15)} % contre ${nf(profile.metaKp15)} % en Émeraude+` : "",
       profile.short.games >= 20 && profile.long.games >= 20 ? `${nf(profile.short.winRate)} % de victoires en parties courtes contre ${nf(profile.long.winRate)} % en parties longues` : "",
     ].filter(Boolean).join(", ");
-    r.push({ w: fit * 7, text: `${profile.style === "early" ? "Champion d'early game" : "Champion qui monte en puissance"}, comme ton profil de la saison${facts ? ` (${facts})` : ""}.` });
+    r.push({ w: fit * 7, short: profile.style === "early" ? "colle à ton style début de partie" : "colle à ton style fin de partie", text: `${profile.style === "early" ? "Champion d'early game" : "Champion qui monte en puissance"}, comme ton profil de la saison${facts ? ` (${facts})` : ""}.` });
   }
   const out = top(r);
-  return out.length ? out : [`${describe(c)[0].toUpperCase()}${describe(c).slice(1)}.`];
+  const desc = `${describe(c)[0].toUpperCase()}${describe(c).slice(1)}`;
+  // Une ligne : les deux raisons les plus fortes qui ont une version courte, si elles tiennent en 12 mots.
+  const shorts = r.filter((x) => x.w > 0 && x.short).sort((a, b) => b.w - a.w).map((x) => x.short!);
+  const one = shorts[0] ? shorts[0][0].toUpperCase() + shorts[0].slice(1) : desc;
+  const two = shorts[1] ? `${one}, ${shorts[1][0].toLowerCase()}${shorts[1].slice(1)}` : one;
+  return { reasons: out.length ? out : [`${desc}.`], short: `${two.split(/\s+/).length <= 12 ? two : one}.` };
 }

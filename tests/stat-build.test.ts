@@ -48,8 +48,8 @@ describe("build statistique (autres champions)", () => {
 
   it("« si… alors… » : alternatives jouées sur ce champion, écrites avant la partie", () => {
     const b = statBuild(input())!;
-    expect(b.ifThen.length).toBeGreaterThan(0);
-    expect(b.ifThen.every((t) => t.startsWith("Si "))).toBe(true);
+    expect(b.rules.length).toBeGreaterThan(0);
+    expect(b.rules.every((r) => r.cond.length > 0 && !!SHOP[r.id])).toBe(true);
   });
 
   it("overlay : un autre champion que Kayn suit le build statistique complet", () => {

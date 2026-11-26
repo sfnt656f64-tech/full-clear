@@ -39,7 +39,7 @@ describe("plan d'avant-partie", () => {
     const bot = p.lanes.find((l) => l.lane === "BOTTOM")!, top = p.lanes.find((l) => l.lane === "TOP")!;
     expect(bot.chance).toBeGreaterThan(top.chance);
     expect(p.firstGank).toBe("BOTTOM");
-    expect(p.start).toEqual({ side: "top", buff: "Blue Buff", topShare: 70 });
+    expect(p.start).toEqual({ side: "top", buff: "buff bleu", topShare: 70 });
     expect(p.objectives[0]).toContain("dragons");
     expect(bot.reasons.join(" ")).toMatch(/Leona a beaucoup de contrôle|réussit/);
     expect(p.games).toBe(100);
@@ -47,9 +47,9 @@ describe("plan d'avant-partie", () => {
     for (const l of p.lanes) { expect(l.chance).toBeGreaterThanOrEqual(10); expect(l.chance).toBeLessThanOrEqual(90); }
   });
 
-  it("équipe rouge : le côté top est celui du Red Buff", () => {
+  it("équipe rouge : le côté top est celui du buff rouge", () => {
     const p = gamePlan({ meChampion: KAYN, side: "red", lanes: LANES, ...data(), index: pairIndex([]) })!;
-    expect(p.start.buff).toBe("Red Buff");
+    expect(p.start.buff).toBe("buff rouge");
   });
 
   it("seulement en jungle", () => {

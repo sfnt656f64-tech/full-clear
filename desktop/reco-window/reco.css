@@ -67,3 +67,8 @@
 .prog > div { flex: 1; min-width: 0; }
 .prog .rank { color: var(--muted); font-weight: 600; width: 18px; flex: none; padding-top: 10px; }
 .flag-btn { font-size: 11px; padding: 2px 8px; }
+
+/* Vue simple : une ligne par champion, le reste replié */
+.why1 { margin: 2px 0 0; font-size: 13px; }
+details.det { margin-top: 4px; }
+details.det summary { cursor: pointer; }

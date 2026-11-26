@@ -283,3 +283,15 @@ body.app { display: flex; height: 100vh; padding: 0; overflow: hidden; }
 .tc-target { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 3; }
 .tc-label { fill: var(--muted); font-size: 10px; }
 .tc-label.strong { fill: var(--text, #ddd); }
+
+/* Vue simple : plan de partie, détails repliés */
+.plain h4 { margin: 8px 0 2px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
+.plain-list { margin: 0; padding-left: 18px; font-size: 13px; }
+.plain-list li { margin: 1px 0; }
+.plain-build { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.pb-item { display: inline-flex; align-items: center; gap: 4px; }
+.pb-ic { width: 26px; height: 26px; border-radius: 4px; }
+.details { margin-top: 8px; }
+.details summary { cursor: pointer; }
+.details .det p { margin: 6px 0 0; }
+.pick-why { margin: 2px 0 0; }

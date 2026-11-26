@@ -22,8 +22,7 @@ import { champByKey, findChamp } from "../src/data/champions";
 import { IPC, type AppState, type Navigation } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildPlanView, type OverlayView , type MatchChampions } from "./next-item.ts";
-import { pregameTips, tipsAt } from "./coach/pregame.ts";
-import { strategyTips } from "./coach/strategy.ts";
+import { plainPlan, type PlainPlan } from "./coach/plain.ts";
 import { SHOP } from "./next-item.ts";
 import { OverlayWindow } from "./overlay-window.ts";
 import { DEFAULT_SHORTCUTS, displayAccelerator, isValidAccelerator, type ShortcutName } from "./shortcuts.ts";
@@ -125,33 +124,27 @@ function readWindowMode(): WindowMode {
   try { return parseWindowMode(readFileSync(join(dir, "Config", "game.cfg"), "utf8")); } catch { return "unknown"; }
 }
 
-/** Conseils d'avant-partie de la partie en cours, et début de leur affichage. */
-let coach: { tips: string[]; start: number } | null = null;
-let coachTimer: NodeJS.Timeout | null = null;
+/** Plan de la partie en cours, écrit en draft (vue simple) : affiché tel quel dans l'overlay, rien ne change ensuite. */
+let coach: PlainPlan | null = null;
 /** Une draft de plus de 15 minutes n'est pas celle de cette partie. */
 const DRAFT_MAX_AGE = 15 * 60_000;
 
 function startCoach(): void {
-  coach = null;
-  if (!settings.overlay.tips || !draft?.lanes || Date.now() - draftAt > DRAFT_MAX_AGE) return;
-  const form = draft.isKayn ? (settings.formChoice !== "auto" ? settings.formChoice : draft.form?.value ?? null) : null;
-  // Plan de partie écrit en draft d'abord, puis les autres conseils : 8 au plus, deux à la fois.
-  const tips = [...(draft.strategy ? strategyTips(draft.strategy) : []), ...pregameTips({ lanes: draft.lanes, form })].slice(0, 8);
-  if (!tips.length) return;
-  coach = { tips, start: Date.now() };
-  // Défilement : on ne renvoie la vue que quand la paire affichée change.
-  let shown = "";
-  coachTimer = setInterval(() => {
-    const now = coach ? tipsAt(coach.tips, Date.now() - coach.start) : [];
-    if (now.join("|") !== shown) { shown = now.join("|"); updateLive(); }
-    if (!now.length) stopCoach();
-  }, 1000);
+  coach = settings.overlay.tips && draft?.plain && Date.now() - draftAt <= DRAFT_MAX_AGE ? draft.plain : null;
 }
 
 function stopCoach(): void {
-  if (coachTimer) clearInterval(coachTimer);
-  coachTimer = null;
   coach = null;
+}
+
+/** Vue simple du plan de la draft : plan de partie + build (Kayn : modèle ; autres : méta), d'après les champions seulement. */
+async function draftPlain(view: DraftView): Promise<PlainPlan | null> {
+  const me = view.me.champion?.id ?? null;
+  if (!me) return null;
+  const m: MatchChampions = { me, allies: view.allies.map((a) => a?.id ?? null), enemies: view.enemies.map((e) => e?.id ?? null) };
+  const pos = ALL_ROLES_POS.has(view.me.position) ? view.me.position : null;
+  const stat = me === "Kayn" ? null : await engine.call("statBuild", m, pos).catch(() => null);
+  return plainPlan(view.strategy ?? null, buildPlanView(m, settings.formChoice, SHOP, stat));
 }
 
 /** Champions de la partie (aucune autre donnée du jeu : ni or, ni items, ni événements). */
@@ -175,17 +168,19 @@ function requestStatBuild(snap: LiveSnapshot): void {
 function updateLive(): void {
   if (liveSnap) requestStatBuild(liveSnap);
   liveView = liveSnap ? buildPlanView(championsOf(liveSnap), settings.formChoice, SHOP, stat.value) : null;
-  if (liveView && coach && settings.overlay.tips) liveView.tips = tipsAt(coach.tips, Date.now() - coach.start);
+  if (liveView && coach && settings.overlay.tips) liveView.plan = coach;
   overlay.update(liveView);
   pushState();
 }
 
-const live = new LiveWatcher((snap) => {
+/** Partie en cours (champions seulement) ou fin de partie (null). */
+function onLive(snap: LiveSnapshot | null): void {
   if (snap && !liveSnap) { windowMode = readWindowMode(); startCoach(); }
   if (!snap) stopCoach();
   liveSnap = snap;
   updateLive();
-});
+}
+const live = new LiveWatcher(onLive);
 
 const watcher = new ClientWatcher(
   () => config?.riotIds ?? [],
@@ -216,7 +211,7 @@ const watcher = new ClientWatcher(
 function onDraft(snap: DraftSnapshot): void {
     const view = buildDraftView(snap);
     // En attendant le moteur : les compléments précédents de cette draft (pas de clignotement).
-    if (draft) Object.assign(view, { lanes: draft.lanes, picks: draft.picks, plan: draft.plan, strategy: draft.strategy, runePage: draft.runePage });
+    if (draft) Object.assign(view, { lanes: draft.lanes, picks: draft.picks, plan: draft.plan, strategy: draft.strategy, plain: draft.plain, runePage: draft.runePage });
     draft = view;
     draftAt = Date.now();
     pushState();
@@ -225,7 +220,26 @@ function onDraft(snap: DraftSnapshot): void {
       if (seq !== draftSeq || draft !== view) return;
       Object.assign(view, x);
       pushState();
+      return draftPlain(view).then((plain) => {
+        if (seq !== draftSeq || draft !== view) return;
+        view.plain = plain;
+        pushState();
+      });
     }).catch((e) => console.error("Draft :", e));
+}
+
+// FULL_CLEAR_FAKE_LIVE=<fichier JSON> (test seulement) : partie simulée (champions), pour vérifier l'overlay sans jeu ;
+// fichier vide ou absent : pas de partie.
+if (testData && process.env.FULL_CLEAR_FAKE_LIVE) {
+  const file = process.env.FULL_CLEAR_FAKE_LIVE;
+  let last = "";
+  setInterval(() => {
+    let text = "";
+    try { text = readFileSync(file, "utf8"); } catch { /* absent : pas de partie */ }
+    if (text === last) return;
+    last = text;
+    try { onLive(text.trim() ? (JSON.parse(text) as LiveSnapshot) : null); } catch { /* en cours d'écriture */ }
+  }, 1000).unref?.();
 }
 
 // FULL_CLEAR_FAKE_DRAFT=<fichier JSON> (avec un dossier de données de test seulement) : draft simulée, relue quand le

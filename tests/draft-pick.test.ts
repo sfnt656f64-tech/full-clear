@@ -112,7 +112,7 @@ describe("choix en draft", () => {
 
   it("aucun nom de joueur : seulement des champions", () => {
     const r = draftPicks({ ...base, index: pairIndex([]), enemies: [AHRI] });
-    expect(Object.keys(r.list[0]).sort()).toEqual(["base", "championId", "counter", "damage", "inPool", "poolRank", "provisional", "reasons", "score", "synergy"]);
+    expect(Object.keys(r.list[0]).sort()).toEqual(["base", "championId", "counter", "damage", "inPool", "poolRank", "provisional", "reasons", "score", "short", "synergy"]);
   });
 });
 

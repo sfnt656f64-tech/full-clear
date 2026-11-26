@@ -7,9 +7,9 @@ import { OVERLAY_IPC } from "./ipc.ts";
 import type { ShortcutName, Shortcuts, ShortcutStatus } from "./shortcuts.ts";
 import type { OverlayView } from "./next-item.ts";
 
-const WIDTH = 300;
+const WIDTH = 330;
 const MIN_HEIGHT = 60;
-const MAX_HEIGHT = 260;
+const MAX_HEIGHT = 600;
 
 export interface OverlayOptions {
   dir: string;
