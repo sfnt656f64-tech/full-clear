@@ -7,7 +7,8 @@ import { remindersFrom, strategy } from "../desktop/coach/strategy";
 import { buildPlanView, SHOP } from "../desktop/next-item";
 import { statBuild } from "../desktop/coach/stat-build";
 import { pairIndex } from "../desktop/reco/draft-pick";
-import { plainTop, type Moment, type VsLine } from "../desktop/analysis/postgame";
+import { habitLine, plainTop, type Moment, type VsLine } from "../desktop/analysis/postgame";
+import type { AnalysisGame } from "../desktop/analysis/analysis";
 import { progressPriority } from "../desktop/reco/progress-draft";
 import { champ } from "../src/data/champions";
 import type { MetaPartRow } from "../desktop/meta/meta-stats";
@@ -104,7 +105,7 @@ describe("vue principale de l'après-partie et de la draft", () => {
   for (const key of ["unc15", "deaths15", "solo15", "cs10", "gd15", "kp15", "obj15", null]) {
     it(`haut de l'analyse (${key ?? "aucun point net"}) : 3 lignes aux règles`, () => {
       const t = plainTop([vs("gd10", true), vs("cs10", false), vs("kp15", false), vs("gd15", false)], moments, key, "Rengar");
-      ok([t.well, t.point, ...(t.moment ? [t.moment] : []), t.next]);
+      ok([...(t.well ? [t.well] : []), t.point, ...(t.moment ? [t.moment] : []), t.next]);
     });
   }
   it("le moment illustre le point de cette partie", () => {
@@ -115,5 +116,26 @@ describe("vue principale de l'après-partie et de la draft", () => {
     const r = progressPriority(420, { tracking: [{ championId: 1, stage: "readyToTest", text: "x" }], comfort: [], notForMe: [] });
     ok([r.ruleShort!, ...r.priority!.map((x) => x.short!)]);
     ok([progressPriority(400, { tracking: [{ championId: 1, stage: "learning", text: "x" }], comfort: [], notForMe: [] }).ruleShort!]);
+  });
+});
+
+describe("ligne « Bien » : adversaire, sinon ton habitude (si net), sinon retirée", () => {
+  // CS à 10 min : 20 parties précédentes autour de 60 (± 4).
+  const prev = Array.from({ length: 20 }, (_, i) => ({ cs10: 60 + (i % 2 ? 4 : -4) }) as unknown as AnalysisGame);
+  it("rien de mieux que l'adversaire, mais nettement mieux que d'habitude", () => {
+    const habit = habitLine({ cs10: 80 } as unknown as AnalysisGame, prev);
+    expect(habit).toBe("Mieux que d'habitude : plus de camps à 10 min.");
+    expect(plainTop([], [], null, "Zac", habit).well).toBe(habit);
+    ok([habit!]);
+  });
+  it("écart dans ta plage habituelle : pas de ligne « Bien »", () => {
+    expect(habitLine({ cs10: 66 } as unknown as AnalysisGame, prev)).toBeNull();
+    expect(plainTop([], [], null, "Zac", null).well).toBeNull();
+  });
+  it("moins de 20 parties précédentes : pas de comparaison", () => {
+    expect(habitLine({ cs10: 90 } as unknown as AnalysisGame, prev.slice(0, 19))).toBeNull();
+  });
+  it("l'adversaire reste prioritaire", () => {
+    expect(plainTop([{ key: "gd15", label: "", unit: "", mine: 300, opp: null, better: true, outcomeLinked: false, diff: true }], [], null, "Zac", "Mieux que d'habitude : x.").well).toBe("Plus d'or que Zac à 15 min.");
   });
 });

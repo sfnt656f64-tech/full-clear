@@ -55,7 +55,8 @@ export interface PostGame {
   /** Courbe de chaque point à travailler (même ordre que work), null si pas assez de parties. */
   curves: (WorkCurve | null)[];
   /** Vue simple, en haut : ce qui a marché, le point à travailler et un moment de cette partie, une consigne. */
-  top: { well: string; point: string; moment: string | null; next: string };
+  /** well : null quand rien n'est net (ni face à l'adversaire, ni face à ta propre habitude) : la ligne est retirée. */
+  top: { well: string | null; point: string; moment: string | null; next: string };
 }
 
 const POINT: Record<string, string> = {
@@ -78,7 +79,35 @@ const minute = (t: number) => Math.max(1, Math.round(t / MIN));
  * (un fait, pas une conclusion) ; le point à travailler vient de tes dernières parties (net, marge comprise), illustré
  * par un moment de cette partie s'il y en a un ; une seule consigne pour la prochaine partie.
  */
-export function plainTop(vs: VsLine[], moments: Moment[], workKey: string | null, oppName: string): PostGame["top"] {
+/** Ce que tu as fait mieux que d'habitude (pour « Mieux que d'habitude : … »). */
+const HABIT: Record<string, string> = {
+  cs10: "plus de camps à 10 min", cs15: "plus de camps à 15 min", gd10: "meilleur écart d'or à 10 min",
+  gd15: "meilleur écart d'or à 15 min", xd10: "meilleur écart d'expérience à 10 min",
+  kp15: "plus présent sur les kills avant 15 min", deaths15: "moins de morts avant 15 min",
+  solo15: "moins de morts seul avant 15 min", obj15: "plus d'objectifs pris avant 15 min",
+  unc15: "moins d'objectifs laissés gratuits avant 15 min",
+};
+
+/**
+ * Cette partie face à ta propre habitude : la mesure où elle sort nettement de ta plage habituelle, du bon côté. Net :
+ * au-delà de ta moyenne de plus de 1,96 écart-type (intervalle de prédiction d'une partie, sur au moins 20 parties
+ * précédentes dans ce rôle et cette saison). Sinon null : la ligne est retirée.
+ */
+export function habitLine(game: AnalysisGame, recent: AnalysisGame[]): string | null {
+  const best = METRICS.filter((m) => HABIT[m.key]).flatMap((m) => {
+    const v = m.value(game);
+    const xs = recent.slice(0, WORK_GAMES).map((h) => m.value(h)).filter((x): x is number => x != null);
+    if (v == null || xs.length < WORK_GAMES) return [];
+    const mean = xs.reduce((s, x) => s + x, 0) / xs.length;
+    const sd = Math.sqrt(xs.reduce((s, x) => s + (x - mean) ** 2, 0) / (xs.length - 1));
+    if (!sd) return [];
+    const z = ((m.better === "+" ? v - mean : mean - v) / sd) / Math.sqrt(1 + 1 / xs.length);
+    return z > 1.96 ? [{ key: m.key, z }] : [];
+  }).sort((a, b) => b.z - a.z)[0];
+  return best ? `Mieux que d'habitude : ${HABIT[best.key]}.` : null;
+}
+
+export function plainTop(vs: VsLine[], moments: Moment[], workKey: string | null, oppName: string, habit: string | null = null): PostGame["top"] {
   const v = new Map(vs.map((x) => [x.key, x]));
   /** « que Zac », « qu'Amumu ». */
   const que = /^[aeiouyéèêh]/i.test(oppName) ? `qu'${oppName}` : `que ${oppName}`;
@@ -93,7 +122,8 @@ export function plainTop(vs: VsLine[], moments: Moment[], workKey: string | null
     ["obj15", (x) => (x.better ? "Ton équipe prend plus d'objectifs avant 15 min." : null)],
     ["unc15", (x) => (x.mine === 0 ? "Aucun objectif laissé gratuit avant 15 min." : null)],
   ];
-  const well = WELL.map(([k, f]) => (v.get(k) ? f(v.get(k)!) : null)).find((x): x is string => !!x) ?? `Rien de mieux ${que} sur les mesures suivies.`;
+  // Face à l'adversaire d'abord ; sinon face à ton habitude (si l'écart est net) ; sinon pas de ligne.
+  const well = WELL.map(([k, f]) => (v.get(k) ? f(v.get(k)!) : null)).find((x): x is string => !!x) ?? habit;
   if (!workKey) return { well, point: "Aucun point net à travailler sur tes dernières parties.", moment: null, next: "Garde tes objectifs de la semaine." };
   const early = moments.filter((m) => m.t < 15 * MIN);
   const deaths = early.filter((m) => m.kind === "death");
@@ -246,7 +276,7 @@ export function postGame(x: PostGameInput): PostGame {
     queue: x.queue, kda: `${g.kills}/${g.deaths}/${g.assists}`, opponent: opp ? n(opp.championId) : null,
     vs, goals: g.role === "JUNGLE" ? goalLines(x.metrics, x.targets) : [], moments, average, progression: x.progression,
     work, strength, curves,
-    top: plainTop(vs, moments, workKeys[0] ?? null, opp ? name(n(opp.championId)) : "ton vis-à-vis"),
+    top: plainTop(vs, moments, workKeys[0] ?? null, opp ? name(n(opp.championId)) : "ton vis-à-vis", habitLine(g, x.recent)),
   };
 }
 

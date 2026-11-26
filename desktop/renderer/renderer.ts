@@ -639,7 +639,7 @@ function renderPostGame(p: PostGame, open: boolean): HTMLElement {
   const d = h("details", { class: "post", id: `postgame-${p.matchId}` },
     h("summary", {}, head),
     h("ul", { class: "plain-list post-top" },
-      h("li", {}, h("span", { class: "good-text" }, "Bien : "), p.top.well),
+      p.top.well ? h("li", {}, h("span", { class: "good-text" }, "Bien : "), p.top.well) : null,
       h("li", {}, h("span", { class: "bad-text" }, "À travailler : "), p.top.point, p.top.moment ? h("div", { class: "small" }, p.top.moment) : null),
       h("li", {}, h("b", {}, "Prochaine partie : "), p.top.next)),
     c ? h("div", { class: "spark-box" },
