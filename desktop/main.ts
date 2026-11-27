@@ -18,8 +18,11 @@ import { DEFAULT_GOALS, type GoalsView } from "./analysis/goals.ts";
 import type { StatBuild } from "./coach/stat-build.ts";
 import { EngineClient } from "./data/engine-client.ts";
 import type { DraftContext } from "./data/engine.ts";
+import { journal, openJournal } from "./journal.ts";
+import { MAX_PROGRESS } from "./reco/pool-view.ts";
+import { ERRORS, pickTheme, themeReview, themeVerdict, type ErrorKey } from "./analysis/lesson.ts";
 import { champByKey, findChamp } from "../src/data/champions";
-import { IPC, type AppState, type Navigation } from "./ipc.ts";
+import { IPC, type AppState, type Navigation , type ThemeView } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
 import { buildPlanView, type OverlayView , type MatchChampions } from "./next-item.ts";
 import { plainPlan, type PlainPlan } from "./coach/plain.ts";
@@ -144,7 +147,12 @@ async function draftPlain(view: DraftView): Promise<PlainPlan | null> {
   const m: MatchChampions = { me, allies: view.allies.map((a) => a?.id ?? null), enemies: view.enemies.map((e) => e?.id ?? null) };
   const pos = ALL_ROLES_POS.has(view.me.position) ? view.me.position : null;
   const stat = me === "Kayn" ? null : await engine.call("statBuild", m, pos).catch(() => null);
-  return plainPlan(view.strategy ?? null, buildPlanView(m, settings.formChoice, SHOP, stat));
+  const key = findChamp(me)?.key;
+  const role = pos ? ROLE_OF_POS[pos] : null;
+  const enemyKeys = view.enemies.map((e) => (e ? findChamp(e.id)?.key ?? 0 : 0)).filter(Boolean);
+  const situational = key && role ? await engine.call("situational", key, role, enemyKeys).catch(() => []) : [];
+  const theme = settings.theme ? { key: settings.theme.key, short: ERRORS[settings.theme.key as ErrorKey]?.short ?? "" } : null;
+  return plainPlan(view.strategy ?? null, buildPlanView(m, settings.formChoice, SHOP, stat), theme, situational);
 }
 
 /** Champions de la partie (aucune autre donnée du jeu : ni or, ni items, ni événements). */
@@ -256,7 +264,40 @@ if (testData && process.env.FULL_CLEAR_FAKE_DRAFT) {
 }
 
 /** Analyses d'après-partie des dernières parties (classées, flexibles et normales en draft). */
-const postGames = (limit: number) => engine.call("postGames", excludedKeys(), settings.refTier, settings.goals.targets, limit, settings.championFlags);
+const postGames = (limit: number) => engine.call("postGames", excludedKeys(), settings.refTier, settings.goals.targets, limit, settings.championFlags, (settings.theme?.key ?? null) as ErrorKey | null);
+
+/**
+ * Thème de la semaine : l'erreur personnelle la plus fréquente sur tes 20 dernières parties. Au bout de 7 jours, bilan
+ * (avant / pendant, avec la marge), puis nouveau thème.
+ */
+const WEEK_MS = 7 * 24 * 3600_000;
+const ROLE_OF_POS: Record<string, string> = { top: "TOP", jungle: "JUNGLE", middle: "MIDDLE", bottom: "BOTTOM", utility: "UTILITY" };
+async function ensureTheme(): Promise<void> {
+  const now = Date.now();
+  if (settings.theme && now - settings.theme.startMs < WEEK_MS) return;
+  if (settings.theme) {
+    const t = settings.theme;
+    const since = (await engine.call("errorStats", excludedKeys(), Infinity, t.startMs)).find((s) => s.key === t.key);
+    if (since) settings.lastReview = { key: t.key, label: since.label, text: themeReview(t.before, since), endMs: now };
+  }
+  const pick = pickTheme(await engine.call("errorStats", excludedKeys(), Infinity, 0));
+  settings.theme = pick ? { key: pick.key, startMs: now, before: { perGame: pick.perGame, margin: pick.margin, games: pick.games } } : null;
+  saveSettings(settingsFile, settings);
+  journal("thème", pick ? `nouveau thème : ${pick.key}` : "pas encore de thème (moins de 20 parties relues)");
+}
+
+/** Thème en cours : l'erreur, l'exercice, des exemples à revoir, la semaine en cours et le bilan précédent. */
+async function themeView(): Promise<ThemeView> {
+  await ensureTheme().catch((e) => journal("thème", `erreur : ${e instanceof Error ? e.message : String(e)}`));
+  const t = settings.theme;
+  const recent = await engine.call("errorStats", excludedKeys(), Infinity, 0);
+  const cur = t ? recent.find((s) => s.key === t.key) ?? null : null;
+  const since = t ? (await engine.call("errorStats", excludedKeys(), Infinity, t.startMs)).find((s) => s.key === t.key) ?? null : null;
+  return {
+    current: t && cur ? { key: t.key as ErrorKey, label: ERRORS[t.key as ErrorKey].label, short: ERRORS[t.key as ErrorKey].short, exercise: ERRORS[t.key as ErrorKey].exercise, startMs: t.startMs, examples: cur.examples, recent: cur, week: since ? themeVerdict(t.before, since) : null } : null,
+    review: settings.lastReview, all: recent,
+  };
+}
 
 /**
  * Analyse automatique : dès qu'une nouvelle partie apparaît dans la base (collecte), une notification Windows la
@@ -268,23 +309,35 @@ function checkPostGame(): void {
   if (postGameTimer) return;
   postGameTimer = setTimeout(() => {
     postGameTimer = null;
-    void postGames(1).then(([p]) => {
-      if (!p || p.matchId === settings.lastPostGame) return;
+    void ensureTheme().catch(() => {}).then(() => postGames(1)).then(([p]) => {
+      if (!p) { journal("analyse", "aucune partie analysable"); return; }
+      if (p.matchId === settings.lastPostGame) return;
       const first = settings.lastPostGame == null;
       settings.lastPostGame = p.matchId;
       saveSettings(settingsFile, settings);
-      win?.webContents.send(IPC.postGameReady);
-      if (first || !Notification.isSupported()) return;
+      journal("analyse", `nouvelle partie ${p.matchId} (${first ? "premier lancement : pas de notification" : "notification"})`);
+      win?.webContents.send(IPC.postGameReady, p.matchId);
+      if (first) return;
+      if (!Notification.isSupported()) { journal("notification", "non prise en charge par Windows"); return; }
       const name = champByKey(p.championId)?.name ?? "ta partie";
       const n = new Notification({
         title: "Analyse d'après-partie prête",
-        body: `${name} · ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min · ${p.kda}. Clique pour l'ouvrir dans Progresser.`,
+        body: `${name} · ${p.win ? "victoire" : "défaite"}. Clique pour voir ce que cette partie t'apprend.`,
         silent: true,
       });
-      n.on("click", () => navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }));
+      n.on("click", () => { journal("notification", `clic ${p.matchId}`); navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }); });
+      n.on("show", () => journal("notification", `affichée ${p.matchId}`));
+      // Notification bloquée (réglages Windows, mode « Ne pas déranger » des jeux) : la fenêtre s'ouvre sur l'analyse,
+      // sans prendre le focus, et clignote dans la barre des tâches.
+      n.on("failed", (_e, err) => {
+        journal("notification", `échec ${p.matchId} : ${err} → fenêtre ouverte sur l'analyse`);
+        if (overlay?.isInGame) return;
+        navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }, false);
+        win?.flashFrame(true);
+      });
       n.show();
       if (PROFILE) console.log(`[après-partie] notification : ${p.matchId}`);
-    }).catch((e) => console.error("Analyse d'après-partie :", e));
+    }).catch((e) => { journal("analyse", `erreur : ${e instanceof Error ? e.message : String(e)}`); console.error("Analyse d'après-partie :", e); });
   }, 30_000);
   postGameTimer.unref?.();
 }
@@ -391,8 +444,8 @@ function pushState(): void {
 }
 
 /** Affiche la fenêtre et ouvre une vue (onglet, sous-vue, ancre du simulateur). */
-function navigate(nav: Navigation): void {
-  showWindow();
+function navigate(nav: Navigation, focus = true): void {
+  showWindow(focus);
   const send = () => win?.webContents.send(IPC.navigate, nav);
   if (win?.webContents.isLoading()) win.webContents.once("did-finish-load", send); else send();
 }
@@ -567,7 +620,11 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
   ipcMain.handle(IPC.getProgression, () => engine.call("progression", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
-  ipcMain.handle(IPC.getPostGames, () => postGames(10));
+  ipcMain.handle(IPC.getPostGames, () => postGames(20));
+  ipcMain.handle(IPC.getPool, () => engine.call("pool", excludedKeys(), settings.refTier, settings.championFlags));
+  ipcMain.handle(IPC.getTheme, () => themeView());
+  // « Analyser ma dernière partie » : demande tout de suite à la collecte de chercher les nouvelles parties.
+  ipcMain.handle(IPC.checkNewGames, () => { journal("analyse", "recherche demandée"); collector?.checkNewGames(); checkPostGame(); });
   ipcMain.handle(IPC.setPoolGoal, (_e, goal: unknown) => {
     if (goal === "win" || goal === "progress") { settings.poolGoal = goal; saveSettings(settingsFile, settings); }
     pushState();
@@ -577,6 +634,9 @@ function registerIpc(): void {
     // Seulement des champions qui existent ; null retire le choix.
     if (typeof id === "string" && findChamp(id)?.id) {
       const key = findChamp(id)!.id as string;
+      // « Je veux progresser dessus » : 2 champions au plus (au-delà, la fenêtre demande lesquels garder).
+      const progress = Object.entries(settings.championFlags).filter(([k, f]) => f === "progress" && k !== key).length;
+      if (flag === "progress" && progress >= MAX_PROGRESS) return { ...state(), flagError: `Tu as déjà ${progress} champions de progression : retire-en un d'abord.` };
       if (flag === "notForMe" || flag === "progress") settings.championFlags[key] = flag; else delete settings.championFlags[key];
       saveSettings(settingsFile, settings);
     }
@@ -613,6 +673,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     config = readConfig();
     settingsFile = join(app.getPath("userData"), "settings.json");
+    openJournal(join(app.getPath("userData"), "journal.log"));
+    journal("démarrage", `version ${app.getVersion()}`);
     settings = loadSettings(settingsFile);
     overlay = new OverlayWindow({
       dir: here,

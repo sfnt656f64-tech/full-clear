@@ -139,3 +139,13 @@ describe("ligne « Bien » : adversaire, sinon ton habitude (si net), sinon reti
     expect(plainTop([{ key: "gd15", label: "", unit: "", mine: 300, opp: null, better: true, outcomeLinked: false, diff: true }], [], null, "Zac", "Mieux que d'habitude : x.").well).toBe("Plus d'or que Zac à 15 min.");
   });
 });
+
+describe("0.4.0 : nouvelles lignes de la vue principale", () => {
+  it("thème de la semaine, recommandations du pool, parts sans chiffre", async () => {
+    const { ERRORS, shareText } = await import("../desktop/analysis/lesson");
+    ok(Object.values(ERRORS).map((e) => e.short));
+    ok([shareText(11, 20), shareText(3, 20), shareText(16, 20)].map((t) => `Revient dans ${t}.`));
+    const { candidateLine } = await import("../desktop/reco/pool-view");
+    ok([candidateLine({ force: { adjusted: 55, margin: 2 }, fit: { value: 3, margin: 1 }, difficulty: 3 } as never), candidateLine({ force: { adjusted: 50, margin: 2 }, fit: { value: 0, margin: 1 }, difficulty: 6 } as never)]);
+  });
+});

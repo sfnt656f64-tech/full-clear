@@ -54,6 +54,8 @@ export interface PostGame {
   strength: string;
   /** Courbe de chaque point à travailler (même ordre que work), null si pas assez de parties. */
   curves: (WorkCurve | null)[];
+  /** Ce que cette partie t'apprend (tournant, moments, repères, build, thème) ; null sans chronologie. */
+  lesson: import("./lesson.ts").Lesson | null;
   /** Vue simple, en haut : ce qui a marché, le point à travailler et un moment de cette partie, une consigne. */
   /** well : null quand rien n'est net (ni face à l'adversaire, ni face à ta propre habitude) : la ligne est retirée. */
   top: { well: string | null; point: string; moment: string | null; next: string };
@@ -231,6 +233,7 @@ export function goalLines(m: GameMetrics | null, targets: { uncompensatedEarly: 
 }
 
 export interface PostGameInput {
+  lesson?: import("./lesson.ts").Lesson | null;
   game: AnalysisGame;
   detail: Detail;
   queue: PostGame["queue"];
@@ -273,6 +276,7 @@ export function postGame(x: PostGameInput): PostGame {
   const moments = keyMoments(x.detail);
   return {
     matchId: g.matchId, account: g.account, startMs: g.startMs, championId: g.championId, win: g.win, durationS: g.durationS, role: g.role,
+    lesson: x.lesson ?? null,
     queue: x.queue, kda: `${g.kills}/${g.deaths}/${g.assists}`, opponent: opp ? n(opp.championId) : null,
     vs, goals: g.role === "JUNGLE" ? goalLines(x.metrics, x.targets) : [], moments, average, progression: x.progression,
     work, strength, curves,

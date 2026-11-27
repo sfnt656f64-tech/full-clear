@@ -4,6 +4,15 @@ import type { FirstGames } from "./reco/progress.ts";
 import type { RefInfo, RefTier } from "./analysis/ref-tier.ts";
 import type { DraftView } from "./draft-view.ts";
 import type { PostGame } from "./analysis/postgame.ts";
+import type { PoolView } from "./reco/pool-view.ts";
+import type { ErrorKey, ErrorStat } from "./analysis/lesson.ts";
+
+export interface ThemeView {
+  current: { key: ErrorKey; label: string; short: string; exercise: string; startMs: number; examples: ErrorStat["examples"]; recent: ErrorStat; week: { verdict: string; numbers: string } | null } | null;
+  review: { key: string; label: string; text: string; endMs: number } | null;
+  /** Toutes les erreurs suivies, sur tes 20 dernières parties. */
+  all: ErrorStat[];
+}
 import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
 import type { MetaChampion } from "./meta/meta-stats.ts";
@@ -157,15 +166,21 @@ export interface KaynApi {
   /** Navigation demandée par le processus principal (menu de l'icône, simulateur). */
   onNavigate(cb: (nav: Navigation) => void): void;
   /** Nouvelle analyse d'après-partie disponible. */
-  onPostGameReady(cb: () => void): void;
+  onPostGameReady(cb: (matchId: string) => void): void;
   /** Niveau de référence des comparaisons (Analyse, Champions). */
   setRefTier(tier: RefTier): Promise<AppState>;
   /** Objectif du pool, et choix par champion (null : retirer le choix). */
   setPoolGoal(goal: PoolGoal): Promise<AppState>;
-  setChampionFlag(id: string, flag: "notForMe" | "progress" | null): Promise<AppState>;
+  setChampionFlag(id: string, flag: "notForMe" | "progress" | null): Promise<AppState & { flagError?: string }>;
   getProgression(): Promise<ProgressionView>;
   /** Analyses d'après-partie de tes dernières parties (les plus récentes d'abord). */
   getPostGames(): Promise<PostGame[]>;
+  /** Cherche tout de suite tes nouvelles parties (bouton « Analyser ma dernière partie »). */
+  checkNewGames(): Promise<void>;
+  /** Mon pool : un seul système de recommandation, par rôle. */
+  getPool(): Promise<PoolView[]>;
+  /** Thème de la semaine, exemples à revoir, bilan. */
+  getTheme(): Promise<ThemeView>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Suivi de tes objectifs (jungle). */
   getGoals(): Promise<GoalsView>;
@@ -205,6 +220,9 @@ export const IPC = {
   setChampionFlag: "kayn:set-champion-flag",
   getProgression: "kayn:get-progression",
   getPostGames: "kayn:get-postgames",
+  checkNewGames: "kayn:check-new-games",
+  getPool: "kayn:get-pool",
+  getTheme: "kayn:get-theme",
   navigate: "kayn:navigate",
   postGameReady: "kayn:postgame-ready",
   getOverview: "kayn:get-overview",

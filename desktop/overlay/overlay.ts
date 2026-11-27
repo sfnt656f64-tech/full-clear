@@ -30,6 +30,7 @@ function render(v: OverlayView | null): void {
   const build: PlainItem[] = p ? [...(p.starter ? [p.starter] : []), ...p.build] : [...(v.starter ? [v.starter] : []), ...v.build];
   const out: Child[] = [
     ...block("À RETENIR", p?.retain ?? []),
+    ...block("THÈME DE LA SEMAINE", p?.theme ? [p.theme] : []),
     ...(build.length ? [h("div", { class: "head" }, "BUILD", p?.form ? h("span", { class: "form" }, ` · ${p.form}`) : null), h("div", { class: "build" }, ...build.flatMap((it, i) => [...(i ? [h("span", { class: "arrow" }, "→")] : []), item(it)]))] : []),
     ...block("SI… ALORS…", p ? p.ifThen : v.rules.map((r) => ruleText(r))),
     ...block("MES RAPPELS", (p?.reminders ?? []).map((r) => r.text)),

@@ -12,6 +12,7 @@
 import itemIndex from "../../src/data/generated/item-index.json";
 import { STARTERS } from "../../src/data/starters";
 import type { Champion } from "../../src/data/types";
+import { damageProfile, type DamageProfile } from "./compo.ts";
 import type { MetaBuildRow, MetaPartRow } from "../meta/meta-stats.ts";
 import type { Shop } from "../next-item.ts";
 
@@ -26,6 +27,8 @@ export interface StatBuild {
   reasons: string[];
   /** Règles écrites avant la partie (« si… alors… ») : c'est toi qui les appliques, l'appli ne lit rien en jeu. */
   rules: BuildRule[];
+  /** Dégâts de la compo adverse (classification unique, coach/compo.ts). */
+  profile: DamageProfile;
 }
 
 /**
@@ -82,9 +85,8 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
 
   // Composition adverse.
   const known = input.enemies.filter((c): c is Champion => !!c);
-  const phys = known.filter((c) => c.damage === "physical").length;
-  const mag = known.filter((c) => c.damage === "magic").length;
-  const adShare = phys + mag ? phys / (phys + mag) : 0.5;
+  // Même classification que partout ailleurs (coach/compo.ts).
+  const profile = damageProfile(known);
   const healers = known.filter((c) => c.heals).length;
 
   // Anti-soins : seulement un item que les joueurs prennent sur ce champion.
@@ -99,8 +101,8 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
 
   // Défense selon les dégâts adverses : un item (armure ou résistance magique) déjà joué sur ce champion.
   const defensive = (stat: "armor" | "mr") => items.find((x) => (input.shop[x.id]?.[stat] ?? 0) >= 30 && !legend.slice(0, 3).includes(x.id));
-  if (adShare >= 0.7 || adShare <= 0.3) {
-    const stat = adShare >= 0.7 ? "armor" : "mr";
+  if (profile !== "mixed") {
+    const stat = profile === "physical" ? "armor" : "mr";
     const d = defensive(stat);
     if (d && legend.indexOf(d.id) !== 3) {
       const at = legend.indexOf(d.id);
@@ -113,8 +115,8 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
 
   // Bottes : les plus jouées, ou des bottes défensives si les joueurs les prennent sur ce champion.
   let boots = bootsRank[0]?.id ?? null;
-  if (adShare >= 0.7 && usedBoots.has(BOOTS_ARMOR) && boots !== BOOTS_ARMOR) { boots = BOOTS_ARMOR; reasons.push(`${input.shop[BOOTS_ARMOR]?.nameFr ?? "Coques en acier"} contre les dégâts physiques`); }
-  else if (adShare <= 0.3 && usedBoots.has(BOOTS_MR) && boots !== BOOTS_MR) { boots = BOOTS_MR; reasons.push(`${input.shop[BOOTS_MR]?.nameFr ?? "Sandales de Mercure"} contre les dégâts magiques`); }
+  if (profile === "physical" && usedBoots.has(BOOTS_ARMOR) && boots !== BOOTS_ARMOR) { boots = BOOTS_ARMOR; reasons.push(`${input.shop[BOOTS_ARMOR]?.nameFr ?? "Coques en acier"} contre les dégâts physiques`); }
+  else if (profile === "magic" && usedBoots.has(BOOTS_MR) && boots !== BOOTS_MR) { boots = BOOTS_MR; reasons.push(`${input.shop[BOOTS_MR]?.nameFr ?? "Sandales de Mercure"} contre les dégâts magiques`); }
 
   // Bottes après le premier item (le plus courant pour un jungler ou un mid).
   const ids = boots ? [legend[0], boots, ...legend.slice(1)].filter(Boolean) : legend;
@@ -131,5 +133,5 @@ export function statBuild(input: StatBuildInput): StatBuild | null {
   if (gw && !ids.includes(gw.id)) rules.push({ cond: "Leurs soins font la différence", id: gw.id });
   if (boots && boots !== BOOTS_ARMOR && usedBoots.has(BOOTS_ARMOR)) rules.push({ cond: "Beaucoup d'auto-attaques en face", id: BOOTS_ARMOR, instead: boots });
   if (boots && boots !== BOOTS_MR && usedBoots.has(BOOTS_MR)) rules.push({ cond: "Leurs contrôles te gênent", id: BOOTS_MR, instead: boots });
-  return { ids, starter, games: n, reasons, rules: rules.slice(0, 3) };
+  return { ids, starter, games: n, reasons, rules: rules.slice(0, 3), profile };
 }
