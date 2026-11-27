@@ -100,3 +100,54 @@ describe("objets selon la compo", () => {
     expect(l.some((x) => /Tueur de krakens : pris par la plupart, absent de ton build/.test(x))).toBe(true);
   });
 });
+
+describe("règles « si… alors… » du plan suivies", () => {
+  /** Smolder (7) fait 4 kills avant 38 min ; tu achètes l'Ange gardien (3026) à 39 min. */
+  function facts(fed: boolean) {
+    const d = detail();
+    const fr = (d.timeline!.frames as { e: Record<string, unknown>[] }[]);
+    if (fed) for (let i = 0; i < 4; i++) fr[26 + i].e.push({ type: "CHAMPION_KILL", timestamp: (26 + i) * MIN, killerId: 7, victimId: 2, assistingParticipantIds: [] });
+    fr[30].e.push({ type: "ITEM_PURCHASED", timestamp: 30.5 * MIN, participantId: 1, itemId: 3026 });
+    return gameFacts(d)!;
+  }
+  const ref = { physical: { games: 100, share: {} }, magic: { games: 100, share: {} }, mixed: { games: 100, share: { "6672": 0.9, "3026": 0.05 } } };
+  const rules = [{ cond: "Leur carry AD est fed", id: "3026" }];
+  it("condition réalisée et règle suivie : reconnue, jamais comptée comme une erreur", () => {
+    const l = buildLines(["6672", "3026"], "mixed", ref, ["6672"], []).map((x) => x.text);
+    expect(l.join(" ")).toMatch(/Ange gardien : rarement pris|Hors du build conseillé : Ange gardien/); // sans le plan : signalé
+    const f = facts(true);
+    const lz = lesson(f, { label: "Diamant+", games: 300, cs4: [], cs10: [], firstItem: [], gold15diff: [], builds: ref }, ["6672"], null, "mixed", rules);
+    const t = lz.build.lines.map((x) => x.text);
+    expect(t[0]).toBe("Compo adverse mixte.");
+    expect(t[1]).toBe("Ange gardien : tu as suivi le plan (« Leur carry AD est fed »), et c'était le cas.");
+    expect(lz.build.lines[1].detail).toMatch(/^Smolder avait 6 kills de plus que de morts à 30:30$/);
+    expect(t.join(" ")).not.toMatch(/Ange gardien : rarement pris|Hors du build conseillé/);
+  });
+  it("condition pas réalisée : l'objet reste un écart au plan", () => {
+    const lz = lesson(facts(false), { label: "Diamant+", games: 300, cs4: [], cs10: [], firstItem: [], gold15diff: [], builds: ref }, ["6672"], null, "mixed", rules);
+    expect(lz.build.lines.map((x) => x.text).join(" ")).toMatch(/Hors du build conseillé : Ange gardien/);
+  });
+});
+
+describe("une seule classification des dégâts adverses (draft, build, analyse)", () => {
+  it("la compo de la partie contre Hecarim est mixte partout ; une compo physique est physique partout", async () => {
+    const { damageProfile } = await import("../desktop/coach/compo");
+    const { compoTags } = await import("../desktop/analysis/lesson");
+    const { statBuild } = await import("../desktop/coach/stat-build");
+    const { SHOP } = await import("../desktop/next-item");
+    const parts = Array.from({ length: 40 }, (_, i) => ({ matchId: `S${i}`, championId: K("Belveth"), role: "JUNGLE", win: true, items: [6672, 3047, 3153, 6333, 3156, 3091], perks: null }));
+    const check = (ids: string[], expected: "physical" | "magic" | "mixed") => {
+      const cs = ids.map((x) => champ(x));
+      expect(damageProfile(cs)).toBe(expected);
+      expect(compoProfile(cs.map((c) => c.key!))).toBe(expected);
+      const tags = compoTags(cs.map((c) => c.key!)).map((x) => x.tag);
+      expect(tags.includes("physical")).toBe(expected === "physical");
+      expect(tags.includes("magic")).toBe(expected === "magic");
+      // Le build de la draft et l'analyse utilisent le même classement.
+      expect(statBuild({ parts: parts as never, builds: [], role: "JUNGLE", enemies: cs, shop: SHOP })!.profile).toBe(expected);
+    };
+    check(["Urgot", "Hecarim", "Taliyah", "Smolder", "Milio"], "mixed");
+    check(["Urgot", "Hecarim", "Draven", "Smolder", "Milio"], "physical");
+    check(["Mordekaiser", "Cassiopeia", "Zac", "Yone", "Nami"], "magic");
+  });
+});

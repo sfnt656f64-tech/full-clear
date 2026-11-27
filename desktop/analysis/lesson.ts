@@ -9,6 +9,7 @@ import itemIndex from "../../src/data/generated/item-index.json";
 import { SHOP } from "../next-item.ts";
 import type { Detail } from "../collector/detail.ts";
 import { compensated } from "./goals.ts";
+import { damageProfile, damageProfileOfKeys, PROFILE_FR } from "../coach/compo.ts";
 
 const MIN = 60_000;
 const n = (v: unknown) => (typeof v === "number" ? v : 0);
@@ -53,6 +54,8 @@ export interface GameFacts {
   gold15: number | null; oppGold15: number | null;
   /** Objets terminés, dans l'ordre d'achat. */
   items: { t: number; id: string }[];
+  /** Tous les kills de la partie (champions), pour vérifier les « si… alors… » du plan. */
+  allKills: { t: number; killer: number; killerTeam: number; victim: number }[];
 }
 
 export function gameFacts(d: Detail): GameFacts | null {
@@ -100,7 +103,33 @@ export function gameFacts(d: Detail): GameFacts | null {
     cs: cs(me), oppCs: opp ? cs(n(opp.participantId)) : [],
     gold15: fr[15] ? n(pf(15, me).totalGold) : null, oppGold15: fr[15] && opp ? n(pf(15, n(opp.participantId)).totalGold) : null,
     items,
+    allKills: kills.map((e) => ({ t: n(e.timestamp), killer: champOf.get(n(e.killerId)) ?? 0, killerTeam: teamOf.get(n(e.killerId)) ?? 0, victim: champOf.get(n(e.victimId)) ?? 0 })),
   };
+}
+
+/** Règle « si… alors… » du plan (build), vue depuis la partie. */
+export interface PlanRule { cond: string; id: string; instead?: string }
+
+/**
+ * La condition d'une règle du plan s'est-elle réalisée au moment de l'achat ? « fed » : un adversaire de ce type de
+ * dégâts avec au moins 3 kills de plus que de morts. « Peu de kills tôt » : 1 kill au plus avant 15 min. Les autres
+ * conditions (soins, contrôles, armure) ne se lisent pas dans la chronologie : « inconnue ».
+ */
+export function ruleOutcome(rule: PlanRule, f: GameFacts, t: number): { realized: boolean | null; who: string | null } {
+  const fed = (dmg: "physical" | "magic") => {
+    let best: { c: number; kd: number } | null = null;
+    for (const c of new Set(f.allKills.filter((k) => k.killerTeam !== f.team).map((k) => k.killer))) {
+      const champ = champByKey(c);
+      if (!champ || (champ.damage !== dmg && champ.damage !== "mixed")) continue;
+      const kd = f.allKills.filter((k) => k.t <= t && k.killer === c).length - f.allKills.filter((k) => k.t <= t && k.victim === c).length;
+      if (!best || kd > best.kd) best = { c, kd };
+    }
+    return best && best.kd >= 3 ? { realized: true, who: `${name(best.c)} avait ${best.kd} kills de plus que de morts à ${mmss(t)}` } : { realized: false, who: null };
+  };
+  if (/carry AD est fed/.test(rule.cond)) return fed("physical");
+  if (/carry AP est fed/.test(rule.cond)) return fed("magic");
+  if (/Peu de kills tôt/.test(rule.cond)) { const k = f.kills.filter((x) => x.t < 15 * MIN).length; return { realized: k <= 1, who: `${k} kill${k > 1 ? "s" : ""} avant 15 min` }; }
+  return { realized: null, who: null };
 }
 
 /** Erreurs qui reviennent (thème de la semaine) : comptées dans une partie. */
@@ -197,20 +226,24 @@ const wilson = (k: number, n: number) => {
   return ((z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d) * 100;
 };
 export type CompoProfile = "physical" | "magic" | "mixed";
-const PROFILE_FR: Record<CompoProfile, string> = { physical: "surtout physique", magic: "surtout magique", mixed: "mixte" };
+
 
 /**
  * Ton build face aux joueurs de référence contre une compo du même type (dégâts adverses surtout physiques, surtout
  * magiques, ou mixtes), avec la marge : objets que tu as pris rarement pris par eux, objets pris par la plupart que tu
  * n'as pas pris, et objets qui dépendent nettement de la compo.
  */
-export function buildLines(mine: string[], profile: CompoProfile, ref: Reference["builds"], plan: string[]): LessonLine[] {
+export function buildLines(mine: string[], profile: CompoProfile, ref: Reference["builds"], plan: string[], followed: { id: string; line: LessonLine }[] = []): LessonLine[] {
   const g = ref[profile];
-  const out: LessonLine[] = [];
-  if (!g || g.games < 20) return [{ text: "Pas assez de parties de référence contre ce type de compo pour comparer ton build." }];
+  // Objets pris en suivant une règle « si… alors… » du plan (condition réalisée ou invérifiable) : reconnus, jamais
+  // comptés comme écart au build ni comme objet rare.
+  const fromPlan = new Set(followed.map((x) => x.id));
+  const out: LessonLine[] = followed.map((x) => x.line);
+  if (!g || g.games < 20) return [...followed.map((x) => x.line), { text: "Pas assez de parties de référence contre ce type de compo pour comparer ton build." }];
   const share = (id: string) => g.share[id] ?? 0;
   const pm = (id: string) => `${Math.round(share(id) * 100)} % ± ${Math.round(wilson(Math.round(share(id) * g.games), g.games))} des ${g.games} parties contre une compo ${PROFILE_FR[profile]}`;
   for (const id of mine) {
+    if (fromPlan.has(id)) continue;
     const s = share(id) * 100, m = wilson(Math.round(share(id) * g.games), g.games);
     if (s + m < 15) out.push({ text: `${itemName(id)} : rarement pris contre une compo ${PROFILE_FR[profile]}.`, detail: pm(id) });
   }
@@ -230,12 +263,12 @@ export function buildLines(mine: string[], profile: CompoProfile, ref: Reference
       }
     }
   }
-  const diff = mine.filter((id) => !plan.includes(id));
+  const diff = mine.filter((id) => !plan.includes(id) && !fromPlan.has(id));
   if (plan.length && diff.length) out.push({ text: `Hors du build conseillé : ${diff.map(itemName).join(", ")}.` });
   return out.length ? out : [{ text: "Ton build suit ce que font les joueurs contre ce type de compo." }];
 }
 
-export function lesson(f: GameFacts, ref: Reference | null, planBuild: string[], themeKey: ErrorKey | null, profile: CompoProfile = "mixed"): Lesson {
+export function lesson(f: GameFacts, ref: Reference | null, planBuild: string[], themeKey: ErrorKey | null, profile: CompoProfile = "mixed", planRules: PlanRule[] = []): Lesson {
   // Bien joué : kills suivis d'un objectif, objectifs pris par toi, kills seul.
   const good: { t: number; w: number; text: string }[] = [];
   for (const k of f.kills) {
@@ -290,7 +323,16 @@ export function lesson(f: GameFacts, ref: Reference | null, planBuild: string[],
 
   // Ton build face à ce que les joueurs de référence achètent contre une compo du même type.
   const myItems = f.items.map((i) => i.id);
-  const builds: LessonLine[] = ref ? buildLines(myItems, profile, ref.builds, planBuild) : [{ text: "Pas assez de parties de référence pour comparer ton build." }];
+  // Règles du plan suivies : l'objet acheté est celui de la règle.
+  const followed: { id: string; line: LessonLine }[] = [];
+  for (const it of f.items) {
+    const r = planRules.find((x) => x.id === it.id);
+    if (!r) continue;
+    const o = ruleOutcome(r, f, it.t);
+    if (o.realized === false) continue;
+    followed.push({ id: it.id, line: { text: `${itemName(it.id)} : tu as suivi le plan (« ${r.cond} »)${o.realized ? ", et c'était le cas." : "."}`, detail: o.who ?? "Condition invisible dans la chronologie : prise comme suivie." } });
+  }
+  const builds: LessonLine[] = [{ text: `Compo adverse ${PROFILE_FR[profile]}.` }, ...(ref ? buildLines(myItems, profile, ref.builds, planBuild, followed) : [...followed.map((x) => x.line), { text: "Pas assez de parties de référence pour comparer ton build." }])];
 
   // Thème de la semaine : respecté dans cette partie ?
   let theme: Lesson["theme"] = null;
@@ -314,10 +356,7 @@ function pickSpread<T extends { t: number; w: number }>(xs: T[], k: number): T[]
 
 /** Type de compo adverse d'après les dégâts de ses champions : 3 physiques ou plus, 3 magiques ou plus, ou mixte. */
 export function compoProfile(enemyKeys: number[]): CompoProfile {
-  const cs = enemyKeys.map((k) => champByKey(k)).filter((c): c is NonNullable<typeof c> => !!c);
-  if (cs.filter((c) => c.damage === "physical").length >= 3) return "physical";
-  if (cs.filter((c) => c.damage === "magic").length >= 3) return "magic";
-  return "mixed";
+  return damageProfileOfKeys(enemyKeys);
 }
 
 /** Une erreur sur tes dernières parties : fréquence par partie (marge comprise) et exemples récents. */
@@ -362,9 +401,10 @@ const TAG_FR: Record<CompoTag, string> = { physical: "leurs dégâts physiques",
 export function compoTags(enemyKeys: number[]): { tag: CompoTag; who: string[] }[] {
   const cs = enemyKeys.map((k) => champByKey(k)).filter((c): c is NonNullable<typeof c> => !!c);
   const out: { tag: CompoTag; who: string[] }[] = [];
-  const phys = cs.filter((c) => c.damage === "physical"), mag = cs.filter((c) => c.damage === "magic");
-  if (phys.length >= 3) out.push({ tag: "physical", who: phys.map((c) => c.name) });
-  if (mag.length >= 3) out.push({ tag: "magic", who: mag.map((c) => c.name) });
+  // Dégâts : la même classification que partout (coach/compo.ts).
+  const prof = damageProfile(cs);
+  if (prof === "physical") out.push({ tag: "physical", who: cs.filter((c) => c.damage !== "magic").map((c) => c.name) });
+  if (prof === "magic") out.push({ tag: "magic", who: cs.filter((c) => c.damage !== "physical").map((c) => c.name) });
   const heal = cs.filter((c) => c.heals); if (heal.length >= 2) out.push({ tag: "healers", who: heal.map((c) => c.name) });
   const tanks = cs.filter((c) => c.tags?.includes("Tank")); if (tanks.length >= 2) out.push({ tag: "tanks", who: tanks.map((c) => c.name) });
   const cc = cs.filter((c) => c.cc >= 2); if (cc.length >= 3) out.push({ tag: "cc", who: cc.map((c) => c.name) });

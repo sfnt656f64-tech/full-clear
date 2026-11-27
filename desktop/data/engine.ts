@@ -623,8 +623,8 @@ export class Engine {
             const allies = d.match.parts.filter((p) => num(p.teamId) === facts.team && !p.me).map((p) => champByKey(num(p.championId))?.id ?? null);
             const m: MatchChampions = { me: champByKey(facts.championId)?.id ?? null, allies, enemies: enemies.map((k) => champByKey(k)?.id ?? null) };
             const pos = POS_OF_ROLE[g.role] ?? null;
-            const planBuild = m.me ? buildPlanView(m, "auto", SHOP, m.me === "Kayn" ? null : this.statBuild(m, pos)).build.map((i) => i.id) : [];
-            lessonV = lesson(facts, this.reference(facts.championId, g.role), planBuild, themeKey, compoProfile(enemies));
+            const plan = m.me ? buildPlanView(m, "auto", SHOP, m.me === "Kayn" ? null : this.statBuild(m, pos)) : null;
+            lessonV = lesson(facts, this.reference(facts.championId, g.role), plan?.build.map((i) => i.id) ?? [], themeKey, compoProfile(enemies), plan?.rules ?? []);
           }
           out.push(postGame({
             lesson: lessonV,

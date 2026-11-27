@@ -45,6 +45,8 @@ export interface OverlayView {
   rules: BuildRule[];
   /** Méta : parties utilisées pour le build. */
   buildGames?: number;
+  /** Dégâts de la compo adverse (classification unique, la même que l'analyse). */
+  profile?: import("./coach/compo.ts").DamageProfile;
   /** Plan écrit en draft (vue simple), ajouté par le processus principal au début de la partie ; rien ne change ensuite. */
   plan?: import("./coach/plain.ts").PlainPlan | null;
 }
@@ -105,7 +107,7 @@ export function buildPlanView(m: MatchChampions, formChoice: Form | "auto", shop
     if (!stat) return { ...common, source: "none", starter: null, build: [], reasons: [], rules: [] };
     const pet = stat.starter ? Object.values(STARTERS).find((p) => p.id === stat.starter) : undefined;
     return {
-      ...common, source: "meta", buildGames: stat.games,
+      ...common, source: "meta", buildGames: stat.games, profile: stat.profile,
       starter: pet ? { ...lite(pet.id, shop), name: pet.nameFr, cost: pet.cost, why: "Le plus joué en Émeraude+ sur ce champion." } : null,
       build: stat.ids.map((id) => lite(id, shop)), reasons: stat.reasons, rules: stat.rules,
     };

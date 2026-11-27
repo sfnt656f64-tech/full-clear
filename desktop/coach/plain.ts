@@ -5,6 +5,7 @@
 import type { OverlayView } from "../next-item.ts";
 import { ruleText } from "../next-item.ts";
 import type { Strategy } from "./strategy.ts";
+import { PROFILE_FR } from "./compo.ts";
 
 export interface PlainItem { id: string; name: string; icon: string }
 export interface PlainPlan {
@@ -45,6 +46,7 @@ export function plainPlan(s: Strategy | null, b: OverlayView | null, theme: { ke
     section("Objectifs", s.objectives),
     section("Build", b && b.source !== "none" ? [
       b.source === "meta" ? `Build le plus joué en Émeraude+ sur ce champion (${b.buildGames ?? 0} parties), adapté à la draft.` : "Build du modèle de Kayn, adapté à la draft.",
+      ...(b.profile ? [`Compo adverse ${PROFILE_FR[b.profile]} (même classement que dans l'analyse d'après-partie).`] : []),
       ...b.reasons.map((r) => `Selon la draft : ${r}.`.replace("..", ".")),
     ] : []),
     section("Rappels (détail)", s.reminders.map((r) => r.text)),
