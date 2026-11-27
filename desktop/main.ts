@@ -19,6 +19,7 @@ import type { StatBuild } from "./coach/stat-build.ts";
 import { EngineClient } from "./data/engine-client.ts";
 import type { DraftContext } from "./data/engine.ts";
 import { journal, openJournal } from "./journal.ts";
+import { MAX_PROGRESS } from "./reco/pool-view.ts";
 import { champByKey, findChamp } from "../src/data/champions";
 import { IPC, type AppState, type Navigation } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -581,6 +582,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
   ipcMain.handle(IPC.getProgression, () => engine.call("progression", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
   ipcMain.handle(IPC.getPostGames, () => postGames(20));
+  ipcMain.handle(IPC.getPool, () => engine.call("pool", excludedKeys(), settings.refTier, settings.championFlags));
   // « Analyser ma dernière partie » : demande tout de suite à la collecte de chercher les nouvelles parties.
   ipcMain.handle(IPC.checkNewGames, () => { journal("analyse", "recherche demandée"); collector?.checkNewGames(); checkPostGame(); });
   ipcMain.handle(IPC.setPoolGoal, (_e, goal: unknown) => {
@@ -592,6 +594,9 @@ function registerIpc(): void {
     // Seulement des champions qui existent ; null retire le choix.
     if (typeof id === "string" && findChamp(id)?.id) {
       const key = findChamp(id)!.id as string;
+      // « Je veux progresser dessus » : 2 champions au plus (au-delà, la fenêtre demande lesquels garder).
+      const progress = Object.entries(settings.championFlags).filter(([k, f]) => f === "progress" && k !== key).length;
+      if (flag === "progress" && progress >= MAX_PROGRESS) return { ...state(), flagError: `Tu as déjà ${progress} champions de progression : retire-en un d'abord.` };
       if (flag === "notForMe" || flag === "progress") settings.championFlags[key] = flag; else delete settings.championFlags[key];
       saveSettings(settingsFile, settings);
     }

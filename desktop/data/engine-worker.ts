@@ -15,6 +15,7 @@ const calls = {
   myGames: () => engine.myGames(),
   draftExtras: (...a: Parameters<Engine["draftExtras"]>) => engine.draftExtras(...a),
   postGames: (...a: Parameters<Engine["postGames"]>) => engine.postGames(...a),
+  pool: (...a: Parameters<Engine["pool"]>) => engine.pool(...a),
   statBuild: (...a: Parameters<Engine["statBuild"]>) => engine.statBuild(...a),
 };
 export type EngineCalls = typeof calls;

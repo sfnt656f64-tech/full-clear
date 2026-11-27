@@ -17,6 +17,7 @@ import { readGankData, readMeta, readMetaMastery, readMetaPatches } from "../met
 import { metaStats } from "../meta/meta-stats.ts";
 import { recommend } from "../reco/recommend.ts";
 import { progressPriority } from "../reco/progress-draft.ts";
+import { poolView, type PoolView } from "../reco/pool-view.ts";
 import { draftPicks, pairIndex, type DraftPicks, type PairIndex } from "../reco/draft-pick.ts";
 import { laneRows, roleShares, type Lane, type LaneRow, type RoleShares } from "../reco/lanes.ts";
 import { potentialGroups, type PotentialGroups } from "../reco/potential.ts";
@@ -311,7 +312,25 @@ export class Engine {
         const p = this.progressionCore(excluded, tier, flags);
         advice.JUNGLE = progressAdvice(p, potential.JUNGLE.keep.map((k) => ({ championId: k.championId, games: k.games })), jungle.pool[0]?.championId ?? null) as unknown as PoolAdvice;
       }
-      return { ...reco, patches, potential, advice, trends, goal, reference: this.refInfo(reco.roles.map((r) => r.role), tier) };
+      // « Pas pour moi » : retiré de toutes les recommandations (essais, groupes, pool conseillé).
+      const banned = new Set([...this.flagMap(flags)].filter(([, f]) => f === "notForMe").map(([c]) => c));
+      const roles = reco.roles.map((r) => ({ ...r, tryList: r.tryList.filter((t) => !banned.has(t.championId)) }));
+      for (const g of Object.values(potential)) for (const k of ["keep", "potential", "neutral", "shelve"] as const) g[k] = g[k].filter((e) => !banned.has(e.championId));
+      for (const a of Object.values(advice)) a.picks = a.picks.filter((p) => !banned.has(p.championId));
+      return { ...reco, roles, patches, potential, advice, trends, goal, reference: this.refInfo(reco.roles.map((r) => r.role), tier) };
+    });
+  }
+
+  /** Mon pool : un seul système (à faire progresser, confort, à essayer), « Pas pour moi » respecté partout. */
+  pool(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, flags: Record<string, ChampionFlag> = {}): PoolView[] {
+    return this.memo(`pool:${excluded.join(",")}:${tier}:${JSON.stringify(flags)}`, () => {
+      const reco = this.reco(excluded, tier, "win", flags);
+      const prog = this.progression(excluded, tier, "progress", flags);
+      const fm = this.flagMap(flags);
+      return reco.roles.map((r) => poolView({
+        role: r.role, flags: fm, keep: reco.potential[r.role]?.keep ?? [], pool: r.pool, tryList: r.tryList,
+        ...(r.role === "JUNGLE" ? { tracking: prog.readinessAll, candidates: prog.candidates, comfort: prog.comfort } : {}),
+      }));
     });
   }
 
@@ -616,6 +635,8 @@ export class Engine {
       enemies: snap.enemies.map((e) => e.championId).filter(Boolean),
       enemyLanes, unavailable: snap.unavailable, excluded,
       pool: r.pool, meta: this.metaView(RECO_PATCHES).champions, index: this.pairs(), provisional: reco.provisional,
+      // « Pas pour moi » : jamais proposé, quel que soit l'objectif du pool.
+      blocked: [...this.flagMap(ctx.flags)].filter(([, f]) => f === "notForMe").map(([c]) => c),
       ...(ctx.goal === "progress" && role === "JUNGLE" ? progressPriority(snap.queueId, this.progression(excluded, ctx.tier, "progress", ctx.flags)) : {}),
     }) : null;
     this.picksMemo = { key, at: Date.now(), value };
