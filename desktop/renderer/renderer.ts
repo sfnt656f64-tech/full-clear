@@ -90,8 +90,10 @@ function renderPlain(p: NonNullable<DraftView["plain"]>, extra: { title: string;
   return h("div", { class: "plan plain" },
     h("h3", {}, "Plan de partie", p.provisional ? h("span", { class: "small muted" }, " · provisoire, la draft n'est pas finie") : null),
     ...(p.retain.length ? [h("h4", {}, "À retenir"), bullets(p.retain)] : []),
+    ...(p.theme ? [h("h4", {}, "Thème de la semaine"), bullets([p.theme])] : []),
     ...(build.length ? [h("h4", {}, "Build", p.form ? h("span", { class: "small muted" }, ` · ${p.form}`) : null),
-      h("div", { class: "plain-build" }, ...build.flatMap((it, i) => [...(i ? [h("span", { class: "pb-arrow muted" }, "→")] : []), h("span", { class: "pb-item" }, icon(it.icon, it.name, "pb-ic"), h("span", { class: "small" }, it.name))]))] : []),
+      h("div", { class: "plain-build" }, ...build.flatMap((it, i) => [...(i ? [h("span", { class: "pb-arrow muted" }, "→")] : []), h("span", { class: "pb-item" }, icon(it.icon, it.name, "pb-ic"), h("span", { class: "small" }, it.name))])),
+      ...(p.buildNotes.length ? [bullets(p.buildNotes, "small")] : [])] : []),
     ...(p.ifThen.length ? [h("h4", {}, "Si… alors…"), bullets(p.ifThen)] : []),
     ...(p.reminders.length ? [h("h4", {}, "Mes rappels"), h("ul", { class: "plain-list" }, ...p.reminders.map((r) => h("li", {}, r.text, r.value ? h("span", { class: "muted" }, ` (${r.value})`) : null)))] : []),
     detailsBlock([...p.details, ...extra]));

@@ -163,6 +163,8 @@ export interface StrategyInput {
   reminders: Reminder[];
   /** Tous les picks connus ? Sinon le plan est provisoire. */
   complete: boolean;
+  /** Consignes « à retenir » qui reviennent dans la plupart de tes parties (clés) : passées dans les détails. */
+  common?: Set<string>;
 }
 
 export interface Strategy {
@@ -184,7 +186,7 @@ export interface Strategy {
    * détails). « À retenir » : départ et premier gank, objectif prioritaire, piège à éviter. « Si… alors… » : une
    * condition visible en jeu, puis l'action.
    */
-  plain: { retain: string[]; ifThen: string[] };
+  plain: { retain: string[]; ifThen: string[]; /** Clés de toutes les consignes « à retenir » (pour repérer celles qui reviennent). */ retainKeys: string[]; /** Consignes qui reviennent dans la plupart de tes parties : dans les détails. */ demoted: string[] };
 }
 
 /** « en haut » / « en bas » (côté de la carte), « top » / « mid » / « bot » (lane). */
@@ -345,32 +347,48 @@ export function strategy(inp: StrategyInput): Strategy {
   }
 
   // ----- Vue simple (n'affirme rien de plus que les détails ci-dessus) -----
-  const retain: string[] = [];
+  const keyed: { key: string; text: string }[] = [];
+  const retain = { push: (key: string, text: string) => keyed.push({ key, text }) };
   const plainIf: string[] = [];
   const isJg = inp.me.lane === "JUNGLE";
+  // 0. Condition de victoire, quand elle existe (équipes, sinon champions nettement classés).
+  const enemyLate = theirs.marked.find((x) => !x.early && x.lane !== "JUNGLE");
+  const oursEarly = ours.marked.find((x) => x.early && x.lane !== inp.me.lane);
+  const enemyEarly = theirs.marked.find((x) => x.early);
+  const oursLate = ours.marked.find((x) => !x.early && x.lane !== inp.me.lane);
+  if (summary.startsWith("Ton équipe est plus forte en début")) retain.push("wc:early", "Prends l'avance tôt : ton équipe gagne avant 25 min.");
+  else if (summary.startsWith("Leur équipe est plus forte en début")) retain.push("wc:late", "Ne te fais pas distancer : ton équipe gagne en fin de partie.");
+  else if (enemyLate) retain.push("wc:enemyLate", `Prends l'avance tôt : finis avant que ${enemyLate.name} soit prêt.`);
+  else if (oursEarly) retain.push("wc:oursEarly", `Joue tôt avec ${oursEarly.name} : il est fort en début de partie.`);
+  else if (enemyEarly) retain.push("wc:enemyEarly", `Résiste tôt : ${enemyEarly.name} est fort en début de partie.`);
+  else if (oursLate) retain.push("wc:oursLate", `Joue la fin de partie : ${oursLate.name} porte ton équipe.`);
   // 1. Départ et premier gank.
   if (isJg && inp.plan) {
     const p = inp.plan, lane = p.firstGank;
     const majority = p.start.topShare != null ? (p.start.topShare >= 50 ? "top" : "bot") : null;
-    if (gankFactors.pro.length) retain.push(`Commence ${SIDE_FR[p.start.side]}, gank ${LANE_SHORT[lane]} après ton premier tour de camps.`);
-    else retain.push(`Commence ${SIDE_FR[majority ?? p.start.side]} : aucune lane plus gankable d'avance.`);
+    if (gankFactors.pro.length) retain.push(`start:${p.start.side}:${lane}`, `Commence ${SIDE_FR[p.start.side]}, gank ${LANE_SHORT[lane]} après ton premier tour de camps.`);
+    else retain.push(`start:${majority ?? p.start.side}`, `Commence ${SIDE_FR[majority ?? p.start.side]} : aucune lane plus gankable d'avance.`);
   }
   // 2. Objectif prioritaire (duel de lane net, sinon le côté du premier gank s'il est visé).
-  if (bot && bot.wr > bot.base) retain.push("Joue les dragons : ta bot lane gagne son duel.");
-  else if (top && top.wr > top.base) retain.push("Joue les larves : ton top gagne son duel.");
-  else if (bot && bot.wr < bot.base) retain.push("Dragon difficile : s'ils le prennent, prends l'autre côté.");
-  else if (top && top.wr < top.base) retain.push("Ne conteste pas les larves sans ton top.");
-  else if (gankFactors.pro.length && inp.plan?.firstGank === "BOTTOM") retain.push("Premier dragon en priorité : tu seras déjà côté bot.");
-  else if (gankFactors.pro.length && inp.plan?.firstGank === "TOP") retain.push("Larves en priorité : tu seras déjà côté top.");
+  if (bot && bot.wr > bot.base) retain.push("obj:botDuel", "Joue les dragons : ta bot lane gagne son duel.");
+  else if (top && top.wr > top.base) retain.push("obj:topDuel", "Joue les larves : ton top gagne son duel.");
+  else if (bot && bot.wr < bot.base) retain.push("obj:botWeak", "Dragon difficile : s'ils le prennent, prends l'autre côté.");
+  else if (top && top.wr < top.base) retain.push("obj:topWeak", "Ne conteste pas les larves sans ton top.");
+  else if (gankFactors.pro.length && inp.plan?.firstGank === "BOTTOM") retain.push("obj:firstDragon", "Premier dragon en priorité : tu seras déjà côté bot.");
+  else if (gankFactors.pro.length && inp.plan?.firstGank === "TOP") retain.push("obj:grubs", "Larves en priorité : tu seras déjà côté top.");
   // 3. Piège à éviter.
   const ejName = ej ? name(ej) : null;
   if (isJg && ejName) {
     const d = earlyDuel(inp.metaParts, inp.me.championId, ej!, "JUNGLE");
-    retain.push(!d ? `Pas d'invade : duel inconnu contre ${ejName}, joue tes camps.`
-      : !d.net ? `Pas d'invade : duel incertain contre ${ejName}, joue tes camps.`
-      : d.gold > 0 ? `Envahis ${ejName} tôt : tu gagnes ce duel en début de partie.`
-      : `Pas d'invade : ${ejName} gagne ce duel, joue tes camps.`);
-  } else if (theirs.engagers.length > ours.engagers.length) retain.push("Ne te place pas devant sans vision : ils engagent mieux.");
+    if (!d) retain.push("invade:unknown", `Pas d'invade : duel inconnu contre ${ejName}, joue tes camps.`);
+    else if (!d.net) retain.push("invade:uncertain", `Pas d'invade : duel incertain contre ${ejName}, joue tes camps.`);
+    else if (d.gold > 0) retain.push("invade:win", `Envahis ${ejName} tôt : tu gagnes ce duel en début de partie.`);
+    else retain.push("invade:lose", `Pas d'invade : ${ejName} gagne ce duel, joue tes camps.`);
+  } else if (theirs.engagers.length > ours.engagers.length) retain.push("engage", "Ne te place pas devant sans vision : ils engagent mieux.");
+  // Une consigne qui revient dans la plupart de tes parties n'est pas « à retenir » : elle passe dans les détails.
+  const common = inp.common ?? new Set<string>();
+  const kept = keyed.filter((r) => r.key.startsWith("wc:") || !common.has(r.key.replace(/:(top|bot)(:.*)?$/, "")));
+  const demoted = keyed.filter((r) => !kept.includes(r)).map((r) => r.text);
 
   // Si… alors… : condition visible en jeu → action.
   const ejT = ej ? timing(inp.metaParts, ej, "JUNGLE", "JUNGLE") : null;
@@ -386,12 +404,12 @@ export function strategy(inp: StrategyInput): Strategy {
     else plainIf.push(`${x.name} se fait plonger → aide-le, il porte la fin.`);
   }
   if (ours.engagers.length > theirs.engagers.length) plainIf.push("Combat autour d'un objectif → c'est à ton équipe d'engager.");
-  else if (theirs.engagers.length > ours.engagers.length && !retain.some((r) => r.includes("engagent"))) plainIf.push("Ils se regroupent → reste derrière, avec de la vision.");
+  else if (theirs.engagers.length > ours.engagers.length && !keyed.some((r) => r.text.includes("engagent"))) plainIf.push("Ils se regroupent → reste derrière, avec de la vision.");
   for (const s of theirs.splitters) plainIf.push(`${s} part seul sur une lane → ne le suis pas seul.`);
 
   return {
     provisional: !inp.complete, ours, theirs, winCondition: { summary, ifThen: ifThen.slice(0, 5) }, power, enemyJungler, path, objectives: objectives.slice(0, 4), reminders: inp.reminders,
-    plain: { retain: retain.slice(0, 3), ifThen: plainIf },
+    plain: { retain: kept.slice(0, 3).map((r) => r.text), retainKeys: keyed.map((r) => r.key), ifThen: plainIf, demoted },
   };
 }
 

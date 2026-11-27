@@ -5,6 +5,14 @@ import type { RefInfo, RefTier } from "./analysis/ref-tier.ts";
 import type { DraftView } from "./draft-view.ts";
 import type { PostGame } from "./analysis/postgame.ts";
 import type { PoolView } from "./reco/pool-view.ts";
+import type { ErrorKey, ErrorStat } from "./analysis/lesson.ts";
+
+export interface ThemeView {
+  current: { key: ErrorKey; label: string; short: string; exercise: string; startMs: number; examples: ErrorStat["examples"]; recent: ErrorStat; week: string | null } | null;
+  review: { key: string; label: string; text: string; endMs: number } | null;
+  /** Toutes les erreurs suivies, sur tes 20 dernières parties. */
+  all: ErrorStat[];
+}
 import type { HostState } from "./collector-host.ts";
 import type { MyGameRow } from "./stats/my-stats.ts";
 import type { MetaChampion } from "./meta/meta-stats.ts";
@@ -171,6 +179,8 @@ export interface KaynApi {
   checkNewGames(): Promise<void>;
   /** Mon pool : un seul système de recommandation, par rôle. */
   getPool(): Promise<PoolView[]>;
+  /** Thème de la semaine, exemples à revoir, bilan. */
+  getTheme(): Promise<ThemeView>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Suivi de tes objectifs (jungle). */
   getGoals(): Promise<GoalsView>;
@@ -212,6 +222,7 @@ export const IPC = {
   getPostGames: "kayn:get-postgames",
   checkNewGames: "kayn:check-new-games",
   getPool: "kayn:get-pool",
+  getTheme: "kayn:get-theme",
   navigate: "kayn:navigate",
   postGameReady: "kayn:postgame-ready",
   getOverview: "kayn:get-overview",

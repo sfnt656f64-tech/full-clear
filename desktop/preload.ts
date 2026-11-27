@@ -21,6 +21,7 @@ const api: KaynApi = {
   getPostGames: () => ipcRenderer.invoke(IPC.getPostGames),
   checkNewGames: () => ipcRenderer.invoke(IPC.checkNewGames),
   getPool: () => ipcRenderer.invoke(IPC.getPool),
+  getTheme: () => ipcRenderer.invoke(IPC.getTheme),
   getOverview: (filter, compare) => ipcRenderer.invoke(IPC.getOverview, filter, compare),
   getGoals: () => ipcRenderer.invoke(IPC.getGoals),
   restartGoals: () => ipcRenderer.invoke(IPC.restartGoals),

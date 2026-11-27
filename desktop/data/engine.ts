@@ -28,7 +28,14 @@ import { guidePage, metaPage, type RecommendedPage } from "../runes/rune-page.ts
 import { gamePlan, type GamePlan } from "../coach/game-plan.ts";
 import { remindersFrom, strategy, type Reminder, type Strategy } from "../coach/strategy.ts";
 import { statBuild, type StatBuild } from "../coach/stat-build.ts";
-import { SHOP, type MatchChampions } from "../next-item.ts";
+import { buildPlanView, SHOP, type MatchChampions } from "../next-item.ts";
+import itemIndexJson from "../../src/data/generated/item-index.json";
+import { compoProfile, compoTags, countErrors, ERRORS, gameFacts, lesson, situationalItems, type CompoProfile, type CompoTag, type ErrorKey, type ErrorStat, type Lesson, type Reference, type TagShares } from "../analysis/lesson.ts";
+
+const INDEX_ITEMS = itemIndexJson as Record<string, { kind: string }>;
+const num = (v: unknown) => (typeof v === "number" ? v : 0);
+/** Rôle de partie → poste de draft (pour le build statistique). */
+const POS_OF_ROLE: Record<string, string> = { TOP: "top", JUNGLE: "jungle", MIDDLE: "middle", BOTTOM: "bottom", UTILITY: "utility" };
 import { readAllMyEvents, readAnalysisGames, readMetaDuels, readMetaMetrics, readMyEvents } from "../analysis/read.ts";
 import { analyseGame, type AnalysisGame, type DuelValues, type MetaMetricRow, type Values } from "../analysis/analysis.ts";
 import { championTable, evolution, filterGames, MetaRef, overview, type OverviewFilter } from "../analysis/overview.ts";
@@ -496,11 +503,100 @@ export class Engine {
    * Analyses d'après-partie de tes dernières parties (classées et normales en draft), les plus récentes d'abord.
    * Pour chaque partie, les points à travailler et ta moyenne ne viennent que des parties d'avant.
    */
-  postGames(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, userTargets: Record<string, number> = {}, limit = 10, flags: Record<string, ChampionFlag> = {}): PostGame[] {
+  /**
+   * Repères de référence sur un champion dans un rôle : joueurs Diamant+ (au moins 40 parties), sinon Émeraude+ (dit
+   * comme tel). Courbe des camps (jungle), premier objet, écart d'or à 15 min contre le vis-à-vis, et objets terminés
+   * selon la compo adverse.
+   */
+  reference(championId: number, role: string): Reference | null {
+    return this.cached(`reference:${championId}:${role}`, META_TTL, () => {
+      let db: DatabaseSync | null = null;
+      try {
+        db = new DatabaseSync(this.dbFile, { readOnly: true });
+        const patches = this.patches(RECO_PATCHES);
+        if (!patches.length) return null;
+        const marks = patches.map(() => "?").join(",");
+        const DIAMOND = "('DIAMOND','MASTER','GRANDMASTER','CHALLENGER')", EMERALD = "('EMERALD','DIAMOND','MASTER','GRANDMASTER','CHALLENGER')";
+        const parts = (tiers: string) => db!.prepare(`select p.match_id, p.team, p.gold15, p.items from meta_parts p join meta_games g on g.match_id = p.match_id where p.champion_id = ? and p.role = ? and g.remake = 0 and g.tier in ${tiers} and g.patch in (${marks})`).all(championId, role, ...patches) as { match_id: string; team: number; gold15: number | null; items: string }[];
+        let label = "Diamant+", rows = parts(DIAMOND);
+        if (rows.length < 40) { label = `Émeraude+ (moins de 40 parties Diamant+ sur ${champByKey(championId)?.name ?? "ce champion"})`; rows = parts(EMERALD); }
+        if (rows.length < 20) return null;
+        const tiers = label === "Diamant+" ? DIAMOND : EMERALD;
+        const curves = role === "JUNGLE" ? db.prepare(`select c.cs, c.first_item from meta_jungle_curve c join meta_games g on g.match_id = c.match_id where c.champion_id = ? and g.remake = 0 and g.tier in ${tiers} and g.patch in (${marks})`).all(championId, ...patches) as { cs: string; first_item: number | null }[] : [];
+        const cs = curves.map((c) => JSON.parse(c.cs) as number[]);
+        const oppOf = db.prepare("select gold15, champion_id from meta_parts where match_id = ? and role = ? and team != ?");
+        const enemiesOf = db.prepare("select champion_id from meta_parts where match_id = ? and team != ?");
+        const gold15diff: number[] = [];
+        const builds: Reference["builds"] = { physical: { games: 0, share: {} }, magic: { games: 0, share: {} }, mixed: { games: 0, share: {} } };
+        const counts: Record<CompoProfile, Map<string, number>> = { physical: new Map(), magic: new Map(), mixed: new Map() };
+        const TAGS: CompoTag[] = ["physical", "magic", "healers", "tanks", "cc"];
+        const tagCounts = Object.fromEntries(TAGS.map((t) => [t, { with: { games: 0, c: new Map<string, number>() }, without: { games: 0, c: new Map<string, number>() } }])) as Record<CompoTag, { with: { games: number; c: Map<string, number> }; without: { games: number; c: Map<string, number> } }>;
+        for (const r of rows) {
+          const o = oppOf.get(r.match_id, role, r.team) as { gold15: number | null } | undefined;
+          if (r.gold15 != null && o?.gold15 != null) gold15diff.push(r.gold15 - o.gold15);
+          const enemyKeys = (enemiesOf.all(r.match_id, r.team) as { champion_id: number }[]).map((x) => x.champion_id);
+          const prof = compoProfile(enemyKeys);
+          const present = new Set(compoTags(enemyKeys).map((x) => x.tag));
+          builds[prof].games++;
+          for (const t of TAGS) tagCounts[t][present.has(t) ? "with" : "without"].games++;
+          for (const id of new Set((JSON.parse(r.items) as number[]).map(String).filter((i) => INDEX_ITEMS[i]?.kind === "legendary"))) {
+            counts[prof].set(id, (counts[prof].get(id) ?? 0) + 1);
+            for (const t of TAGS) { const b = tagCounts[t][present.has(t) ? "with" : "without"]; b.c.set(id, (b.c.get(id) ?? 0) + 1); }
+          }
+        }
+        for (const p of ["physical", "magic", "mixed"] as const) for (const [id, k] of counts[p]) builds[p].share[id] = k / Math.max(1, builds[p].games);
+        const share = (b: { games: number; c: Map<string, number> }) => ({ games: b.games, share: Object.fromEntries([...b.c].map(([id, k]) => [id, k / Math.max(1, b.games)])) });
+        const tags = Object.fromEntries(TAGS.map((t) => [t, { with: share(tagCounts[t].with), without: share(tagCounts[t].without) }])) as TagShares;
+        return {
+          label, games: rows.length,
+          cs4: cs.map((c) => c[4]).filter((x): x is number => x != null), cs10: cs.map((c) => c[10]).filter((x): x is number => x != null),
+          firstItem: curves.map((c) => c.first_item).filter((x): x is number => x != null), gold15diff, builds, tags,
+        };
+      } catch { return null; } finally { db?.close(); }
+    });
+  }
+
+  /** Objets adaptés à la compo adverse (draft) : d'après ce que les joueurs de référence achètent contre ces traits. */
+  situational(championId: number, role: string, enemyKeys: number[]): { id: string; line: string; detail: string }[] {
+    const ref = this.reference(championId, role);
+    return ref ? situationalItems(ref.tags, enemyKeys, ref.label) : [];
+  }
+
+  /**
+   * Erreurs qui reviennent sur tes 20 dernières parties (chronologies relues) : par type, le nombre de parties où elle
+   * arrive, sa fréquence par partie avec sa marge, et les exemples les plus récents (minutes à revoir).
+   */
+  errorStats(excluded: number[], beforeMs = Infinity, sinceMs = 0): ErrorStat[] {
+    return this.memo(`errors:${excluded.join(",")}:${beforeMs}:${sinceMs}`, () => {
+      const games = [...this.analysisGames(excluded), ...this.draftNormals().filter((g) => !excluded.includes(g.championId))]
+        .filter((g) => g.role === "JUNGLE" && g.startMs < beforeMs && g.startMs >= sinceMs).sort((a, b) => b.startMs - a.startMs);
+      let db: DatabaseSync | null = null;
+      const per: { g: AnalysisGame; e: ReturnType<typeof countErrors> }[] = [];
+      try {
+        db = new DatabaseSync(this.dbFile, { readOnly: true });
+        const get = db.prepare("select data from my_detail where match_id = ? and account = ?");
+        for (const g of games) {
+          if (per.length >= 20) break;
+          const row = get.get(g.matchId, g.account) as { data: Uint8Array } | undefined;
+          const f = row ? gameFacts(unpackDetail(row.data)) : null;
+          if (f) per.push({ g, e: countErrors(f) });
+        }
+      } finally { db?.close(); }
+      return (Object.keys(ERRORS) as ErrorKey[]).map((key) => {
+        const xs = per.map((p) => p.e[key].length);
+        const mean = xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0;
+        const sd = xs.length > 1 ? Math.sqrt(xs.reduce((s, x) => s + (x - mean) ** 2, 0) / (xs.length - 1)) : 0;
+        const examples = per.flatMap((p) => p.e[key].map((o: { t: number; text: string }) => ({ matchId: p.g.matchId, startMs: p.g.startMs, championId: p.g.championId, t: o.t, text: o.text }))).slice(0, 3);
+        return { key, label: ERRORS[key].label, games: per.length, withError: xs.filter((x) => x > 0).length, perGame: mean, margin: xs.length ? (1.96 * sd) / Math.sqrt(xs.length) : 0, examples };
+      });
+    });
+  }
+
+  postGames(excluded: number[], tier: RefTier = DEFAULT_REF_TIER, userTargets: Record<string, number> = {}, limit = 10, flags: Record<string, ChampionFlag> = {}, themeKey: ErrorKey | null = null): PostGame[] {
     // Cibles : les tiennes, sinon celles par défaut des objectifs.
     const target = (k: string) => userTargets[k] ?? DEFAULT_GOALS.flatMap((g) => g.metrics).find((m) => m.key === k)?.target ?? 0;
     const targets = { uncompensatedEarly: target("uncompensatedEarly"), deathsBeforeObj: target("deathsBeforeObj"), cs10: target("cs10") };
-    return this.memo(`postGames:${excluded.join(",")}:${tier}:${JSON.stringify(targets)}:${limit}:${JSON.stringify(flags)}`, () => {
+    return this.memo(`postGames:${excluded.join(",")}:${tier}:${JSON.stringify(targets)}:${limit}:${JSON.stringify(flags)}:${themeKey}`, () => {
       const ranked = this.analysisGames(excluded);
       const normals = this.draftNormals().filter((g) => !excluded.includes(g.championId));
       const rankedKeys = new Set(ranked.map((g) => `${g.matchId}|${g.account}`));
@@ -519,7 +615,19 @@ export class Engine {
           const before = all.filter((h) => h.startMs < g.startMs);
           const ref = this.metaRef([g.role], tier);
           const t = tracking.get(g.championId);
+          // Ce que la partie t'apprend : faits de la chronologie, repères de référence, build, thème de la semaine.
+          const facts = gameFacts(d);
+          let lessonV: Lesson | null = null;
+          if (facts) {
+            const enemies = d.match.parts.filter((p) => num(p.teamId) !== facts.team).map((p) => num(p.championId));
+            const allies = d.match.parts.filter((p) => num(p.teamId) === facts.team && !p.me).map((p) => champByKey(num(p.championId))?.id ?? null);
+            const m: MatchChampions = { me: champByKey(facts.championId)?.id ?? null, allies, enemies: enemies.map((k) => champByKey(k)?.id ?? null) };
+            const pos = POS_OF_ROLE[g.role] ?? null;
+            const planBuild = m.me ? buildPlanView(m, "auto", SHOP, m.me === "Kayn" ? null : this.statBuild(m, pos)).build.map((i) => i.id) : [];
+            lessonV = lesson(facts, this.reference(facts.championId, g.role), planBuild, themeKey, compoProfile(enemies));
+          }
           out.push(postGame({
+            lesson: lessonV,
             game: g, detail: d, queue: rankedKeys.has(`${g.matchId}|${g.account}`) ? "ranked" : d.match.queue === 440 ? "flex" : "draftNormal",
             metrics: gameMetrics(d, new Set([420, 440, 400])), targets,
             sameChampion: before.filter((h) => h.championId === g.championId && h.role === g.role && h.season === g.season),
@@ -576,6 +684,45 @@ export class Engine {
     }));
   }
 
+  /**
+   * Consignes « à retenir » qui reviennent dans au moins la moitié de tes 20 dernières parties en jungle (plan recalculé
+   * sur chacune de leurs drafts) : elles ne t'apprennent rien de propre à la partie, elles passent dans les détails.
+   */
+  commonRetain(excluded: number[]): Set<string> {
+    return this.cached(`commonRetain:${excluded.join(",")}:${this.myVersion()}`, META_TTL, () => {
+      const games = this.analysisGames(excluded).filter((g) => g.role === "JUNGLE").sort((a, b) => b.startMs - a.startMs).slice(0, 20);
+      const LANES: Lane[] = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"];
+      const count = new Map<string, number>();
+      let done = 0;
+      let db: DatabaseSync | null = null;
+      try {
+        db = new DatabaseSync(this.dbFile, { readOnly: true });
+        const get = db.prepare("select data from my_detail where match_id = ? and account = ?");
+        const ganks = this.ganks(), index = this.pairs(), parts = this.recentMeta().parts;
+        for (const g of games) {
+          const row = get.get(g.matchId, g.account) as { data: Uint8Array } | undefined;
+          if (!row) continue;
+          const d = unpackDetail(row.data);
+          const me = d.match.parts.find((p) => p.me);
+          if (!me) continue;
+          const allies: Partial<Record<Lane, number>> = {}, enemies: Partial<Record<Lane, number>> = {};
+          for (const p of d.match.parts) { const l = String(p.teamPosition) as Lane; if (LANES.includes(l)) (num(p.teamId) === num(me.teamId) ? allies : enemies)[l] = num(p.championId); }
+          const side = num(me.teamId) === 100 ? "blue" as const : "red" as const;
+          const dd = (k?: number) => (k ? { id: champByKey(k)?.id ?? "" } : null);
+          const lanes = LANES.map((lane) => ({ lane, ally: dd(allies[lane]), me: lane === "JUNGLE", enemy: dd(enemies[lane]), probable: true })) as unknown as LaneRow<ChampLite>[];
+          const plan = gamePlan({ meChampion: num(me.championId), side, lanes, kills: ganks.kills, parts: ganks.parts, index });
+          const s = strategy({ me: { championId: num(me.championId), lane: "JUNGLE" }, allies, enemies, side, metaParts: parts, index, plan, reminders: [], complete: true });
+          for (const k of new Set(s.plain.retainKeys.map((x) => x.replace(/:(top|bot)(:.*)?$/, "")))) count.set(k, (count.get(k) ?? 0) + 1);
+          done++;
+        }
+      } catch { /* base indisponible : rien n'est retiré */ } finally { db?.close(); }
+      // Clés par famille (le départ compte quel que soit le côté) ; au moins 10 parties pour en juger.
+      const out = new Set<string>();
+      if (done >= 10) for (const [k, c] of count) if (c / done >= 0.5) out.add(k);
+      return out;
+    });
+  }
+
   private strategyMemo: { key: string; value: Strategy | null } | null = null;
   /** Plan de partie : dès que ton champion est choisi (survolé ou verrouillé), provisoire tant que la draft n'est pas complète. */
   private strategyFor(snap: DraftSnapshot, lanes: LaneRow<ChampLite>[] | null, plan: GamePlan | null, excluded: number[], ctx: DraftContext): Strategy | null {
@@ -597,6 +744,7 @@ export class Engine {
     const value = strategy({
       me: { championId: me, lane: myLane }, allies, enemies, side: snap.side,
       metaParts: this.recentMeta().parts, index: this.pairs(), plan, reminders: this.reminders(excluded, ctx), complete,
+      common: myLane === "JUNGLE" ? this.commonRetain(excluded) : undefined,
     });
     this.strategyMemo = { key, value };
     return value;
