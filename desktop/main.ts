@@ -20,7 +20,7 @@ import { EngineClient } from "./data/engine-client.ts";
 import type { DraftContext } from "./data/engine.ts";
 import { journal, openJournal } from "./journal.ts";
 import { MAX_PROGRESS } from "./reco/pool-view.ts";
-import { ERRORS, pickTheme, themeReview, type ErrorKey } from "./analysis/lesson.ts";
+import { ERRORS, pickTheme, themeReview, themeVerdict, type ErrorKey } from "./analysis/lesson.ts";
 import { champByKey, findChamp } from "../src/data/champions";
 import { IPC, type AppState, type Navigation , type ThemeView } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -294,7 +294,7 @@ async function themeView(): Promise<ThemeView> {
   const cur = t ? recent.find((s) => s.key === t.key) ?? null : null;
   const since = t ? (await engine.call("errorStats", excludedKeys(), Infinity, t.startMs)).find((s) => s.key === t.key) ?? null : null;
   return {
-    current: t && cur ? { key: t.key as ErrorKey, label: ERRORS[t.key as ErrorKey].label, short: ERRORS[t.key as ErrorKey].short, exercise: ERRORS[t.key as ErrorKey].exercise, startMs: t.startMs, examples: cur.examples, recent: cur, week: since ? themeReview(t.before, since) : null } : null,
+    current: t && cur ? { key: t.key as ErrorKey, label: ERRORS[t.key as ErrorKey].label, short: ERRORS[t.key as ErrorKey].short, exercise: ERRORS[t.key as ErrorKey].exercise, startMs: t.startMs, examples: cur.examples, recent: cur, week: since ? themeVerdict(t.before, since) : null } : null,
     review: settings.lastReview, all: recent,
   };
 }

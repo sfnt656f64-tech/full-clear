@@ -12,77 +12,121 @@
       <img src="../icon.png" alt="" width="28" height="28">
       <div><h1>Full Clear</h1><span id="version" class="muted small"></span></div>
     </div>
+    <div class="side-status">
+      <p id="client" class="status idle">Recherche du client…</p>
+      <p id="client-account" class="muted small" hidden></p>
+      <p id="home-alert" class="alert" hidden></p>
+    </div>
     <nav class="side-nav" role="tablist" aria-orientation="vertical">
-      <button type="button" role="tab" data-tab="home" aria-selected="true">Accueil</button>
-      <button type="button" role="tab" data-tab="draft">Draft<span id="draft-dot" class="dot" hidden></span></button>
+      <button type="button" role="tab" data-tab="draft">Avant la partie<span id="draft-dot" class="dot" hidden></span></button>
+      <button type="button" role="tab" data-tab="after" aria-selected="true">Après la partie</button>
       <button type="button" role="tab" data-tab="analysis">Progresser</button>
-      <button type="button" role="tab" data-tab="champions">Champions</button>
       <span class="side-gap"></span>
       <button type="button" role="tab" data-tab="settings">Réglages</button>
+      <button type="button" role="tab" data-tab="advanced">Avancé</button>
     </nav>
   </aside>
 
   <div class="content">
 
-  <!-- ===================== Accueil ===================== -->
-  <main id="tab-home" class="tab" role="tabpanel">
-    <p id="home-alert" class="alert" hidden></p>
-    <section>
-      <p id="client" class="status idle">Recherche du client…</p>
-      <p id="client-account" class="muted small" hidden></p>
+
+  <!-- ===================== Avant la partie ===================== -->
+  <main id="tab-draft" class="tab" role="tabpanel" hidden>
+    <section id="draft">
+      <h2 id="draft-title">Draft</h2>
+      <p id="draft-empty" class="muted">Pas de draft en cours. Cet écran s'ouvre tout seul pendant la sélection des champions.</p>
+      <div id="draft-body"></div>
     </section>
-
-    <button id="home-goal" type="button" class="summary-line" hidden><span id="home-goal-text"></span><span class="muted small">Objectifs ›</span></button>
-
-    <div class="home-grid">
-      <section>
-        <h2>Pool conseillé</h2>
-        <div id="home-advice"><p class="muted small">Calcul…</p></div>
-        <div class="row"><button id="home-reco" type="button" class="link">Champions recommandés ›</button></div>
-      </section>
-      <section>
-        <h2>Dernière partie analysée</h2>
-        <div id="home-last"><p class="muted small">Calcul…</p></div>
-      </section>
-    </div>
-
     <section>
       <h2>En jeu</h2>
       <p id="live-status" class="status idle">Pas de partie en cours.</p>
       <div id="live-body"></div>
       <p id="window-mode" class="small"></p>
     </section>
-
-    <button id="home-col" type="button" class="summary-line"><span id="home-col-text" class="status idle">Collecte…</span><span class="muted small">Détails ›</span></button>
   </main>
 
-  <!-- ===================== Draft ===================== -->
-  <main id="tab-draft" class="tab" role="tabpanel" hidden>
-    <section id="draft">
-      <h2 id="draft-title">Draft</h2>
-      <p id="draft-empty" class="muted">Pas de draft en cours. Cet onglet s'ouvre tout seul pendant la sélection des champions.</p>
-      <div id="draft-body"></div>
-    </section>
-  </main>
-
-  <!-- ===================== Analyse ===================== -->
-  <main id="tab-analysis" class="tab" role="tabpanel" hidden>
+  <!-- ===================== Après la partie ===================== -->
+  <main id="tab-after" class="tab" role="tabpanel">
     <section id="post-sec">
       <h2>Mes dernières parties</h2>
       <div class="row"><button id="post-check" type="button">Analyser ma dernière partie</button><span id="post-status" class="small muted" role="status"></span></div>
       <div id="post-list" class="post-list"></div>
       <div id="post-view"></div>
     </section>
+    <section id="an-map-sec">
+      <h2>Carte de tes kills et de tes morts</h2>
+      <div class="row an-filter an-game-filter" role="group" aria-label="Période">
+        <button type="button" data-f="all" aria-pressed="true">Toute la partie</button>
+        <button type="button" data-f="early" aria-pressed="false">Avant 15 min</button>
+        <button type="button" data-f="late" aria-pressed="false">Après 15 min</button>
+      </div>
+      <div id="an-map" class="an-map"><img class="an-map-bg" alt="Carte de la Faille de l'invocateur"></div>
+      <p class="small muted"><span class="dot-k"></span> kill <span class="dot-a"></span> assist <span class="dot-d"></span> mort · survole un point pour la minute et le champion</p>
+    </section>
+    <section id="an-metrics-sec">
+      <h2>Ta partie comparée à l'Émeraude+</h2>
+      <div id="an-metrics"></div>
+      <p id="an-ref" class="small muted"></p>
+    </section>
+    <div hidden>
+    <!-- Partie par partie -->
+    <div id="an-game-view" hidden>
+      <section>
+        <div class="row an-head">
+          <select id="an-game" aria-label="Partie analysée"></select>
+        </div>
+        <p id="an-summary" class="small muted"></p>
+        <p id="an-empty" class="muted" hidden>Pas de partie analysée pour ces filtres : la collecte relit tes parties (Réglages › Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
+      </section>
+      <section id="an-radar-sec">
+        <h2>Profil de la partie</h2>
+        <div id="an-radar" class="radar-box"></div>
+        <p class="small muted"><span class="lg lg-game"></span> cette partie <span class="lg lg-avg"></span> ta moyenne sur ce champion <span class="lg lg-med"></span> médiane Émeraude+</p>
+      </section>
+      <section id="an-focus-sec">
+        <h2>Points à travailler</h2>
+        <div id="an-focus"></div>
+      </section>
+    </div>
+    </div>
+  </main>
+
+  <!-- ===================== Progresser ===================== -->
+  <main id="tab-analysis" class="tab" role="tabpanel" hidden>
+    <section id="theme-sec">
+      <h2>Thème de la semaine</h2>
+      <div id="theme"><p class="muted small">Calcul…</p></div>
+    </section>
     <section id="goals-sec">
-      <h2>Mes objectifs (jungle)</h2>
+      <h2>Mes objectifs de la semaine</h2>
       <p id="goals-head" class="small muted"></p>
       <div id="goals"></div>
     </section>
-    <section id="track-sec" hidden>
-      <h2>Champions en progression</h2>
-      <div id="track"></div>
-      <p class="small muted">Repère en deux temps. « Prêt à tester en classée » : au moins 20 parties sur la Faille (normales comprises) et stats ≥ 50 sur les parties aux règles standard (classées et normales en draft), sans compter la marge. Après 20 parties classées : « Confirmé » si les stats en classée sont ≥ 50, « Retour en normale conseillé » si stats + marge &lt; 50, sinon « À confirmer ». Les parties rapides ou accélérées comptent seulement comme expérience.</p>
+    <section id="pool-sec">
+      <h2>Mon pool</h2>
+      <p id="pool-flag-error" class="warn-text small" hidden></p>
+      <div id="pool"><p class="muted small">Calcul…</p></div>
     </section>
+    <section id="rep-sec">
+      <h2>Mes repères</h2>
+      <p id="ov-summary" class="ov-summary"></p>
+      <p id="ov-note" class="small muted"></p>
+      <div id="ov-metrics"></div>
+      <p class="small muted">Sur tes dernières parties de jungle, comparées aux joueurs Émeraude+ (filtres et autres vues : Avancé).</p>
+    </section>
+  </main>
+
+  <!-- ===================== Avancé ===================== -->
+  <main id="tab-advanced" class="tab tab-frames" role="tabpanel" hidden>
+    <nav class="subnav" role="tablist">
+      <button type="button" role="tab" data-sub="analysis" aria-selected="true">Analyse détaillée</button>
+      <button type="button" role="tab" data-sub="stats">Mes stats</button>
+      <button type="button" role="tab" data-sub="meta">Méta</button>
+      <button type="button" role="tab" data-sub="reco">Calcul du pool</button>
+      <button type="button" role="tab" data-sub="sim">Simulateur Kayn</button>
+      <button type="button" role="tab" data-sub="config">Configuration</button>
+    </nav>
+    <div id="adv-analysis" class="adv-pane">
     <section class="an-filters">
       <div class="an-grid">
         <label>Champion <select id="af-champ"></select></label>
@@ -91,19 +135,13 @@
         <label>Compte <select id="af-account"></select></label>
         <label>Référence <select id="af-ref"><option value="EMERALD">Émeraude (ton niveau)</option><option value="DIAMOND">Diamant (ton objectif)</option></select></label>
       </div>
-      <div class="an-views" role="tablist">
+      <div class="an-views" role="tablist" hidden>
         <button type="button" data-view="overview" aria-selected="true">Vue d'ensemble</button>
         <button type="button" data-view="game" aria-selected="false">Partie par partie</button>
       </div>
     </section>
-
     <!-- Vue d'ensemble -->
     <div id="an-overview">
-      <section>
-        <p id="ov-summary" class="ov-summary"></p>
-        <p id="ov-note" class="small muted"></p>
-        <div id="ov-metrics"></div>
-      </section>
       <section>
         <h2>Profil de jeu</h2>
         <div class="row"><label class="small muted">Comparer avec <select id="ov-compare"></select></label></div>
@@ -143,56 +181,34 @@
       </section>
       <p id="ov-empty" class="muted" hidden>Aucune partie analysée pour ces filtres. La collecte relit tes parties (Réglages › Collecte).</p>
     </div>
-
-    <!-- Partie par partie -->
-    <div id="an-game-view" hidden>
-      <section>
-        <div class="row an-head">
-          <select id="an-game" aria-label="Partie analysée"></select>
-        </div>
-        <p id="an-summary" class="small muted"></p>
-        <p id="an-empty" class="muted" hidden>Pas de partie analysée pour ces filtres : la collecte relit tes parties (Réglages › Collecte). Après chaque partie, l'analyse arrive quelques minutes plus tard.</p>
-      </section>
-      <section id="an-map-sec">
-        <h2>Carte de tes kills et de tes morts</h2>
-        <div class="row an-filter an-game-filter" role="group" aria-label="Période">
-          <button type="button" data-f="all" aria-pressed="true">Toute la partie</button>
-          <button type="button" data-f="early" aria-pressed="false">Avant 15 min</button>
-          <button type="button" data-f="late" aria-pressed="false">Après 15 min</button>
-        </div>
-        <div id="an-map" class="an-map"><img class="an-map-bg" alt="Carte de la Faille de l'invocateur"></div>
-        <p class="small muted"><span class="dot-k"></span> kill <span class="dot-a"></span> assist <span class="dot-d"></span> mort · survole un point pour la minute et le champion</p>
-      </section>
-      <section id="an-radar-sec">
-        <h2>Profil de la partie</h2>
-        <div id="an-radar" class="radar-box"></div>
-        <p class="small muted"><span class="lg lg-game"></span> cette partie <span class="lg lg-avg"></span> ta moyenne sur ce champion <span class="lg lg-med"></span> médiane Émeraude+</p>
-      </section>
-      <section id="an-metrics-sec">
-        <h2>Ta partie comparée à l'Émeraude+</h2>
-        <div id="an-metrics"></div>
-        <p id="an-ref" class="small muted"></p>
-      </section>
-      <section id="an-focus-sec">
-        <h2>Points à travailler</h2>
-        <div id="an-focus"></div>
-      </section>
+    <section id="track-sec" hidden>
+      <h2>Champions en progression</h2>
+      <div id="track"></div>
+      <p class="small muted">Repère en deux temps. « Prêt à tester en classée » : au moins 20 parties sur la Faille (normales comprises) et stats ≥ 50 sur les parties aux règles standard (classées et normales en draft), sans compter la marge. Après 20 parties classées : « Confirmé » si les stats en classée sont ≥ 50, « Retour en normale conseillé » si stats + marge &lt; 50, sinon « À confirmer ». Les parties rapides ou accélérées comptent seulement comme expérience.</p>
+    </section>
     </div>
-  </main>
-
-  <!-- ===================== Champions ===================== -->
-  <main id="tab-champions" class="tab tab-frames" role="tabpanel" hidden>
-    <nav class="subnav" role="tablist">
-      <button type="button" role="tab" data-sub="reco" aria-selected="true">Recommandés et pool conseillé</button>
-      <button type="button" role="tab" data-sub="stats">Mes stats</button>
-      <button type="button" role="tab" data-sub="meta">Méta</button>
-      <button type="button" role="tab" data-sub="sim">Simulateur Kayn</button>
-    </nav>
-    <iframe id="frame-reco" class="frame" title="Champions recommandés" data-src="../reco-window/index.html"></iframe>
+    <iframe id="frame-reco" class="frame" title="Calcul du pool" data-src="../reco-window/index.html" hidden></iframe>
     <iframe id="frame-stats" class="frame" title="Mes stats" data-src="../stats-window/index.html" hidden></iframe>
     <iframe id="frame-meta" class="frame" title="Méta" data-src="../meta-window/index.html" hidden></iframe>
     <iframe id="frame-sim" class="frame" title="Simulateur Kayn" data-src="../site/index.html" hidden></iframe>
+    <div id="adv-config" class="adv-pane" hidden>
+    <section>
+      <h2>Configuration</h2>
+      <p id="riot-id" class="status"></p>
+      <ul id="problems" class="problems"></ul>
+      <p class="muted small">Fichier : <span id="env-file"></span></p>
+      <p id="data-dir" class="muted small"></p>
+      <p id="accounts" class="muted small"></p>
+      <p class="muted small">La clé API (RIOT_API_KEY) sert uniquement à la collecte et n'est envoyée qu'à l'API Riot. Le client et le jeu sont lus en local.</p>
+      <div class="row">
+        <button id="reload" type="button">Relire le .env</button>
+        <button id="open-dir" type="button">Ouvrir le dossier de l'appli</button>
+      </div>
+    </section>
+    </div>
   </main>
+
+
 
   <!-- ===================== Réglages ===================== -->
   <main id="tab-settings" class="tab" role="tabpanel" hidden>
@@ -214,7 +230,7 @@
         <option value="progress">Progresser sur de nouveaux champions</option>
         <option value="win">Gagner tout de suite</option>
       </select>
-      <p class="muted small">« Progresser » : le pool conseillé (jungle) propose deux champions à fort potentiel pour toi et un champion de confort (ton meilleur « À garder ») ; tes champions déjà beaucoup joués (50 parties classées sur deux saisons ou 150 000 points) passent en confort. « Gagner tout de suite » : le pool conseillé reste celui de tes champions établis. Dans Champions › Recommandés, « Pas pour moi » et « Je veux progresser dessus » priment sur ce seuil.</p>
+      <p class="muted small">« Progresser » : le pool conseillé (jungle) propose deux champions à fort potentiel pour toi et un champion de confort (ton meilleur « À garder ») ; tes champions déjà beaucoup joués (50 parties classées sur deux saisons ou 150 000 points) passent en confort. « Gagner tout de suite » : le pool conseillé reste celui de tes champions établis. Dans Progresser › Mon pool, « Pas pour moi » et « Je veux progresser dessus » priment partout.</p>
     </section>
 
     <section>
@@ -271,19 +287,6 @@
       </div>
     </section>
 
-    <section>
-      <h2>Configuration</h2>
-      <p id="riot-id" class="status"></p>
-      <ul id="problems" class="problems"></ul>
-      <p class="muted small">Fichier : <span id="env-file"></span></p>
-      <p id="data-dir" class="muted small"></p>
-      <p id="accounts" class="muted small"></p>
-      <p class="muted small">La clé API (RIOT_API_KEY) sert uniquement à la collecte et n'est envoyée qu'à l'API Riot. Le client et le jeu sont lus en local.</p>
-      <div class="row">
-        <button id="reload" type="button">Relire le .env</button>
-        <button id="open-dir" type="button">Ouvrir le dossier de l'appli</button>
-      </div>
-    </section>
   </main>
 
   <footer class="muted small">Fermer cette fenêtre la cache : l'appli reste dans la zone de notification. Pour quitter : clic droit sur l'icône → Quitter.</footer>

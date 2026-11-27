@@ -151,13 +151,8 @@ function render(): void {
 
 /** Pool conseillé : 2 ou 3 champions complémentaires, la part de tes parties qu'ils couvrent, et pourquoi le resserrer. */
 function renderAdvice(): void {
-  const a = view?.advice?.[role];
-  if (!a || !a.picks.length) { $("advice").replaceChildren(); $("advice").hidden = true; return; }
-  $("advice").hidden = false;
-  $("advice").replaceChildren(
-    el("h2", {}, "Pool conseillé", a.fromMeta ? el("span", { class: "tag-prov" }, "d'après la méta") : ""),
-    el("ol", { class: "advice-list" }, ...a.picks.map((p) => el("li", {}, portrait(p.championId, "advice-ic"), el("div", {}, el("b", {}, champName(p.championId)), why(p.short))))),
-    details(...a.picks.map((p) => el("p", { class: "small" }, `${champName(p.championId)} : ${p.why.join(" · ")}${p.provisional ? " · provisoire" : ""}`)), el("p", { class: "small" }, a.text)));
+  // Calcul du pool : le pool conseillé est dans Progresser › Mon pool (un seul système).
+  $("advice").hidden = true;
 }
 
 let prog: ProgressionView | null = null;

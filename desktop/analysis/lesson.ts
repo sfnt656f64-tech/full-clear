@@ -336,11 +336,24 @@ export function pickTheme(stats: ErrorStat[]): ErrorStat | null {
 
 /** Bilan d'une semaine : fréquence par partie avant / pendant le thème, avec la marge ; conclusion seulement si nette. */
 export function themeReview(before: { perGame: number; margin: number; games: number }, since: { perGame: number; margin: number; games: number }): string {
+  const r = themeVerdict(before, since);
+  return `${r.numbers} : ${r.verdict[0].toLowerCase()}${r.verdict.slice(1)}`;
+}
+
+/** Verdict en clair (vue principale) et chiffres avec la marge (détails). */
+export function themeVerdict(before: { perGame: number; margin: number; games: number }, since: { perGame: number; margin: number; games: number }): { verdict: string; numbers: string } {
   const f = (x: number) => x.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-  const base = `${f(before.perGame)} ± ${f(before.margin)} par partie avant (${before.games} parties), ${f(since.perGame)} ± ${f(since.margin)} depuis (${since.games} parties)`;
-  if (since.games < 5) return `${base} : pas encore assez de parties cette semaine pour conclure.`;
+  const numbers = `${f(before.perGame)} ± ${f(before.margin)} par partie avant (${before.games} parties), ${f(since.perGame)} ± ${f(since.margin)} depuis (${since.games} parties)`;
+  if (since.games < 5) return { verdict: "Pas encore assez de parties cette semaine pour conclure.", numbers };
   const gap = since.perGame - before.perGame, m = Math.hypot(before.margin, since.margin);
-  return `${base} : ${Math.abs(gap) <= m ? "pas d'écart net (marge comprise)" : gap < 0 ? "progrès net" : "recul net"}${since.games < THEME_GAMES ? `, sur moins de ${THEME_GAMES} parties : à confirmer` : ""}.`;
+  const v = Math.abs(gap) <= m ? "Pas d'écart net pour l'instant." : gap < 0 ? "Progrès net." : "Recul net.";
+  return { verdict: since.games < THEME_GAMES && Math.abs(gap) > m ? `${v.slice(0, -1)}, à confirmer.` : v, numbers };
+}
+
+/** « plus de la moitié de tes dernières parties » : une part, sans chiffre. */
+export function shareText(k: number, n: number): string {
+  const r = n ? k / n : 0;
+  return r >= 0.75 ? "presque toutes tes dernières parties" : r >= 0.5 ? "plus de la moitié de tes dernières parties" : r >= 0.3 ? "environ une de tes dernières parties sur trois" : "quelques-unes de tes dernières parties";
 }
 
 /** Traits d'une compo adverse qui changent les achats : dégâts surtout physiques ou magiques, soins, tanks, contrôles. */

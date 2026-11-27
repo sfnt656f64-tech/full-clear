@@ -302,3 +302,19 @@ body.app { display: flex; height: 100vh; padding: 0; overflow: hidden; }
 .post-row.sel { border-color: var(--blue); background: rgba(90, 130, 255, .12); }
 .pr-ic { width: 22px; height: 22px; border-radius: 4px; }
 .post h3 { margin: 0 0 6px; }
+
+/* 0.4.0 : barre d'état, écrans, analyse qui apprend, pool */
+.side-status { padding: 0 12px 10px; }
+.side-status .status { font-size: 12px; margin: 0; }
+.post h4, #theme h4, #pool h4 { margin: 12px 0 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); }
+.post .turn { margin: 2px 0; font-size: 14px; }
+.tl-row b { display: inline-block; min-width: 42px; font-variant-numeric: tabular-nums; }
+.theme-head { font-size: 15px; margin: 2px 0; }
+.pool-row { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.pool-line { margin: 1px 0 0; }
+.pool-btns { display: flex; gap: 6px; }
+.flag-btn { font-size: 11.5px; padding: 3px 8px; }
+.adv-pane { overflow-y: auto; }
+#rep-sec #ov-summary, #rep-sec #ov-note, #rep-sec .an-label .small { display: none; }
+#tab-after .an-map { max-width: 440px; }
+.an-views[hidden] { display: none !important; }

@@ -2,9 +2,9 @@
 import type { AppState, DraftView, KaynApi } from "../ipc.ts";
 import type { ChampionRow } from "../analysis/overview.ts";
 import type { PostGame } from "../analysis/postgame.ts";
+import { shareText } from "../analysis/lesson.ts";
 import { radarSvg, type RadarSeries } from "../ui/radar-svg.ts";
 import { frenchify, ruleText } from "../next-item.ts";
-import { sparkline as targetCurve } from "../ui/sparkline.ts";
 import { syncTargetInputs } from "../ui/goal-targets.ts";
 import { acceleratorFromKey } from "../shortcuts.ts";
 import { CHAMPIONS, champByKey, findChamp } from "../../src/data/champions";
@@ -31,9 +31,8 @@ function renderClient(s: AppState): void {
   el.className = `status ${c.matchesEnv === false ? "warn" : "ok"}`;
   acc.hidden = false;
   acc.textContent = !c.account ? "Compte : en cours de chargement…"
-    : c.matchesEnv === false ? `Compte : ${c.account}, différent du RIOT_ID du .env (${s.riotId}).`
-    : c.matchesEnv ? `Compte : ${c.account} (identique au .env)`
-    : `Compte : ${c.account}`;
+    : c.matchesEnv === false ? `${c.account} : ce compte n'est pas suivi (Avancé › Configuration).`
+    : c.account;
 }
 
 // ---------- Draft ----------
@@ -402,9 +401,7 @@ function renderCollector(s: AppState): void {
   st.textContent = text;
   $("col-summary").replaceChildren(...summary.filter((b): b is Node | string => !!b));
   $("col-body").replaceChildren(...body.filter((b): b is Node | string => !!b));
-  const home = $("home-col-text");
-  home.className = `status ${cls}`;
-  home.textContent = `Collecte : ${text.split(" (")[0].toLowerCase()}${homeText}`;
+  void homeText;
   $("accounts").textContent = s.riotIds.length > 1 ? `Comptes suivis : ${s.riotIds.join(", ")}` : s.riotIds.length ? `Compte suivi : ${s.riotIds[0]} (ajoute RIOT_ID_2 pour un 2ᵉ compte)` : "";
 }
 
@@ -459,8 +456,8 @@ $("open-dir").addEventListener("click", () => void window.kayn.openUserDataDir()
 $<HTMLInputElement>("login").addEventListener("change", async (e) => render(await window.kayn.setOpenAtLogin((e.target as HTMLInputElement).checked)));
 // ---------- Onglets ----------
 
-type Tab = "home" | "draft" | "analysis" | "champions" | "settings";
-const TABS: Tab[] = ["home", "draft", "analysis", "champions", "settings"];
+type Tab = "draft" | "after" | "analysis" | "settings" | "advanced";
+const TABS: Tab[] = ["draft", "after", "analysis", "settings", "advanced"];
 
 function selectTab(tab: Tab): void {
   for (const t of TABS) {
@@ -469,43 +466,45 @@ function selectTab(tab: Tab): void {
   }
   try { localStorage.setItem("tab", tab); } catch { /* stockage indisponible */ }
   // Après l'initialisation du script (l'onglet peut être restauré au démarrage).
-  if (tab === "analysis") queueMicrotask(() => void loadAnalysis(anKey));
-  if (tab === "champions") selectSub(currentSub);
+  if (tab === "analysis") queueMicrotask(() => { void loadAnalysis(null); void loadTheme(); void loadPool(); });
+  if (tab === "after") queueMicrotask(() => void loadPostGames());
+  if (tab === "advanced") selectSub(currentSub);
 }
 
 // ---------- Champions : vues intégrées (chargées à la première ouverture) ----------
 
-type Sub = "reco" | "stats" | "meta" | "sim";
-const SUBS: Sub[] = ["reco", "stats", "meta", "sim"];
-let currentSub: Sub = "reco";
+type Sub = "analysis" | "stats" | "meta" | "reco" | "sim" | "config";
+const SUBS: Sub[] = ["analysis", "stats", "meta", "reco", "sim", "config"];
+const FRAME_SUBS = new Set<Sub>(["stats", "meta", "reco", "sim"]);
+let currentSub: Sub = "analysis";
 function selectSub(sub: Sub, hash?: string): void {
   currentSub = sub;
   for (const x of SUBS) {
+    document.querySelector(`[data-sub="${x}"]`)!.setAttribute("aria-selected", String(x === sub));
+    if (!FRAME_SUBS.has(x)) { $(`adv-${x}`).hidden = x !== sub; continue; }
     const fr = $<HTMLIFrameElement>(`frame-${x}`);
     fr.hidden = x !== sub;
-    document.querySelector(`[data-sub="${x}"]`)!.setAttribute("aria-selected", String(x === sub));
     if (x === sub && (!fr.src || hash)) fr.src = fr.dataset.src! + (hash ? `#${hash}` : "");
   }
+  if (sub === "analysis") void loadAnalysis(null);
   try { localStorage.setItem("sub", sub); } catch { /* stockage indisponible */ }
 }
 for (const x of SUBS) document.querySelector(`[data-sub="${x}"]`)!.addEventListener("click", () => selectSub(x));
 try { const x = localStorage.getItem("sub") as Sub | null; if (x && SUBS.includes(x)) currentSub = x; } catch { /* idem */ }
 // Menu de l'icône, simulateur avec la draft : le processus principal demande une vue.
+// Anciennes destinations (menu de l'icône, notification) : ramenées aux nouveaux écrans.
 window.kayn.onNavigate((n) => {
-  if (n.sub) currentSub = n.sub;
-  selectTab(n.tab);
-  if (n.tab === "analysis" && n.hash?.startsWith("postgame:")) openPostGame(n.hash.slice(9));
-  if (n.tab === "champions" && n.sub) selectSub(n.sub, n.hash);
+  if (n.hash?.startsWith("postgame:")) { openPostGame(n.hash.slice(9)); return; }
+  if (n.tab === "champions" || n.sub) { if (n.sub && (SUBS as string[]).includes(n.sub)) currentSub = n.sub as Sub; selectTab("advanced"); if (n.sub) selectSub(n.sub as Sub, n.hash); return; }
+  selectTab(n.tab === "home" ? "after" : (n.tab as Tab));
 });
 for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
-$("home-col").addEventListener("click", () => selectTab("settings"));
-$("home-reco").addEventListener("click", () => { selectTab("champions"); selectSub("reco"); });
 try { const t = localStorage.getItem("tab") as Tab | null; if (t && TABS.includes(t) && t !== "draft") selectTab(t); } catch { /* idem */ }
 
 /** Onglet Draft ouvert tout seul au début de la sélection, Accueil à la fin (seulement aux changements). */
 let wasLive: boolean | null = null;
 function autoTab(live: boolean): void {
-  if (wasLive !== null && live !== wasLive) selectTab(live ? "draft" : "home");
+  if (wasLive !== null && live !== wasLive) selectTab(live ? "draft" : "after");
   else if (wasLive === null && live) selectTab("draft");
   wasLive = live;
 }
@@ -596,27 +595,10 @@ for (const id of ["af-champ", "af-role", "af-period", "af-account"]) $(id).addEv
 // Objectif du pool : mémorisé, puis l'accueil et Champions sont recalculés.
 $<HTMLSelectElement>("pool-goal").addEventListener("change", (e) => {
   const goal = (e.target as HTMLSelectElement).value as AppState["poolGoal"];
-  void window.kayn.setPoolGoal(goal).then(() => { renderHome(); void loadTracking(); const fr = $<HTMLIFrameElement>("frame-reco"); if (fr.src) fr.src = fr.dataset.src!; });
+  void window.kayn.setPoolGoal(goal).then(() => { void loadPool(); const fr = $<HTMLIFrameElement>("frame-reco"); if (fr.src) fr.src = fr.dataset.src!; });
 });
 
-/** Progresser : champions en progression et repère « prêt pour la classée ». */
-async function loadTracking(): Promise<void> {
-  const p = await window.kayn.getProgression().catch(() => null);
-  const sec = $("track-sec");
-  if (!p || p.goal !== "progress" || !p.tracking.length) { sec.hidden = true; return; }
-  sec.hidden = false;
-  const STAGE_CLASS: Record<string, string> = { confirmed: "good", readyToTest: "good", backToNormal: "bad", keepPracticing: "", toConfirm: "", learning: "" };
-  const LABEL: Record<string, string> = { learning: "En apprentissage", keepPracticing: "Continuer en normale", readyToTest: "Prêt à tester en classée", confirmed: "Confirmé", backToNormal: "Retour en normale conseillé", toConfirm: "À confirmer" };
-  $("track").replaceChildren(...p.tracking.map((t) => h("div", { class: `track ${STAGE_CLASS[t.stage]}` },
-    h("b", {}, champName(t.championId)), h("span", { class: "small muted" }, t.source === "flag" ? " · choisi par toi" : " · conseillé"),
-    h("span", { class: "badge" }, LABEL[t.stage]),
-    h("p", { class: "small" }, t.text),
-    h("p", { class: "small muted" }, `${plural(t.experience, "partie")} sur la Faille, dont ${plural(t.draftNormal, "normale")} en draft et ${plural(t.rankedGames, "classée")} (jungle).`))));
-}
-function plural(n: number, word: string): string { return `${n} ${word}${n > 1 ? "s" : ""}`;
-}
-void loadTracking();
-window.setInterval(() => void loadTracking(), 120_000);
+
 
 // ---------- Analyses d'après-partie ----------
 
@@ -625,31 +607,110 @@ const num = (v: number, unit: string) => `${v.toLocaleString("fr-FR", { maximumF
 let postOpen: string | null = null;
 
 function renderPostGame(p: PostGame, open: boolean): HTMLElement {
+  void open;
   const mark = (b: boolean | null) => (b === true ? "✔ " : b === false ? "✘ " : "= ");
   const head = `${new Date(p.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} · ${champName(p.championId)} · ${QUEUE_LABEL[p.queue]} · ${p.win ? "victoire" : "défaite"}${p.opponent ? ` · contre ${champName(p.opponent)}` : ""}`;
-  const c = p.top.point && p.curves?.[0];
-  const details: { title: string; lines: (string | Node)[] }[] = [
-    { title: `Partie : ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min, ${p.kda}`, lines: [] },
-    { title: p.role === "JUNGLE" ? "Face au jungler adverse" : "Face à ton vis-à-vis", lines: p.vs.filter((v) => v.mine != null).map((v) => `${mark(v.better)}${v.label} : ${v.diff ? `${v.mine! >= 0 ? "+" : "−"}${num(Math.abs(v.mine!), v.unit)} (${v.mine! > 0 ? "en ta faveur" : v.mine! < 0 ? "en sa faveur" : "égalité"})` : `${num(v.mine!, v.unit)} contre ${v.opp != null ? num(v.opp, v.unit) : "–"}`}${v.outcomeLinked ? " (toute la partie : suit en partie l'issue)" : ""}`) },
-    { title: "Tes objectifs de la semaine (cette partie)", lines: p.goals.length ? p.goals.map((g) => `${mark(g.met)}${g.label} : ${g.value} (cible ${g.target})`) : ["Tes objectifs portent sur la jungle : pas suivis sur une partie dans un autre rôle."] },
-    { title: "Moments clés", lines: p.moments.length ? p.moments.map((m) => `${m.time} ${m.text}`) : ["Chronologie pas encore lue pour cette partie."] },
-    { title: p.average ? `Ta moyenne sur ${champName(p.championId)} (${p.average.games} autres parties cette saison)` : "Ta moyenne sur ce champion", lines: p.average ? p.average.lines.map((l) => `${mark(l.better)}${l.label} : ${num(l.game, l.unit)} contre ${num(l.average, l.unit)} en moyenne`) : ["Moins de 5 autres parties sur ce champion cette saison : pas de comparaison."] },
-    ...(p.progression ? [{ title: "Repère de progression", lines: [p.progression] }] : []),
-    { title: "À travailler (tes 20 parties précédentes)", lines: [...p.work, ...(c ? [c.vsTarget] : [])] },
-    { title: "Point fort", lines: [p.strength] },
-  ];
-  const d = h("div", { class: "post", id: `postgame-${p.matchId}` },
-    h("h3", {}, head),
+  const l = p.lesson;
+  const c = p.curves?.[0];
+  const line = (x: { text: string }) => {
+    const m = x.text.match(/^(\d+:\d\d) — (.*)$/);
+    return m ? h("li", { class: "tl-row" }, h("b", {}, m[1]), " ", m[2]) : h("li", {}, x.text);
+  };
+  const block = (title: string, ...kids: Child[]) => [h("h4", {}, title), ...kids];
+  const main: Child[] = l ? [
+    ...block("Le tournant", ...l.turning.map((t) => h("p", { class: "turn" }, t))),
+    ...(l.well.length ? block("Bien joué", h("ul", { class: "plain-list" }, ...l.well.map(line))) : []),
+    ...(l.fix.length ? block("À corriger", h("ul", { class: "plain-list" }, ...l.fix.map(line))) : []),
+    ...(l.replay.length ? block("À revoir en replay", h("p", {}, l.replay.join(" · "))) : []),
+    ...(l.theme ? block(`Thème de la semaine · ${l.theme.label}`, h("p", { class: l.theme.respected ? "good-text" : "bad-text" }, l.theme.text)) : []),
+    ...block(`Repères ${l.reference.label ? `face aux ${l.reference.label}` : ""} sur ${champName(p.championId)}`,
+      l.reference.lines.length ? h("ul", { class: "plain-list" }, ...l.reference.lines.map((x) => h("li", {}, x.text))) : h("p", { class: "muted small" }, "Rien de net : dans la moyenne sur les repères mesurés.")),
+    ...block("Ton build", h("p", { class: "small" }, l.build.mine.join(" → ") || "Aucun objet terminé."), h("ul", { class: "plain-list" }, ...l.build.lines.map((x) => h("li", {}, x.text)))),
+  ] : [
     h("ul", { class: "plain-list post-top" },
       p.top.well ? h("li", {}, h("span", { class: "good-text" }, "Bien : "), p.top.well) : null,
       h("li", {}, h("span", { class: "bad-text" }, "À travailler : "), p.top.point, p.top.moment ? h("div", { class: "small" }, p.top.moment) : null),
       h("li", {}, h("b", {}, "Prochaine partie : "), p.top.next)),
-    c ? h("div", { class: "spark-box" },
-      h("span", { class: "small muted" }, `${c.label} : moyenne sur 10 parties, tes ${c.games} dernières (la plus récente à droite).`),
-      targetCurve({ points: c.points, target: c.target, targetLabel: c.targetLabel, fmt: (v) => num(v, c.unit) })) : null,
-    detailsBlock(details));
-  void open;
-  return d;
+    h("p", { class: "muted small" }, "Chronologie de la partie pas encore lue : le récit détaillé arrive quand la collecte l'a relue."),
+  ];
+  const details: { title: string; lines: (string | Node)[] }[] = [
+    { title: `Partie : ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min, ${p.kda}`, lines: [] },
+    ...(l ? [
+      { title: "Repères (chiffres)", lines: [...l.reference.lines.map((x) => `${x.text} ${x.detail ?? ""}`), ...l.reference.notes] },
+      { title: "Build (chiffres)", lines: l.build.lines.filter((x) => x.detail).map((x) => `${x.text} ${x.detail}`) },
+    ] : []),
+    { title: p.role === "JUNGLE" ? "Face au jungler adverse" : "Face à ton vis-à-vis", lines: p.vs.filter((v) => v.mine != null).map((v) => `${mark(v.better)}${v.label} : ${v.diff ? `${v.mine! >= 0 ? "+" : "−"}${num(Math.abs(v.mine!), v.unit)} (${v.mine! > 0 ? "en ta faveur" : v.mine! < 0 ? "en sa faveur" : "égalité"})` : `${num(v.mine!, v.unit)} contre ${v.opp != null ? num(v.opp, v.unit) : "–"}`}${v.outcomeLinked ? " (toute la partie : suit en partie l'issue)" : ""}`) },
+    { title: "Tes objectifs de la semaine (cette partie)", lines: p.goals.length ? p.goals.map((g) => `${mark(g.met)}${g.label} : ${g.value} (cible ${g.target})`) : ["Tes objectifs portent sur la jungle : pas suivis sur une partie dans un autre rôle."] },
+    { title: "Moments clés", lines: p.moments.length ? p.moments.map((m) => `${m.time} ${m.text}`) : ["Chronologie pas encore lue pour cette partie."] },
+    { title: p.average ? `Ta moyenne sur ${champName(p.championId)} (${p.average.games} autres parties cette saison)` : "Ta moyenne sur ce champion", lines: p.average ? p.average.lines.map((x) => `${mark(x.better)}${x.label} : ${num(x.game, x.unit)} contre ${num(x.average, x.unit)} en moyenne`) : ["Moins de 5 autres parties sur ce champion cette saison : pas de comparaison."] },
+    ...(p.progression ? [{ title: "Repère de progression", lines: [p.progression] }] : []),
+    { title: "Tendances (tes 20 parties précédentes)", lines: [...p.work, p.strength, ...(c ? [c.vsTarget] : [])] },
+  ];
+  return h("div", { class: "post", id: `postgame-${p.matchId}` }, h("h3", {}, head), ...main, detailsBlock(details));
+}
+
+/** Carte des kills et des morts, et barres comparées à l'Émeraude+, pour la partie choisie. */
+async function loadGameDetail(p: PostGame): Promise<void> {
+  const v = await window.kayn.getAnalysis(`${p.matchId}|${p.account}`, { championId: null, role: null, period: { kind: "all" }, account: null }).catch(() => null);
+  if (!v || postOpen !== p.matchId) return;
+  anView = v;
+  if (v.reference) refShort = v.reference.short;
+  renderAnalysis();
+}
+
+// ---------- Progresser : thème de la semaine et Mon pool ----------
+
+async function loadTheme(): Promise<void> {
+  const t = await window.kayn.getTheme().catch(() => null);
+  if (!t) return;
+  const cur = t.current;
+  const fmt = (x: number) => x.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  $("theme").replaceChildren(
+    ...(cur ? [
+      h("p", { class: "theme-head" }, h("b", {}, cur.short)),
+      h("p", { class: "small" }, `${cur.label} : dans ${shareText(cur.recent.withError, cur.recent.games)}.`),
+      h("h4", {}, "Exercice"), h("p", {}, cur.exercise),
+      h("h4", {}, "À revoir en replay"),
+      h("ul", { class: "plain-list" }, ...cur.examples.map((x) => h("li", { class: "tl-row" }, h("b", {}, mmss(x.t)), ` ${new Date(x.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} · ${champName(x.championId)} · ${x.text}`))),
+      h("h4", {}, "Cette semaine"), h("p", { class: "small" }, cur.week?.verdict ?? "La semaine commence."),
+    ] : [h("p", { class: "muted small" }, "Pas encore de thème : il faut 20 parties de jungle dont la chronologie est relue.")]),
+    ...(t.review ? [h("h4", {}, "Bilan de la semaine dernière"), h("p", { class: "small" }, `${t.review.label} : ${t.review.text}`)] : []),
+    detailsBlock([...(cur?.week ? [{ title: "Cette semaine (chiffres)", lines: [cur.week.numbers] }] : []), { title: "Erreurs suivies (tes 20 dernières parties)", lines: t.all.map((s) => `${s.label} : ${s.withError} parties sur ${s.games}, ${fmt(s.perGame)} ± ${fmt(s.margin)} par partie.`) },
+      { title: "Méthode", lines: ["Le thème est l'erreur personnelle qui revient dans le plus de parties (les objectifs laissés sans contrepartie sont déjà un objectif de la semaine). Il change chaque semaine, après un bilan avant / pendant, avec la marge."] }]));
+}
+
+async function loadPool(): Promise<void> {
+  const pools = await window.kayn.getPool().catch(() => null);
+  if (!pools) return;
+  const flag = (id: number, f: "notForMe" | "progress" | null, label: string) => {
+    const b = h("button", { type: "button", class: "flag-btn" }, label);
+    b.addEventListener("click", async () => {
+      const c = champByKey(id)?.id;
+      if (!c) return;
+      const r = await window.kayn.setChampionFlag(c, f);
+      $("pool-flag-error").hidden = !r.flagError;
+      $("pool-flag-error").textContent = r.flagError ?? "";
+      void loadPool();
+    });
+    return b;
+  };
+  const row = (e: { championId: number; line: string; details: string[] }, buttons: Node[]) =>
+    h("div", { class: "pool-row" }, icon(champByKey(e.championId)?.image ? CDN_CHAMP + champByKey(e.championId)!.image : "", champName(e.championId), "pr-ic"),
+      h("div", {}, h("b", {}, champName(e.championId)), h("p", { class: "small pool-line" }, e.line)), h("div", { class: "pool-btns" }, ...buttons));
+  const role = (v: (typeof pools)[number]) => [
+    h("h3", {}, v.role === "JUNGLE" ? "Jungle" : "Milieu"),
+    ...(v.tooMany ? [h("p", { class: "warn-text small" }, `Tu as ${v.progress.length} champions « Je veux progresser dessus » : c'est trop pour progresser vraiment. Garde-en 2, retire les autres.`)] : []),
+    h("h4", {}, "À faire progresser"),
+    ...(v.progress.length ? v.progress.map((e) => row(e, [flag(e.championId, null, "Retirer")])) : [h("p", { class: "muted small" }, "Aucun : choisis-en 1 ou 2 dans « À essayer ».")]),
+    h("h4", {}, "Confort"),
+    ...(v.comfort.length ? v.comfort.map((e) => row(e, [flag(e.championId, "progress", "Je veux progresser dessus"), flag(e.championId, "notForMe", "Pas pour moi")])) : [h("p", { class: "muted small" }, "Aucun : tes champions les plus joués sont en « Pas pour moi ».")]),
+    h("h4", {}, "À essayer"),
+    ...(v.toTry.length ? v.toTry.map((e) => row(e, [flag(e.championId, "progress", "Je veux progresser dessus"), flag(e.championId, "notForMe", "Pas pour moi")])) : [h("p", { class: "muted small" }, "Rien à proposer pour l'instant.")]),
+    detailsBlock([...[...v.progress, ...v.comfort, ...v.toTry].map((e) => ({ title: champName(e.championId), lines: e.details })),
+      { title: "Pas pour moi", lines: v.notForMe.map((id) => h("span", {}, champName(id), " ", flag(id, null, "Rétablir"))) }]),
+  ];
+  $("pool").replaceChildren(...pools.filter((v) => v.role === "JUNGLE").flatMap(role),
+    ...pools.filter((v) => v.role !== "JUNGLE").flatMap((v) => [h("details", { class: "details" }, h("summary", { class: "small muted" }, v.role === "MIDDLE" ? "Milieu" : v.role), ...role(v))]));
 }
 
 /** Tes dernières parties (cliquables) et l'analyse de celle choisie ; la même analyse partout dans l'appli. */
@@ -677,10 +738,11 @@ function showPostGame(matchId: string): void {
   }));
   const p = postList.find((x) => x.matchId === matchId);
   $("post-view").replaceChildren(...(p ? [renderPostGame(p, true)] : []));
+  if (p) void loadGameDetail(p);
 }
 /** Ouvre l'analyse d'une partie (Accueil, notification). */
 function openPostGame(matchId: string | null): void {
-  selectTab("analysis");
+  selectTab("after");
   postOpen = matchId;
   void loadPostGames().then(() => $("post-sec").scrollIntoView({ block: "start" }));
 }
@@ -996,43 +1058,33 @@ const fmtStat = (s: GV["goals"][number]["metrics"][number]["since"], unit: strin
 
 function goalCard(g: GV["goals"][number]): HTMLElement {
   const per = g.horizon === "week" ? "semaine" : "mois";
+  const details: string[] = [];
+  const rows = g.metrics.filter((m) => !m.info).map((m) => {
+    const cur = m.since.n >= 5 ? m.since : m.before;
+    const status = m.since.n < 20 ? ["muted", "pas encore de conclusion"] : m.reached ? ["ok-text", "cible atteinte"] : ["warn-text", "pas encore à la cible"];
+    details.push(`${m.label} : avant ${fmtStat(m.before, m.unit)} → depuis ${fmtStat(m.since, m.unit)} (entre parenthèses : parties ; ± : marge). ${m.needed === 0 ? "Assez de parties pour trancher." : m.needed == null ? "Trop proche de la cible pour trancher." : `Encore environ ${m.needed} parties pour trancher.`}${m.clear ? " Écart net avec la période d'avant." : ""}`);
+    return h("div", { class: "goal-metric" },
+      h("div", { class: "goal-label" }, m.label),
+      h("div", { class: "goal-vals" }, h("b", {}, cur.value != null ? fmtNum(cur.value, m.unit) : "–"), ` → cible ${fmtNum(m.target, m.unit)} `, h("span", { class: `small ${status[0]}` }, `· ${status[1]}`)),
+      m.periods.filter((w) => w.stat.value != null).length >= 2 ? periodBars(m, per) : null);
+  });
+  for (const m of g.metrics.filter((x) => x.info)) details.push(`${m.label} (pour information${m.note ? `, ${m.note}` : ""}) : avant ${fmtStat(m.before, m.unit)} → depuis ${fmtStat(m.since, m.unit)}.`);
   return h("div", { class: `goal${g.main ? " main" : ""}` },
-    h("h3", {}, g.main ? "★ " : "", g.label, g.main ? h("span", { class: "small muted" }, " · priorité principale") : null),
-    ...g.metrics.map((m) => {
-      if (m.info) {
-        return h("div", { class: "goal-metric" },
-          h("div", { class: "goal-label" }, m.label, h("span", { class: "small muted" }, ` · pour information${m.note ? ` (${m.note})` : ""}`)),
-          h("div", { class: "goal-vals small" }, h("span", {}, "avant ", h("b", {}, fmtStat(m.before, m.unit))), h("span", {}, " → depuis ", h("b", {}, fmtStat(m.since, m.unit)))));
-      }
-      const status = m.since.n < 20 ? ["muted", `pas de conclusion (${m.since.n}/20 parties)`]
-        : m.reached ? ["ok-text", "cible atteinte"] : ["warn-text", "pas encore"];
-      const delta = m.since.value != null && m.before.value != null ? m.since.value - m.before.value : null;
-      return h("div", { class: "goal-metric" },
-        h("div", { class: "goal-label" }, m.label, h("span", { class: "small muted" }, ` · cible ${m.better === "-" ? "≤" : "≥"} ${fmtNum(m.target, m.unit)}`)),
-        h("div", { class: "goal-vals small" },
-          h("span", {}, "avant ", h("b", {}, fmtStat(m.before, m.unit))),
-          h("span", {}, " → depuis ", h("b", {}, fmtStat(m.since, m.unit))),
-          delta != null ? h("span", { class: m.clear ? "" : "muted" }, ` · ${delta >= 0 ? "+" : ""}${fmtNum(delta, m.unit)}`) : null),
-        h("div", { class: `small ${status[0]}` }, status[1],
-          h("span", { class: "muted" }, m.needed === 0 ? " · assez de parties pour trancher par rapport à la cible"
-            : m.needed == null ? " · trop proche de la cible pour trancher (il faudrait des centaines de parties)"
-            : ` · encore environ ${m.needed} partie${m.needed > 1 ? "s" : ""} pour savoir si tu es à la cible`),
-          m.clear ? h("span", { class: "ok-text" }, " · écart net avec la période d'avant") : null),
-        m.periods.filter((w) => w.stat.value != null).length >= 2 ? periodBars(m, per) : null);
-    }),
-    h("details", { class: "small" }, h("summary", {}, g.horizon === "week" ? "Exercice" : "À quoi ça sert"), h("p", {}, g.exercise)));
+    h("h3", {}, g.label),
+    ...rows,
+    h("p", { class: "small goal-ex" }, h("b", {}, g.horizon === "week" ? "Exercice : " : "À quoi ça sert : "), g.exercise),
+    detailsBlock([{ title: "Chiffres", lines: details }]));
 }
 
 function renderGoals(v: GV): void {
   const start = new Date(v.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const from = new Date(v.baseline.fromMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
-  $("goals-head").textContent = `Depuis le ${start} : ${v.sinceGames} partie(s). Référence : ${v.baseline.extended ? `tes ${v.baseline.games} dernières parties d'avant (moins de 20 sur les 4 semaines)` : `les 4 semaines d'avant (${v.baseline.games} parties, depuis le ${from})`}. Entre parenthèses : nombre de parties ; ± : marge à 95 %.`;
+  $("goals-head").textContent = `Depuis le ${start} : ${v.sinceGames} partie${v.sinceGames > 1 ? "s" : ""}.`;
   const weekly = v.goals.filter((g) => g.horizon === "week"), monthly = v.goals.filter((g) => g.horizon === "month");
   $("goals").replaceChildren(
-    h("h3", { class: "goal-section" }, "Objectifs de la semaine", h("span", { class: "small muted" }, " · ce que tu contrôles, tranchable en 20 à 30 parties")),
     ...weekly.map(goalCard),
-    h("h3", { class: "goal-section" }, "Résultats à long terme", h("span", { class: "small muted" }, " · suivis chaque mois")),
-    ...monthly.map(goalCard));
+    h("details", { class: "details" }, h("summary", { class: "small muted" }, "Résultats à long terme (chaque mois)"), ...monthly.map(goalCard),
+      h("p", { class: "small muted" }, `Référence : ${v.baseline.extended ? `tes ${v.baseline.games} dernières parties d'avant (moins de 20 sur les 4 semaines)` : `les 4 semaines d'avant (${v.baseline.games} parties, depuis le ${from})`}.`)));
 }
 
 /** Valeur par période depuis le début du suivi (barres), avec la cible en pointillés. */
@@ -1072,19 +1124,9 @@ function renderGoalSettings(v: GV): void {
     (key, value) => void window.kayn.setGoalTarget(key, value).then(applyGoals));
 }
 
-/** Accueil : l'objectif principal en une ligne. */
-function renderHomeGoal(v: GV): void {
-  const g = v.goals.find((x) => x.main);
-  const m = g?.metrics[0];
-  $("home-goal").hidden = !m;
-  if (!m) return;
-  $("home-goal-text").textContent = `★ ${m.label} : ${m.since.n ? `${fmtNum(m.since.value, m.unit)} sur ${m.since.n} partie(s)` : "pas encore de partie"} · cible ${fmtNum(m.target, m.unit)} · avant ${fmtNum(m.before.value, m.unit)}`;
-}
-
-function applyGoals(v: GV): void { renderGoals(v); renderGoalSettings(v); renderHomeGoal(v); }
+function applyGoals(v: GV): void { renderGoals(v); renderGoalSettings(v); }
 async function loadGoals(): Promise<void> { applyGoals(await window.kayn.getGoals()); }
 $("goals-restart").addEventListener("click", async () => applyGoals(await window.kayn.restartGoals()));
-$("home-goal").addEventListener("click", () => selectTab("analysis"));
 void loadGoals();
 window.setInterval(() => void loadGoals(), 120_000);
 
@@ -1113,39 +1155,3 @@ $<HTMLInputElement>("excluded-add").addEventListener("change", async (e) => {
 window.kayn.onState(render);
 void window.kayn.getState().then(render);
 
-// ---------- Accueil : pool conseillé et dernière partie ----------
-
-/** Pool conseillé (jungle, puis milieu) : les champions et la raison principale. */
-async function renderHomeAdvice(): Promise<void> {
-  const r = await window.kayn.getRecommendations().catch(() => null);
-  if (!r) return;
-  const rows = r.roles.map((role) => {
-    const a = r.advice[role.role];
-    return h("div", { class: "top3-row" },
-      h("span", { class: "top3-role" }, role.role === "JUNGLE" ? "Jungle" : "Milieu"),
-      ...(a?.picks.length ? a.picks.map((p) => {
-        const ch = champByKey(p.championId);
-        const img = h("img", { src: ch?.image ? `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${ch.image}` : "", alt: "", class: "ic" });
-        return h("span", { class: "top3-pick", title: p.why.join(" · ") }, img, ch?.name ?? `#${p.championId}`, p.provisional ? h("span", { class: "muted small" }, " (provisoire)") : null);
-      }) : [h("span", { class: "muted small" }, "pas encore de parties dans ce rôle")]),
-      a?.fromMeta ? h("span", { class: "muted small" }, " · d'après la méta") : null);
-  });
-  const j = r.advice.JUNGLE?.coverage;
-  $("home-advice").replaceChildren(...rows, j ? h("p", { class: "muted small" }, `Jungle : ces champions couvrent ${Math.round((j.games / j.total) * 100)} % de tes parties de la saison. Survole un champion pour le détail.`) : "");
-}
-
-/** Dernière partie : la même analyse que dans Progresser, et accès direct à celle-ci. */
-async function renderHomeLast(): Promise<void> {
-  const p = (await window.kayn.getPostGames().catch(() => null))?.[0];
-  if (!p) { $("home-last").replaceChildren(h("p", { class: "muted small" }, "Pas encore de partie analysée.")); return; }
-  const open = h("button", { type: "button", class: "link" }, "Voir l'analyse ›");
-  open.addEventListener("click", () => openPostGame(p.matchId));
-  $("home-last").replaceChildren(
-    h("p", {}, h("b", {}, champName(p.championId)), ` · ${p.win ? "victoire" : "défaite"}${p.opponent ? ` contre ${champName(p.opponent)}` : ""} · ${new Date(p.startMs).toLocaleDateString("fr-FR")}`),
-    h("p", { class: "small" }, "À travailler : ", p.top.point),
-    h("div", { class: "row" }, open));
-}
-
-function renderHome(): void { void renderHomeAdvice(); void renderHomeLast(); }
-renderHome();
-window.setInterval(renderHome, 120_000);

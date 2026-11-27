@@ -39,7 +39,10 @@ export function candidateLine(e: ProgressEntry): string {
     ...(e.fit.value - e.fit.margin > 0 ? ["colle à tes points forts"] : []),
     ...(e.difficulty <= 4 ? ["facile à prendre en main"] : e.difficulty >= 8 ? ["difficile à prendre en main"] : []),
   ];
-  const t = parts.length ? parts.join(", ") : "bien classé sur l'ensemble des critères, sans point net";
+  // 12 mots au plus : les raisons dans l'ordre, tant qu'elles tiennent.
+  let joined = "";
+  for (const p of parts) { const next = joined ? `${joined}, ${p}` : p; if (next.split(" ").length > 12) break; joined = next; }
+  const t = joined || "bien classé sur l'ensemble des critères, sans point net";
   return `${t[0].toUpperCase()}${t.slice(1)}.`;
 }
 const candidateDetails = (e: ProgressEntry): string[] => [

@@ -8,7 +8,7 @@ import type { PoolView } from "./reco/pool-view.ts";
 import type { ErrorKey, ErrorStat } from "./analysis/lesson.ts";
 
 export interface ThemeView {
-  current: { key: ErrorKey; label: string; short: string; exercise: string; startMs: number; examples: ErrorStat["examples"]; recent: ErrorStat; week: string | null } | null;
+  current: { key: ErrorKey; label: string; short: string; exercise: string; startMs: number; examples: ErrorStat["examples"]; recent: ErrorStat; week: { verdict: string; numbers: string } | null } | null;
   review: { key: string; label: string; text: string; endMs: number } | null;
   /** Toutes les erreurs suivies, sur tes 20 dernières parties. */
   all: ErrorStat[];
