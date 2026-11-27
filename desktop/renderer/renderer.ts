@@ -492,7 +492,7 @@ try { const x = localStorage.getItem("sub") as Sub | null; if (x && SUBS.include
 window.kayn.onNavigate((n) => {
   if (n.sub) currentSub = n.sub;
   selectTab(n.tab);
-  if (n.tab === "analysis" && n.hash?.startsWith("postgame:")) { postOpen = n.hash.slice(9); void loadPostGames(); }
+  if (n.tab === "analysis" && n.hash?.startsWith("postgame:")) openPostGame(n.hash.slice(9));
   if (n.tab === "champions" && n.sub) selectSub(n.sub, n.hash);
 });
 for (const t of TABS) document.querySelector(`[data-tab="${t}"]`)!.addEventListener("click", () => selectTab(t));
@@ -636,8 +636,8 @@ function renderPostGame(p: PostGame, open: boolean): HTMLElement {
     { title: "À travailler (tes 20 parties précédentes)", lines: [...p.work, ...(c ? [c.vsTarget] : [])] },
     { title: "Point fort", lines: [p.strength] },
   ];
-  const d = h("details", { class: "post", id: `postgame-${p.matchId}` },
-    h("summary", {}, head),
+  const d = h("div", { class: "post", id: `postgame-${p.matchId}` },
+    h("h3", {}, head),
     h("ul", { class: "plain-list post-top" },
       p.top.well ? h("li", {}, h("span", { class: "good-text" }, "Bien : "), p.top.well) : null,
       h("li", {}, h("span", { class: "bad-text" }, "À travailler : "), p.top.point, p.top.moment ? h("div", { class: "small" }, p.top.moment) : null),
@@ -646,20 +646,59 @@ function renderPostGame(p: PostGame, open: boolean): HTMLElement {
       h("span", { class: "small muted" }, `${c.label} : moyenne sur 10 parties, tes ${c.games} dernières (la plus récente à droite).`),
       targetCurve({ points: c.points, target: c.target, targetLabel: c.targetLabel, fmt: (v) => num(v, c.unit) })) : null,
     detailsBlock(details));
-  if (open) d.setAttribute("open", "");
+  void open;
   return d;
 }
 
+/** Tes dernières parties (cliquables) et l'analyse de celle choisie ; la même analyse partout dans l'appli. */
+let postList: PostGame[] = [];
 async function loadPostGames(): Promise<void> {
   const list = await window.kayn.getPostGames().catch(() => null);
-  const sec = $("post-sec");
-  if (!list || !list.length) { sec.hidden = true; return; }
-  sec.hidden = false;
-  $("post").replaceChildren(...list.map((p, i) => renderPostGame(p, postOpen ? p.matchId === postOpen : i === 0)));
-  if (postOpen) document.getElementById(`postgame-${postOpen}`)?.scrollIntoView({ block: "start" });
+  postList = list ?? [];
+  if (!postList.length) {
+    $("post-list").replaceChildren(h("p", { class: "muted small" }, "Pas encore de partie analysée : joue une partie classée ou normale en draft."));
+    $("post-view").replaceChildren();
+    return;
+  }
+  showPostGame(postOpen && postList.some((p) => p.matchId === postOpen) ? postOpen : postList[0].matchId);
 }
+function showPostGame(matchId: string): void {
+  postOpen = matchId;
+  $("post-list").replaceChildren(...postList.map((p) => {
+    const b = h("button", { type: "button", class: `post-row${p.matchId === matchId ? " sel" : ""}`, "aria-pressed": String(p.matchId === matchId) },
+      icon(champByKey(p.championId)?.image ? CDN_CHAMP + champByKey(p.championId)!.image : "", champName(p.championId), "pr-ic"),
+      h("span", {}, `${new Date(p.startMs).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} · ${champName(p.championId)}`),
+      h("span", { class: p.win ? "good-text" : "bad-text" }, p.win ? "victoire" : "défaite"),
+      h("span", { class: "muted" }, p.opponent ? `contre ${champName(p.opponent)}` : ""));
+    b.addEventListener("click", () => showPostGame(p.matchId));
+    return b;
+  }));
+  const p = postList.find((x) => x.matchId === matchId);
+  $("post-view").replaceChildren(...(p ? [renderPostGame(p, true)] : []));
+}
+/** Ouvre l'analyse d'une partie (Accueil, notification). */
+function openPostGame(matchId: string | null): void {
+  selectTab("analysis");
+  postOpen = matchId;
+  void loadPostGames().then(() => $("post-sec").scrollIntoView({ block: "start" }));
+}
+$("post-check").addEventListener("click", async () => {
+  const before = postList[0]?.matchId ?? null;
+  const btn = $<HTMLButtonElement>("post-check");
+  btn.disabled = true;
+  $("post-status").textContent = "Recherche de ta dernière partie chez Riot…";
+  await window.kayn.checkNewGames().catch(() => {});
+  // La collecte lit la partie puis sa chronologie : on regarde toutes les 5 s pendant 2 minutes.
+  for (let i = 0; i < 24; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const list = await window.kayn.getPostGames().catch(() => null);
+    if (list?.[0] && list[0].matchId !== before) { postOpen = list[0].matchId; await loadPostGames(); $("post-status").textContent = "Nouvelle partie analysée."; btn.disabled = false; return; }
+  }
+  $("post-status").textContent = before ? "Pas de nouvelle partie chez Riot : ta dernière partie est déjà analysée (Riot la publie quelques minutes après la fin)." : "Aucune partie trouvée pour l'instant.";
+  btn.disabled = false;
+});
 void loadPostGames();
-window.kayn.onPostGameReady(() => { postOpen = null; void loadPostGames(); });
+window.kayn.onPostGameReady((id) => { postOpen = id; void loadPostGames(); });
 
 // Niveau de référence : mémorisé dans les réglages (partagé avec Champions recommandés), puis tout est recalculé.
 $<HTMLSelectElement>("af-ref").addEventListener("change", (e) => {
@@ -1093,17 +1132,15 @@ async function renderHomeAdvice(): Promise<void> {
   $("home-advice").replaceChildren(...rows, j ? h("p", { class: "muted small" }, `Jungle : ces champions couvrent ${Math.round((j.games / j.total) * 100)} % de tes parties de la saison. Survole un champion pour le détail.`) : "");
 }
 
-/** Dernière partie analysée : résultat, et accès à son analyse. */
+/** Dernière partie : la même analyse que dans Progresser, et accès direct à celle-ci. */
 async function renderHomeLast(): Promise<void> {
-  const v = await window.kayn.getAnalysis(null, { championId: null, role: null, period: { kind: "all" }, account: null }).catch(() => null);
-  const g = v?.games[0];
-  if (!g || !v?.analysis) { $("home-last").replaceChildren(h("p", { class: "muted small" }, "Pas encore de partie analysée.")); return; }
+  const p = (await window.kayn.getPostGames().catch(() => null))?.[0];
+  if (!p) { $("home-last").replaceChildren(h("p", { class: "muted small" }, "Pas encore de partie analysée.")); return; }
   const open = h("button", { type: "button", class: "link" }, "Voir l'analyse ›");
-  open.addEventListener("click", () => { anViewMode = "game"; anKey = g.key; for (const x of document.querySelectorAll(".an-views button")) x.setAttribute("aria-selected", String((x as HTMLElement).dataset.view === "game")); selectTab("analysis"); });
-  const top = v.analysis.focus[0];
+  open.addEventListener("click", () => openPostGame(p.matchId));
   $("home-last").replaceChildren(
-    h("p", {}, h("b", {}, champName(g.championId)), ` · ${g.win ? "victoire" : "défaite"} · ${g.kda} · ${new Date(g.startMs).toLocaleDateString("fr-FR")}`),
-    top ? h("p", { class: "small" }, "À travailler : ", top.text) : h("p", { class: "small muted" }, "Rien de marqué sur tes dernières parties."),
+    h("p", {}, h("b", {}, champName(p.championId)), ` · ${p.win ? "victoire" : "défaite"}${p.opponent ? ` contre ${champName(p.opponent)}` : ""} · ${new Date(p.startMs).toLocaleDateString("fr-FR")}`),
+    h("p", { class: "small" }, "À travailler : ", p.top.point),
     h("div", { class: "row" }, open));
 }
 

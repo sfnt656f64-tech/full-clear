@@ -67,6 +67,12 @@
 
   <!-- ===================== Analyse ===================== -->
   <main id="tab-analysis" class="tab" role="tabpanel" hidden>
+    <section id="post-sec">
+      <h2>Mes dernières parties</h2>
+      <div class="row"><button id="post-check" type="button">Analyser ma dernière partie</button><span id="post-status" class="small muted" role="status"></span></div>
+      <div id="post-list" class="post-list"></div>
+      <div id="post-view"></div>
+    </section>
     <section id="goals-sec">
       <h2>Mes objectifs (jungle)</h2>
       <p id="goals-head" class="small muted"></p>
@@ -76,11 +82,6 @@
       <h2>Champions en progression</h2>
       <div id="track"></div>
       <p class="small muted">Repère en deux temps. « Prêt à tester en classée » : au moins 20 parties sur la Faille (normales comprises) et stats ≥ 50 sur les parties aux règles standard (classées et normales en draft), sans compter la marge. Après 20 parties classées : « Confirmé » si les stats en classée sont ≥ 50, « Retour en normale conseillé » si stats + marge &lt; 50, sinon « À confirmer ». Les parties rapides ou accélérées comptent seulement comme expérience.</p>
-    </section>
-    <section id="post-sec" hidden>
-      <h2>Analyses d'après-partie</h2>
-      <p class="small muted">Après chaque partie : ce qui a marché, un point à travailler, une consigne. Le point à travailler vient de tes dernières parties, pas de cette seule partie.</p>
-      <div id="post"></div>
     </section>
     <section class="an-filters">
       <div class="an-grid">
@@ -225,7 +226,7 @@
     <section>
       <h2>Overlay en jeu</h2>
       <label class="check"><input id="overlay-on" type="checkbox"> Afficher l'overlay pendant les parties</label>
-      <label class="check"><input id="tips-on" type="checkbox"> Conseils d'avant-partie au début de la partie (tirés de la draft, deux à la fois, ils s'effacent seuls)</label>
+      <label class="check"><input id="tips-on" type="checkbox"> Afficher le plan de partie dans l'overlay (écrit en draft, il ne change pas pendant la partie)</label>
       <div class="row">
         <label for="form-choice" class="small">Forme de Kayn :</label>
         <select id="form-choice">

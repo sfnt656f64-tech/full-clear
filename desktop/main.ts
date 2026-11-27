@@ -18,6 +18,7 @@ import { DEFAULT_GOALS, type GoalsView } from "./analysis/goals.ts";
 import type { StatBuild } from "./coach/stat-build.ts";
 import { EngineClient } from "./data/engine-client.ts";
 import type { DraftContext } from "./data/engine.ts";
+import { journal, openJournal } from "./journal.ts";
 import { champByKey, findChamp } from "../src/data/champions";
 import { IPC, type AppState, type Navigation } from "./ipc.ts";
 import { LiveWatcher, type LiveSnapshot } from "./live-client.ts";
@@ -269,22 +270,34 @@ function checkPostGame(): void {
   postGameTimer = setTimeout(() => {
     postGameTimer = null;
     void postGames(1).then(([p]) => {
-      if (!p || p.matchId === settings.lastPostGame) return;
+      if (!p) { journal("analyse", "aucune partie analysable"); return; }
+      if (p.matchId === settings.lastPostGame) return;
       const first = settings.lastPostGame == null;
       settings.lastPostGame = p.matchId;
       saveSettings(settingsFile, settings);
-      win?.webContents.send(IPC.postGameReady);
-      if (first || !Notification.isSupported()) return;
+      journal("analyse", `nouvelle partie ${p.matchId} (${first ? "premier lancement : pas de notification" : "notification"})`);
+      win?.webContents.send(IPC.postGameReady, p.matchId);
+      if (first) return;
+      if (!Notification.isSupported()) { journal("notification", "non prise en charge par Windows"); return; }
       const name = champByKey(p.championId)?.name ?? "ta partie";
       const n = new Notification({
         title: "Analyse d'après-partie prête",
-        body: `${name} · ${p.win ? "victoire" : "défaite"} en ${Math.floor(p.durationS / 60)} min · ${p.kda}. Clique pour l'ouvrir dans Progresser.`,
+        body: `${name} · ${p.win ? "victoire" : "défaite"}. Clique pour voir ce que cette partie t'apprend.`,
         silent: true,
       });
-      n.on("click", () => navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }));
+      n.on("click", () => { journal("notification", `clic ${p.matchId}`); navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }); });
+      n.on("show", () => journal("notification", `affichée ${p.matchId}`));
+      // Notification bloquée (réglages Windows, mode « Ne pas déranger » des jeux) : la fenêtre s'ouvre sur l'analyse,
+      // sans prendre le focus, et clignote dans la barre des tâches.
+      n.on("failed", (_e, err) => {
+        journal("notification", `échec ${p.matchId} : ${err} → fenêtre ouverte sur l'analyse`);
+        if (overlay?.isInGame) return;
+        navigate({ tab: "analysis", hash: `postgame:${p.matchId}` }, false);
+        win?.flashFrame(true);
+      });
       n.show();
       if (PROFILE) console.log(`[après-partie] notification : ${p.matchId}`);
-    }).catch((e) => console.error("Analyse d'après-partie :", e));
+    }).catch((e) => { journal("analyse", `erreur : ${e instanceof Error ? e.message : String(e)}`); console.error("Analyse d'après-partie :", e); });
   }, 30_000);
   postGameTimer.unref?.();
 }
@@ -391,8 +404,8 @@ function pushState(): void {
 }
 
 /** Affiche la fenêtre et ouvre une vue (onglet, sous-vue, ancre du simulateur). */
-function navigate(nav: Navigation): void {
-  showWindow();
+function navigate(nav: Navigation, focus = true): void {
+  showWindow(focus);
   const send = () => win?.webContents.send(IPC.navigate, nav);
   if (win?.webContents.isLoading()) win.webContents.once("did-finish-load", send); else send();
 }
@@ -567,7 +580,9 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.getRecommendations, () => engine.call("reco", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
   ipcMain.handle(IPC.getProgression, () => engine.call("progression", excludedKeys(), settings.refTier, settings.poolGoal, settings.championFlags));
-  ipcMain.handle(IPC.getPostGames, () => postGames(10));
+  ipcMain.handle(IPC.getPostGames, () => postGames(20));
+  // « Analyser ma dernière partie » : demande tout de suite à la collecte de chercher les nouvelles parties.
+  ipcMain.handle(IPC.checkNewGames, () => { journal("analyse", "recherche demandée"); collector?.checkNewGames(); checkPostGame(); });
   ipcMain.handle(IPC.setPoolGoal, (_e, goal: unknown) => {
     if (goal === "win" || goal === "progress") { settings.poolGoal = goal; saveSettings(settingsFile, settings); }
     pushState();
@@ -613,6 +628,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     config = readConfig();
     settingsFile = join(app.getPath("userData"), "settings.json");
+    openJournal(join(app.getPath("userData"), "journal.log"));
+    journal("démarrage", `version ${app.getVersion()}`);
     settings = loadSettings(settingsFile);
     overlay = new OverlayWindow({
       dir: here,

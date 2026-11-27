@@ -157,7 +157,7 @@ export interface KaynApi {
   /** Navigation demandée par le processus principal (menu de l'icône, simulateur). */
   onNavigate(cb: (nav: Navigation) => void): void;
   /** Nouvelle analyse d'après-partie disponible. */
-  onPostGameReady(cb: () => void): void;
+  onPostGameReady(cb: (matchId: string) => void): void;
   /** Niveau de référence des comparaisons (Analyse, Champions). */
   setRefTier(tier: RefTier): Promise<AppState>;
   /** Objectif du pool, et choix par champion (null : retirer le choix). */
@@ -166,6 +166,8 @@ export interface KaynApi {
   getProgression(): Promise<ProgressionView>;
   /** Analyses d'après-partie de tes dernières parties (les plus récentes d'abord). */
   getPostGames(): Promise<PostGame[]>;
+  /** Cherche tout de suite tes nouvelles parties (bouton « Analyser ma dernière partie »). */
+  checkNewGames(): Promise<void>;
   getOverview(filter: OverviewFilter, compareChampionId?: number | null): Promise<OverviewView>;
   /** Suivi de tes objectifs (jungle). */
   getGoals(): Promise<GoalsView>;
@@ -205,6 +207,7 @@ export const IPC = {
   setChampionFlag: "kayn:set-champion-flag",
   getProgression: "kayn:get-progression",
   getPostGames: "kayn:get-postgames",
+  checkNewGames: "kayn:check-new-games",
   navigate: "kayn:navigate",
   postGameReady: "kayn:postgame-ready",
   getOverview: "kayn:get-overview",

@@ -99,3 +99,10 @@ describe("réglages", () => {
     expect(parseWindowMode(null)).toBe("unknown");
   });
 });
+
+describe("réglages : dernière partie signalée", () => {
+  it("relue au démarrage (sinon la première partie après un redémarrage n'était jamais notifiée)", () => {
+    expect(parseSettings(JSON.stringify({ lastPostGame: "EUW1_8058379232" })).lastPostGame).toBe("EUW1_8058379232");
+    expect(parseSettings(JSON.stringify({ lastPostGame: "pas un id" })).lastPostGame).toBeNull();
+  });
+});

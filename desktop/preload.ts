@@ -19,6 +19,7 @@ const api: KaynApi = {
   setChampionFlag: (id, flag) => ipcRenderer.invoke(IPC.setChampionFlag, id, flag),
   getProgression: () => ipcRenderer.invoke(IPC.getProgression),
   getPostGames: () => ipcRenderer.invoke(IPC.getPostGames),
+  checkNewGames: () => ipcRenderer.invoke(IPC.checkNewGames),
   getOverview: (filter, compare) => ipcRenderer.invoke(IPC.getOverview, filter, compare),
   getGoals: () => ipcRenderer.invoke(IPC.getGoals),
   restartGoals: () => ipcRenderer.invoke(IPC.restartGoals),
@@ -35,7 +36,7 @@ const api: KaynApi = {
   setCapturing: (on) => ipcRenderer.invoke(IPC.setCapturing, on),
   onState: (cb) => { ipcRenderer.on(IPC.state, (_e, s: AppState) => cb(s)); },
   onNavigate: (cb) => { ipcRenderer.on(IPC.navigate, (_e, n: Navigation) => cb(n)); },
-  onPostGameReady: (cb) => { ipcRenderer.on(IPC.postGameReady, () => cb()); },
+  onPostGameReady: (cb) => { ipcRenderer.on(IPC.postGameReady, (_e, id: string) => cb(id)); },
 };
 
 contextBridge.exposeInMainWorld("kayn", api);

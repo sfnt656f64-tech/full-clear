@@ -63,7 +63,7 @@ export function parseSettings(text: string | null): Settings {
       refTier: isRefTier(raw.refTier) ? raw.refTier : DEFAULT_REF_TIER,
       poolGoal: raw.poolGoal === "win" ? "win" : "progress",
       championFlags: Object.fromEntries(Object.entries(raw.championFlags ?? {}).filter(([k, v]) => /^[A-Za-z]{1,30}$/.test(k) && (v === "notForMe" || v === "progress"))),
-      lastPostGame: typeof raw.lastPostGame === "string" && /^[A-Z0-9]{2,6}_d{1,15}$/.test(raw.lastPostGame) ? raw.lastPostGame : null,
+      lastPostGame: typeof raw.lastPostGame === "string" && /^[A-Z0-9]{2,6}_\d{1,15}$/.test(raw.lastPostGame) ? raw.lastPostGame : null,
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

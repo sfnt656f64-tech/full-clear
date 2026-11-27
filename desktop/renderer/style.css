@@ -175,6 +175,8 @@ input[type="search"] { font: inherit; color: var(--text); background: #2a2a3a; b
 .an-focus { margin-bottom: 10px; }
 .tc { width: 100%; max-width: 260px; height: 36px; display: block; }
 .tc-line { fill: none; stroke: var(--warn); stroke-width: 2; }
+.spark { width: 220px; height: 36px; display: block; }
+.spark-line { fill: none; stroke: var(--blue); stroke-width: 2; }
 .spark-med { stroke: var(--muted); stroke-dasharray: 3 3; stroke-width: 1; }
 
 /* Analyse : vue d'ensemble */
@@ -295,3 +297,8 @@ body.app { display: flex; height: 100vh; padding: 0; overflow: hidden; }
 .details summary { cursor: pointer; }
 .details .det p { margin: 6px 0 0; }
 .pick-why { margin: 2px 0 0; }
+.post-list { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; max-height: 260px; overflow-y: auto; }
+.post-row { display: grid; grid-template-columns: 26px 1fr 70px 1fr; gap: 8px; align-items: center; text-align: left; padding: 4px 8px; }
+.post-row.sel { border-color: var(--blue); background: rgba(90, 130, 255, .12); }
+.pr-ic { width: 22px; height: 22px; border-radius: 4px; }
+.post h3 { margin: 0 0 6px; }
